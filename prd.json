@@ -1,0 +1,76 @@
+{
+  "branchName": "main",
+  "description": "Guidon Brewing Wholesale Management System. Amazon-style keg ordering for wholesale customers, admin portal for brewery staff. Keg deposit/return tracking with running tallies per customer by keg size. Embeddable ordering experience for guidonbrewing.com. Brand: veteran-owned craft brewery, warm/rustic feel. Colors: dark olive/army green (#3D4F2F), amber/gold (#D4A843), cream (#F5F0E1), dark brown (#2C1810). Tech: Next.js 14, TypeScript, Tailwind CSS. Data: local JSON storage (Supabase-ready but ships with file-based mock data so it works without DB setup).",
+  "userStories": [
+    {
+      "id": "G01",
+      "title": "Initialize Next.js 14 project with Tailwind and brand theme",
+      "description": "Create fresh Next.js 14 project with TypeScript, Tailwind CSS. Set up brand colors: primary dark olive #3D4F2F, accent amber/gold #D4A843, background cream #F5F0E1, dark brown #2C1810, white #FFFFFF. Import fonts: Playfair Display for headings (brewery feel), Inter for body text. Create root layout with Guidon Brewing branding. Set up a lib/data.ts module that reads/writes JSON files from a data/ directory (customers.json, kegs.json, orders.json, invoices.json, keg-ledger.json) so the app works without any database. Include seed data with 5 sample wholesale customers, 8 beer products across 1/2bbl, 1/6bbl, and 1/4bbl sizes, and 3 sample orders.",
+      "acceptCriteria": "npm run build succeeds. Brand colors applied. Seed data loads. Fonts render.",
+      "passes": false
+    },
+    {
+      "id": "G02",
+      "title": "Build wholesale customer ordering portal - product catalog",
+      "description": "Create /order route (public-facing ordering portal). Show a product catalog in a clean grid layout like an ecommerce store. Each product card shows: beer name, style (IPA, Lager, Stout, etc.), keg size (1/2bbl, 1/6bbl, 1/4bbl), price, a quantity selector (+/- buttons), and Add to Cart button. Cards should have a subtle cream/white background with olive green accents. Include a search bar and filter by keg size and beer style. Shopping cart icon in top right showing item count. The catalog should feel like shopping on Amazon or Shopify, not like a boring form. Beer names from seed data.",
+      "acceptCriteria": "Product grid renders with all beers. Quantity selector works. Add to cart works. Filters work. Search works. Mobile responsive 1-col, desktop 3-col.",
+      "passes": false
+    },
+    {
+      "id": "G03",
+      "title": "Build shopping cart and checkout flow",
+      "description": "Slide-out cart panel from right side (like Shopify). Shows: line items with beer name, keg size, quantity, line total. Auto-calculated keg deposits: each keg ordered adds a deposit line item (configurable deposit amount per keg size: 1/2bbl=$50, 1/6bbl=$30, 1/4bbl=$40). Show subtotal, deposit total, and grand total. If customer has kegs to return, show a 'Return Kegs' section where they can select keg sizes and quantities to return (reduces deposit). Checkout button leads to a checkout page: customer selects their account (dropdown of wholesale customers) or creates new account (business name, contact name, email, phone, delivery address). Delivery date picker (next available weekday). Notes field. Place Order button. On submit: save order to orders.json, update keg-ledger.json with deposits, show confirmation.",
+      "acceptCriteria": "Cart slides out. Deposits auto-calculate. Returns reduce deposits. Checkout saves order. Confirmation shows order number. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G04",
+      "title": "Build wholesale customer portal - order history and keg balance",
+      "description": "Create /portal route. Simple login: customer selects their business from dropdown + enters email to verify (no passwords, just email match for now). After login: dashboard showing their keg balance by size (1/2bbl: X kegs, 1/6bbl: X kegs, 1/4bbl: X kegs) in colored cards. Below: order history table with order date, order number, items summary, total, status (pending, confirmed, delivered, completed). Click order to see full detail: line items, deposits charged, returns credited, delivery info. Button to 'Place New Order' linking back to /order. Button to 'Request Keg Return' which creates a return entry in keg-ledger.json.",
+      "acceptCriteria": "Customer login works. Keg balance shows correct tallies from ledger. Order history lists all orders. Detail view works. Return request works. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G05",
+      "title": "Build admin portal - login and dashboard overview",
+      "description": "Create /admin route. Password login (env ADMIN_PASSWORD default 'guidon2026'). Dashboard: stat cards showing Total Kegs Out (sum of all customer balances), Pending Orders count, This Week's Revenue, Active Customers count. Below stats: recent orders table (last 10) with customer name, date, items, total, status. Quick action buttons: View All Orders, View Keg Report, View Customers. Sidebar nav: Dashboard, Orders, Customers, Keg Tracker, Invoices. Use dark olive green sidebar with cream content area. Auth persists via cookie.",
+      "acceptCriteria": "Login works. Stats calculate correctly from data. Recent orders show. Sidebar nav works. Auth persists. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G06",
+      "title": "Build admin - orders management",
+      "description": "Create /admin/orders page. Table: Order #, Customer, Date, Items (summary), Total, Status badge (pending=amber, confirmed=blue, delivered=green, completed=olive). Click row to expand detail: full line items, keg deposits, keg returns, delivery date, notes. Admin can change status via dropdown. When status changes to 'delivered': auto-generate invoice in invoices.json. Filter by status, search by customer name, sort by date. Bulk actions: confirm selected, mark delivered.",
+      "acceptCriteria": "Orders table with all fields. Status change works and persists. Invoice auto-generates on delivery. Filters and search work. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G07",
+      "title": "Build admin - keg tracker and customer management",
+      "description": "Create /admin/kegs page: THE KEY FEATURE. Table showing every customer with columns: Customer Name, 1/2bbl count, 1/6bbl count, 1/4bbl count, Total Kegs Out. Data comes from keg-ledger.json (sum deposits minus returns per customer per size). Color code: green if under 10 total, amber if 10-20, red if over 20. Click customer row to see full ledger history: date, type (deposit/return), keg size, quantity, order reference. Export button: download CSV of current keg report. Create /admin/customers page: list all wholesale customers with contact info, total orders, total revenue, keg balance. Click to see customer detail with edit capability.",
+      "acceptCriteria": "Keg tracker tallies are mathematically correct. Color coding works. Ledger history shows per customer. CSV export works. Customer management CRUD works. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G08",
+      "title": "Build admin - invoicing",
+      "description": "Create /admin/invoices page. Table: Invoice #, Customer, Date, Items, Deposits, Returns, Total, Status (draft, sent, paid). Click to view full invoice detail with printable layout: Guidon Brewing header, customer billing info, line items table (product, keg size, qty, unit price, line total), keg deposits section, keg returns/credits section, subtotal, deposits, credits, grand total. Admin can mark as sent or paid. Print button opens print dialog with clean layout. Filter by status and customer.",
+      "acceptCriteria": "Invoice list renders. Detail view is print-ready. Status changes persist. Deposits and returns correctly shown. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G09",
+      "title": "Make embeddable and add embed.js for WordPress",
+      "description": "Create /embed/order route: renders the ordering catalog + cart + checkout without the outer site chrome (no header/footer, just the ordering experience). Add public/embed.js script: creates iframe to /embed/order, handles auto-height resize via postMessage, provides GuidonWholesale.init({container: '#wholesale-order', baseUrl: 'https://wholesale.guidonbrewing.com'}). Create /embed/portal route: embeddable customer portal. Both embeds should work at any width (min 320px). Add proper headers for iframe embedding. Document embed code in README with WordPress shortcode example.",
+      "acceptCriteria": "Embed routes render without chrome. embed.js works. Auto-height works. README has WordPress embed instructions. Build passes.",
+      "passes": false
+    },
+    {
+      "id": "G10",
+      "title": "Polish, animations, responsive, and final QA",
+      "description": "Add smooth page transitions. Cart slide-out animation (300ms ease). Button hover effects (subtle scale). Card hover shadows. Status badge colors consistent everywhere. Loading skeletons for async operations. Full responsive testing at 375px, 768px, 1024px, 1440px. Product grid: 1-col mobile, 2-col tablet, 3-col desktop. Tables: horizontal scroll on mobile. Test complete flow: browse catalog → add to cart → checkout → order appears in admin → change status → invoice generates → customer portal shows order and keg balance. Meta tags: title 'Guidon Brewing Wholesale'. Zero build errors.",
+      "acceptCriteria": "Full flow works end to end. Responsive at all breakpoints. Animations smooth. Build passes with zero errors.",
+      "passes": false
+    }
+  ]
+}
