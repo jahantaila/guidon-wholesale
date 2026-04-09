@@ -6,6 +6,7 @@
     "email": "marcus@brickhousebar.com",
     "phone": "(502) 555-0101",
     "address": "1234 Bardstown Rd, Louisville, KY 40204",
+    "password": "guidon2026",
     "createdAt": "2025-08-15T10:00:00Z"
   },
   {
@@ -15,6 +16,7 @@
     "email": "sarah@rivercitytap.com",
     "phone": "(502) 555-0202",
     "address": "567 Main St, Louisville, KY 40202",
+    "password": "guidon2026",
     "createdAt": "2025-09-01T14:30:00Z"
   },
   {
@@ -24,6 +26,7 @@
     "email": "james@derbydaysports.com",
     "phone": "(502) 555-0303",
     "address": "890 Frankfort Ave, Louisville, KY 40206",
+    "password": "guidon2026",
     "createdAt": "2025-09-20T09:15:00Z"
   },
   {
@@ -33,6 +36,7 @@
     "email": "elena@magnoliakb.com",
     "phone": "(502) 555-0404",
     "address": "2345 Shelbyville Rd, Louisville, KY 40207",
+    "password": "guidon2026",
     "createdAt": "2025-10-05T11:00:00Z"
   },
   {
@@ -42,6 +46,7 @@
     "email": "david@oldloubrewing.com",
     "phone": "(502) 555-0505",
     "address": "678 S 3rd St, Louisville, KY 40203",
+    "password": "guidon2026",
     "createdAt": "2025-10-18T16:45:00Z"
   }
 ]

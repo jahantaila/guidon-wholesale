@@ -5,7 +5,10 @@ import type { Customer } from '@/lib/types';
 
 export async function GET() {
   const customers = getCustomers();
-  return NextResponse.json(customers);
+  // Strip passwords from response
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const safe = customers.map(({ password, ...rest }) => rest);
+  return NextResponse.json(safe);
 }
 
 export async function POST(request: NextRequest) {

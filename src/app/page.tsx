@@ -3,79 +3,96 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-charcoal flex flex-col overflow-hidden">
-      {/* Navigation */}
-      <header className="relative z-10 border-b border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 flex items-center justify-between h-20">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gold-gradient rounded-lg flex items-center justify-center shadow-gold">
-              <span className="text-charcoal font-heading font-black text-xl">G</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-heading font-bold text-cream tracking-wide">GUIDON BREWING</h1>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-gold/60 font-semibold">Veteran-Owned Craft Brewery</p>
-            </div>
-          </div>
-          <nav className="flex items-center gap-3">
-            <Link href="/order" className="btn-primary text-sm px-5 py-2">
-              Order Kegs
-            </Link>
-            <Link href="/portal" className="btn-outline text-sm px-5 py-2 hidden sm:inline-flex">
-              Customer Portal
-            </Link>
-            <Link href="/admin" className="btn-ghost text-sm hidden sm:inline-flex">
-              Admin
-            </Link>
-          </nav>
-        </div>
-      </header>
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gold/[0.03] rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-olive/[0.05] rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-1/3 h-full opacity-[0.02]"
+          style={{ backgroundImage: 'repeating-linear-gradient(-45deg, transparent, transparent 20px, #D4A843 20px, #D4A843 21px)' }}
+        />
+      </div>
 
-      {/* Hero Section */}
+      {/* Main Content */}
       <main className="flex-1 flex items-center justify-center relative px-6">
-        {/* Background decorative elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gold/[0.03] rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-olive/[0.05] rounded-full blur-3xl" />
-          {/* Military-style diagonal lines */}
-          <div className="absolute top-0 right-0 w-1/3 h-full opacity-[0.02]"
-            style={{ backgroundImage: 'repeating-linear-gradient(-45deg, transparent, transparent 20px, #D4A843 20px, #D4A843 21px)' }}
-          />
-        </div>
+        <div className="relative max-w-3xl w-full text-center animate-fade-in">
+          {/* Logo */}
+          <div className="w-20 h-20 bg-gold-gradient rounded-2xl flex items-center justify-center shadow-gold-lg mx-auto mb-6">
+            <span className="text-charcoal font-heading font-black text-4xl">G</span>
+          </div>
 
-        <div className="relative max-w-4xl text-center animate-fade-in">
-          {/* Rank-style badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold/20 bg-gold/[0.05] mb-8">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-heading font-black text-cream mb-2 tracking-tight leading-[0.9]">
+            GUIDON BREWING
+          </h1>
+          <p className="text-lg sm:text-xl text-gold/70 font-heading font-semibold tracking-wide mb-2">
+            WHOLESALE PORTAL
+          </p>
+
+          {/* Location badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold/20 bg-gold/[0.05] mb-12">
             <div className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse-gold" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gold/80">
-              Louisville, Kentucky
+              Veteran-Owned &bull; Louisville, Kentucky
             </span>
             <div className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse-gold" />
           </div>
 
-          <h2 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-heading font-black text-cream mb-2 tracking-tight leading-[0.9]">
-            CRAFT BEER
-          </h2>
-          <h2 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-heading font-black mb-8 tracking-tight leading-[0.9]">
-            <span className="text-gradient-gold">WHOLESALE</span>
-          </h2>
-
-          {/* Decorative divider */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <div className="h-px w-16 bg-gradient-to-r from-transparent to-gold/40" />
-            <div className="w-2 h-2 rotate-45 border border-gold/40" />
-            <div className="h-px w-16 bg-gradient-to-l from-transparent to-gold/40" />
-          </div>
-
-          <p className="text-lg sm:text-xl text-cream/50 mb-12 max-w-2xl mx-auto leading-relaxed font-light">
-            Premium craft beer from Louisville&apos;s veteran-owned brewery.
-            Order kegs online, track deliveries, and manage your account.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/order" className="btn-primary text-lg px-10 py-4 rounded-xl shadow-gold-lg hover:shadow-gold-lg">
-              Browse &amp; Order Kegs
+          {/* 3 CTA Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-2xl mx-auto">
+            {/* Customer Portal */}
+            <Link href="/portal"
+              className="group relative flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gold/30 bg-gold/[0.05] hover:bg-gold/[0.12] hover:border-gold/60 transition-all duration-300 hover:shadow-gold-lg"
+            >
+              <div className="w-14 h-14 rounded-xl bg-gold-gradient flex items-center justify-center shadow-gold group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-7 h-7 text-charcoal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-black text-cream group-hover:text-gold transition-colors">
+                  Customer Portal
+                </h2>
+                <p className="text-xs text-cream/40 mt-1 leading-relaxed">
+                  Browse products, place orders &amp; track deliveries
+                </p>
+              </div>
             </Link>
-            <Link href="/portal" className="btn-outline text-lg px-10 py-4 rounded-xl">
-              Customer Portal
+
+            {/* Admin Dashboard */}
+            <Link href="/admin"
+              className="group relative flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-olive/30 bg-olive/[0.05] hover:bg-olive/[0.12] hover:border-olive/60 transition-all duration-300 hover:shadow-gold-lg"
+            >
+              <div className="w-14 h-14 rounded-xl bg-olive flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-7 h-7 text-cream" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-black text-cream group-hover:text-gold transition-colors">
+                  Admin Dashboard
+                </h2>
+                <p className="text-xs text-cream/40 mt-1 leading-relaxed">
+                  Manage orders, customers &amp; keg inventory
+                </p>
+              </div>
+            </Link>
+
+            {/* Become a Wholesale Member */}
+            <Link href="/apply"
+              className="group relative flex flex-col items-center gap-4 p-8 rounded-2xl border-2 border-gold/30 bg-charcoal-100 hover:bg-gold/[0.08] hover:border-gold/50 transition-all duration-300 hover:shadow-gold-lg"
+            >
+              <div className="w-14 h-14 rounded-xl bg-charcoal-200 border-2 border-gold/40 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-7 h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-black text-cream group-hover:text-gold transition-colors">
+                  Become a Member
+                </h2>
+                <p className="text-xs text-cream/40 mt-1 leading-relaxed">
+                  Apply for a wholesale account today
+                </p>
+              </div>
             </Link>
           </div>
 

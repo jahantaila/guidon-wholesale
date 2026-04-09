@@ -5,6 +5,19 @@ export interface Customer {
   email: string;
   phone: string;
   address: string;
+  password?: string;
+  createdAt: string;
+}
+
+export interface WholesaleApplication {
+  id: string;
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
+  businessType: string;
+  expectedMonthlyVolume: string;
   createdAt: string;
 }
 
