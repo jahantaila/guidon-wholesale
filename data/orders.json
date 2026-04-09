@@ -1,0 +1,53 @@
+[
+  {
+    "id": "ord-001",
+    "customerId": "cust-001",
+    "status": "delivered",
+    "items": [
+      { "productId": "prod-001", "productName": "Guidon Gold", "size": "1/2bbl", "quantity": 2, "unitPrice": 200, "deposit": 50 },
+      { "productId": "prod-004", "productName": "Barracks IPA", "size": "1/4bbl", "quantity": 1, "unitPrice": 140, "deposit": 40 }
+    ],
+    "kegReturns": [],
+    "subtotal": 540,
+    "totalDeposit": 140,
+    "total": 680,
+    "deliveryDate": "2026-03-15",
+    "notes": "Deliver to back entrance",
+    "createdAt": "2026-03-10T09:00:00Z"
+  },
+  {
+    "id": "ord-002",
+    "customerId": "cust-002",
+    "status": "confirmed",
+    "items": [
+      { "productId": "prod-005", "productName": "Foxhole Haze", "size": "1/6bbl", "quantity": 3, "unitPrice": 90, "deposit": 30 },
+      { "productId": "prod-003", "productName": "Reveille Red", "size": "1/2bbl", "quantity": 1, "unitPrice": 200, "deposit": 50 }
+    ],
+    "kegReturns": [
+      { "size": "1/6bbl", "quantity": 2 }
+    ],
+    "subtotal": 470,
+    "totalDeposit": 80,
+    "total": 550,
+    "deliveryDate": "2026-04-12",
+    "notes": "",
+    "createdAt": "2026-04-01T14:00:00Z"
+  },
+  {
+    "id": "ord-003",
+    "customerId": "cust-003",
+    "status": "pending",
+    "items": [
+      { "productId": "prod-002", "productName": "Sergeant's Stout", "size": "1/4bbl", "quantity": 2, "unitPrice": 140, "deposit": 40 },
+      { "productId": "prod-006", "productName": "Cadence Wheat", "size": "1/2bbl", "quantity": 1, "unitPrice": 200, "deposit": 50 },
+      { "productId": "prod-008", "productName": "Liberty Lager", "size": "1/6bbl", "quantity": 2, "unitPrice": 90, "deposit": 30 }
+    ],
+    "kegReturns": [],
+    "subtotal": 660,
+    "totalDeposit": 190,
+    "total": 850,
+    "deliveryDate": "2026-04-20",
+    "notes": "Call 30 min before delivery",
+    "createdAt": "2026-04-05T11:30:00Z"
+  }
+]

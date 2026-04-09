@@ -1,0 +1,62 @@
+[
+  {
+    "id": "kl-001",
+    "customerId": "cust-001",
+    "orderId": "ord-001",
+    "type": "deposit",
+    "size": "1/2bbl",
+    "quantity": 2,
+    "depositAmount": 50,
+    "totalAmount": 100,
+    "date": "2026-03-15T12:00:00Z",
+    "notes": "Order ord-001 delivery"
+  },
+  {
+    "id": "kl-002",
+    "customerId": "cust-001",
+    "orderId": "ord-001",
+    "type": "deposit",
+    "size": "1/4bbl",
+    "quantity": 1,
+    "depositAmount": 40,
+    "totalAmount": 40,
+    "date": "2026-03-15T12:00:00Z",
+    "notes": "Order ord-001 delivery"
+  },
+  {
+    "id": "kl-003",
+    "customerId": "cust-002",
+    "orderId": "ord-002",
+    "type": "deposit",
+    "size": "1/6bbl",
+    "quantity": 3,
+    "depositAmount": 30,
+    "totalAmount": 90,
+    "date": "2026-04-01T15:00:00Z",
+    "notes": "Order ord-002 delivery"
+  },
+  {
+    "id": "kl-004",
+    "customerId": "cust-002",
+    "orderId": "ord-002",
+    "type": "deposit",
+    "size": "1/2bbl",
+    "quantity": 1,
+    "depositAmount": 50,
+    "totalAmount": 50,
+    "date": "2026-04-01T15:00:00Z",
+    "notes": "Order ord-002 delivery"
+  },
+  {
+    "id": "kl-005",
+    "customerId": "cust-002",
+    "orderId": "ord-002",
+    "type": "return",
+    "size": "1/6bbl",
+    "quantity": 2,
+    "depositAmount": 30,
+    "totalAmount": -60,
+    "date": "2026-04-01T15:00:00Z",
+    "notes": "Keg returns with order ord-002"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "inv-001",
+    "orderId": "ord-001",
+    "customerId": "cust-001",
+    "status": "paid",
+    "items": [
+      { "productId": "prod-001", "productName": "Guidon Gold", "size": "1/2bbl", "quantity": 2, "unitPrice": 200, "deposit": 50 },
+      { "productId": "prod-004", "productName": "Barracks IPA", "size": "1/4bbl", "quantity": 1, "unitPrice": 140, "deposit": 40 }
+    ],
+    "subtotal": 540,
+    "totalDeposit": 140,
+    "total": 680,
+    "issuedAt": "2026-03-15T12:00:00Z",
+    "paidAt": "2026-03-20T09:00:00Z"
+  },
+  {
+    "id": "inv-002",
+    "orderId": "ord-002",
+    "customerId": "cust-002",
+    "status": "unpaid",
+    "items": [
+      { "productId": "prod-005", "productName": "Foxhole Haze", "size": "1/6bbl", "quantity": 3, "unitPrice": 90, "deposit": 30 },
+      { "productId": "prod-003", "productName": "Reveille Red", "size": "1/2bbl", "quantity": 1, "unitPrice": 200, "deposit": 50 }
+    ],
+    "subtotal": 470,
+    "totalDeposit": 80,
+    "total": 550,
+    "issuedAt": "2026-04-01T15:00:00Z",
+    "paidAt": null
+  }
+]

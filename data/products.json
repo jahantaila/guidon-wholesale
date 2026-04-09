@@ -1,0 +1,114 @@
+[
+  {
+    "id": "prod-001",
+    "name": "Guidon Gold",
+    "style": "American Blonde Ale",
+    "abv": 4.8,
+    "description": "Light and crisp with a subtle honey sweetness. Our flagship sessionable ale, perfect for any occasion.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Ale",
+    "available": true
+  },
+  {
+    "id": "prod-002",
+    "name": "Sergeant's Stout",
+    "style": "Oatmeal Stout",
+    "abv": 5.6,
+    "description": "Rich and smooth with notes of coffee and dark chocolate. Brewed with locally roasted oats.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Stout",
+    "available": true
+  },
+  {
+    "id": "prod-003",
+    "name": "Reveille Red",
+    "style": "Irish Red Ale",
+    "abv": 5.2,
+    "description": "Malty and balanced with a toasty caramel backbone. A nod to the morning bugle call.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Ale",
+    "available": true
+  },
+  {
+    "id": "prod-004",
+    "name": "Barracks IPA",
+    "style": "West Coast IPA",
+    "abv": 6.8,
+    "description": "Bold and piney with a citrus punch. Dry-hopped with Citra and Simcoe for maximum impact.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "IPA",
+    "available": true
+  },
+  {
+    "id": "prod-005",
+    "name": "Foxhole Haze",
+    "style": "New England IPA",
+    "abv": 6.4,
+    "description": "Juicy and hazy with tropical fruit flavors. Soft mouthfeel with low bitterness.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "IPA",
+    "available": true
+  },
+  {
+    "id": "prod-006",
+    "name": "Cadence Wheat",
+    "style": "American Wheat Ale",
+    "abv": 4.5,
+    "description": "Refreshing wheat ale with hints of orange peel and coriander. Perfect summer sipper.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Wheat",
+    "available": true
+  },
+  {
+    "id": "prod-007",
+    "name": "Garrison Porter",
+    "style": "Robust Porter",
+    "abv": 5.8,
+    "description": "Dark and complex with layers of chocolate, molasses, and a hint of smoke.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Porter",
+    "available": true
+  },
+  {
+    "id": "prod-008",
+    "name": "Liberty Lager",
+    "style": "Czech Pilsner",
+    "abv": 4.9,
+    "description": "Clean and crisp with noble hop character. Lagered for six weeks for ultimate smoothness.",
+    "sizes": [
+      { "size": "1/2bbl", "price": 200, "deposit": 50 },
+      { "size": "1/4bbl", "price": 140, "deposit": 40 },
+      { "size": "1/6bbl", "price": 90, "deposit": 30 }
+    ],
+    "category": "Lager",
+    "available": true
+  }
+]
