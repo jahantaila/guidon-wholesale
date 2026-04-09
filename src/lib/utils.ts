@@ -25,20 +25,20 @@ export function generateId(prefix: string): string {
 export function getStatusColor(status: string): string {
   switch (status) {
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-gold/20 text-gold border border-gold/30';
     case 'confirmed':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
     case 'delivered':
-      return 'bg-green-100 text-green-800';
+      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     case 'completed':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-olive/30 text-olive-300 border border-olive/40';
     case 'paid':
-      return 'bg-green-100 text-green-800';
+      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     case 'unpaid':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-500/20 text-red-300 border border-red-500/30';
     case 'overdue':
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-orange-500/20 text-orange-300 border border-orange-500/30';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-white/10 text-cream/60 border border-white/10';
   }
 }

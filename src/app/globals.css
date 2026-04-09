@@ -2,68 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --background: #F5F0E1;
-  --foreground: #2C1810;
+  --background: #1A1A1A;
+  --foreground: #F5F0E1;
+  --gold: #D4A843;
+  --charcoal: #1A1A1A;
+  --olive: #3D4F2F;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer base {
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Playfair Display', Georgia, serif;
   }
+
+  ::selection {
+    background: rgba(212, 168, 67, 0.3);
+    color: #F5F0E1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #111111;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #333333;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #D4A843;
+  }
 }
 
 @layer components {
   .skeleton {
-    @apply animate-pulse bg-olive-100 rounded;
+    @apply animate-pulse rounded;
+    background: linear-gradient(90deg, #2a2a2a 25%, #333333 50%, #2a2a2a 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
   }
 
   .btn-primary {
-    @apply bg-olive text-white px-6 py-2.5 rounded-lg font-medium
-      hover:bg-olive-600 active:bg-olive-800 transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-olive-400 focus:ring-offset-2;
+    @apply bg-gold text-charcoal px-6 py-2.5 rounded-lg font-semibold
+      hover:bg-gold-300 active:bg-gold-500 transition-all duration-200
+      focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-charcoal
+      shadow-sm hover:shadow-gold;
   }
 
   .btn-secondary {
-    @apply bg-amber text-brown px-6 py-2.5 rounded-lg font-medium
-      hover:bg-amber-300 active:bg-amber-500 transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2;
+    @apply bg-olive text-cream px-6 py-2.5 rounded-lg font-semibold
+      hover:bg-olive-600 active:bg-olive-800 transition-all duration-200
+      focus:outline-none focus:ring-2 focus:ring-olive-400/50 focus:ring-offset-2 focus:ring-offset-charcoal;
   }
 
   .btn-outline {
-    @apply border-2 border-olive text-olive px-6 py-2.5 rounded-lg font-medium
-      hover:bg-olive hover:text-white transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-olive-400 focus:ring-offset-2;
+    @apply border-2 border-gold/40 text-gold px-6 py-2.5 rounded-lg font-semibold
+      hover:bg-gold/10 hover:border-gold transition-all duration-200
+      focus:outline-none focus:ring-2 focus:ring-gold/30 focus:ring-offset-2 focus:ring-offset-charcoal;
+  }
+
+  .btn-ghost {
+    @apply text-cream/60 px-4 py-2 rounded-lg font-medium
+      hover:text-cream hover:bg-white/5 transition-all duration-200;
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-cream-200 p-6 transition-shadow hover:shadow-md;
+    @apply bg-charcoal-100 rounded-xl border border-white/[0.06] p-6
+      transition-all duration-300 hover:border-gold/20 hover:shadow-gold;
+  }
+
+  .card-dark {
+    @apply bg-charcoal rounded-xl border border-white/[0.06] p-6
+      transition-all duration-300;
   }
 
   .input {
-    @apply w-full px-4 py-2.5 border border-cream-200 rounded-lg bg-white
+    @apply w-full px-4 py-2.5 border border-white/10 rounded-lg
+      bg-charcoal text-cream
+      focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold/60
+      placeholder:text-cream/30 transition-all duration-200;
+  }
+
+  .input-light {
+    @apply w-full px-4 py-2.5 border border-cream-200 rounded-lg
+      bg-white text-brown
       focus:outline-none focus:ring-2 focus:ring-olive-400 focus:border-olive
       placeholder:text-brown-200 transition-all duration-200;
   }
 
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider;
   }
 
   .table-header {
-    @apply px-4 py-3 text-left text-xs font-semibold text-olive uppercase tracking-wider;
+    @apply px-4 py-3 text-left text-[11px] font-bold uppercase tracking-widest text-gold/70;
   }
 
   .table-cell {
-    @apply px-4 py-3 text-sm text-brown;
+    @apply px-4 py-3.5 text-sm text-cream/80;
+  }
+
+  .divider-gold {
+    @apply border-t border-gold/20;
+  }
+
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent bg-gold-gradient;
   }
 }
 
@@ -71,6 +130,12 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
 }
 
 /* Print styles for invoices */
@@ -79,6 +144,17 @@ body {
     display: none !important;
   }
   body {
-    background: white;
+    background: white !important;
+    color: #1A1A1A !important;
   }
+  .card, .card-dark {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Embed mode overrides */
+.embed-mode {
+  background: transparent;
 }
