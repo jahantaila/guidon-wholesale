@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { createApplication } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { WholesaleApplication } from '@/lib/types';
-
-const filePath = path.join(process.cwd(), 'data', 'applications.json');
-
-function getApplications(): WholesaleApplication[] {
-  const data = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(data) as WholesaleApplication[];
-}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -33,9 +25,6 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
   };
 
-  const applications = getApplications();
-  applications.push(application);
-  fs.writeFileSync(filePath, JSON.stringify(applications, null, 2), 'utf-8');
-
+  await createApplication(application);
   return NextResponse.json(application, { status: 201 });
 }

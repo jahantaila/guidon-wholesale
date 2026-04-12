@@ -9,14 +9,14 @@ export async function GET(request: NextRequest) {
   const balances = searchParams.get('balances');
 
   if (balances === 'true') {
-    return NextResponse.json(getAllKegBalances());
+    return NextResponse.json(await getAllKegBalances());
   }
 
   if (customerId) {
-    return NextResponse.json(getKegLedgerByCustomer(customerId));
+    return NextResponse.json(await getKegLedgerByCustomer(customerId));
   }
 
-  return NextResponse.json(getKegLedger());
+  return NextResponse.json(await getKegLedger());
 }
 
 export async function POST(request: NextRequest) {
@@ -33,6 +33,6 @@ export async function POST(request: NextRequest) {
     date: new Date().toISOString(),
     notes: body.notes || '',
   };
-  addKegLedgerEntry(entry);
+  await addKegLedgerEntry(entry);
   return NextResponse.json(entry, { status: 201 });
 }

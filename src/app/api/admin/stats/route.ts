@@ -3,9 +3,11 @@ import { getOrders, getCustomers, getAllKegBalances } from '@/lib/data';
 import type { AdminStats } from '@/lib/types';
 
 export async function GET() {
-  const orders = getOrders();
-  const customers = getCustomers();
-  const balances = getAllKegBalances();
+  const [orders, customers, balances] = await Promise.all([
+    getOrders(),
+    getCustomers(),
+    getAllKegBalances(),
+  ]);
 
   let kegsOut = 0;
   for (const custBalances of Object.values(balances)) {

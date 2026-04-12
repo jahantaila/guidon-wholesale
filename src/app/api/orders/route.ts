@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices } from '@/lib/data';
-import { addKegLedgerEntry } from '@/lib/data';
+import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, addKegLedgerEntry } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
-  let orders = getOrders();
+  let orders = await getOrders();
   if (customerId) {
     orders = orders.filter(o => o.customerId === customerId);
   }
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest) {
     notes: body.notes || '',
     createdAt: new Date().toISOString(),
   };
-  createOrder(order);
+  await createOrder(order);
   return NextResponse.json(order, { status: 201 });
 }
 
@@ -37,7 +36,7 @@ export async function PUT(request: NextRequest) {
   const body = await request.json();
   const { id, ...updates } = body;
 
-  const existingOrder = getOrder(id);
+  const existingOrder = await getOrder(id);
   if (!existingOrder) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
@@ -60,7 +59,7 @@ export async function PUT(request: NextRequest) {
         date: now,
         notes: `Order ${existingOrder.id} delivery`,
       };
-      addKegLedgerEntry(entry);
+      await addKegLedgerEntry(entry);
     }
 
     // Add keg returns
@@ -78,11 +77,11 @@ export async function PUT(request: NextRequest) {
         date: now,
         notes: `Keg returns with order ${existingOrder.id}`,
       };
-      addKegLedgerEntry(entry);
+      await addKegLedgerEntry(entry);
     }
 
     // Auto-create invoice
-    const existingInvoices = getInvoices();
+    const existingInvoices = await getInvoices();
     const alreadyInvoiced = existingInvoices.some(inv => inv.orderId === id);
     if (!alreadyInvoiced) {
       const invoice: Invoice = {
@@ -97,10 +96,10 @@ export async function PUT(request: NextRequest) {
         issuedAt: now,
         paidAt: null,
       };
-      createInvoice(invoice);
+      await createInvoice(invoice);
     }
   }
 
-  const order = updateOrder(id, updates);
+  const order = await updateOrder(id, updates);
   return NextResponse.json(order);
 }

@@ -4,7 +4,7 @@ import { generateId } from '@/lib/utils';
 import type { Customer } from '@/lib/types';
 
 export async function GET() {
-  const customers = getCustomers();
+  const customers = await getCustomers();
   // Strip passwords from response
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const safe = customers.map(({ password, ...rest }) => rest);
@@ -22,14 +22,14 @@ export async function POST(request: NextRequest) {
     address: body.address || '',
     createdAt: new Date().toISOString(),
   };
-  createCustomer(customer);
+  await createCustomer(customer);
   return NextResponse.json(customer, { status: 201 });
 }
 
 export async function PUT(request: NextRequest) {
   const body = await request.json();
   const { id, ...updates } = body;
-  const customer = updateCustomer(id, updates);
+  const customer = await updateCustomer(id, updates);
   if (!customer) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
   }
@@ -42,7 +42,7 @@ export async function DELETE(request: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: 'ID required' }, { status: 400 });
   }
-  const deleted = deleteCustomer(id);
+  const deleted = await deleteCustomer(id);
   if (!deleted) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
   }

@@ -5,12 +5,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
 
-  let ledger = getKegLedger();
+  let ledger = await getKegLedger();
   if (customerId) {
     ledger = ledger.filter(e => e.customerId === customerId);
   }
 
-  const customers = getCustomers();
+  const customers = await getCustomers();
   const customerMap = new Map(customers.map(c => [c.id, c.businessName]));
 
   const headers = ['Date', 'Customer', 'Order', 'Type', 'Size', 'Quantity', 'Deposit Rate', 'Total Amount', 'Notes'];

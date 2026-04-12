@@ -48,5 +48,15 @@
     "address": "678 S 3rd St, Louisville, KY 40203",
     "password": "guidon2026",
     "createdAt": "2025-10-18T16:45:00Z"
+  },
+  {
+    "id": "cust-006",
+    "businessName": "Derby Digital",
+    "contactName": "Jahan",
+    "email": "jahan@derbydigital.us",
+    "phone": "(502) 555-0606",
+    "address": "Louisville, KY 40202",
+    "password": "DerbyDigital123!",
+    "createdAt": "2026-04-12T00:00:00Z"
   }
 ]

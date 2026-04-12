@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomers } from '@/lib/data';
+import { isSupabaseConfigured, createServerClient } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -8,7 +9,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
   }
 
-  const customers = getCustomers();
+  // When Supabase is configured, authenticate via Supabase Auth
+  if (isSupabaseConfigured()) {
+    const sb = createServerClient();
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
+    }
+
+    // Fetch the linked customer record
+    const { data: customerRow } = await sb
+      .from('customers')
+      .select('*')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (!customerRow) {
+      return NextResponse.json({ error: 'No customer account found for this email.' }, { status: 401 });
+    }
+
+    const customer = {
+      id: customerRow.id,
+      businessName: customerRow.business_name,
+      contactName: customerRow.contact_name,
+      email: customerRow.email,
+      phone: customerRow.phone,
+      address: customerRow.address,
+      createdAt: customerRow.created_at,
+    };
+
+    const response = NextResponse.json(customer);
+    response.cookies.set('portal_session', customer.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    });
+    return response;
+  }
+
+  // Fallback: file-based authentication
+  const customers = await getCustomers();
   const customer = customers.find(
     (c) => c.email.toLowerCase() === email.trim().toLowerCase()
   );
@@ -22,7 +65,7 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24, // 24 hours
+    maxAge: 60 * 60 * 24,
     path: '/',
   });
 
@@ -35,13 +78,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const customers = getCustomers();
+  const customers = await getCustomers();
   const customer = customers.find((c) => c.id === session.value);
   if (!customer) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 401 });
   }
 
-  return NextResponse.json(customer);
+  // Strip password before returning
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password, ...safe } = customer;
+  return NextResponse.json(safe);
 }
 
 export async function DELETE() {
