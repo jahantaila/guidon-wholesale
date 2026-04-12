@@ -17,11 +17,16 @@ create table if not exists customers (
   created_at timestamptz not null default now()
 );
 
--- Row Level Security: admins (service role) can see all; customers see only themselves
+-- Row Level Security
 alter table customers enable row level security;
+-- Service role (admin client) can do everything
 create policy "Service role full access" on customers
   using (true)
   with check (true);
+-- Authenticated users can read their own customer row (by email match)
+create policy "Customer self read" on customers
+  for select
+  using (email = lower(auth.jwt() ->> 'email'));
 
 -- ============================================================
 -- PRODUCTS
@@ -92,6 +97,8 @@ create table if not exists keg_returns (
 
 alter table orders enable row level security;
 create policy "Service role full access" on orders using (true) with check (true);
+create policy "Customer self read" on orders for select
+  using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 alter table order_items enable row level security;
 create policy "Service role full access" on order_items using (true) with check (true);
 alter table keg_returns enable row level security;
@@ -115,6 +122,8 @@ create table if not exists invoices (
 
 alter table invoices enable row level security;
 create policy "Service role full access" on invoices using (true) with check (true);
+create policy "Customer self read" on invoices for select
+  using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 
 -- ============================================================
 -- KEG LEDGER
@@ -134,6 +143,8 @@ create table if not exists keg_ledger (
 
 alter table keg_ledger enable row level security;
 create policy "Service role full access" on keg_ledger using (true) with check (true);
+create policy "Customer self read" on keg_ledger for select
+  using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 
 -- ============================================================
 -- WHOLESALE APPLICATIONS
