@@ -8,7 +8,7 @@ export default function HomePage() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gold/[0.03] rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-olive/[0.05] rounded-full blur-3xl" />
         <div className="absolute top-0 right-0 w-1/3 h-full opacity-[0.02]"
-          style={{ backgroundImage: 'repeating-linear-gradient(-45deg, transparent, transparent 20px, #D4A843 20px, #D4A843 21px)' }}
+          style={{ backgroundImage: 'repeating-linear-gradient(-45deg, transparent, transparent 20px, #F3CA2C 20px, #F3CA2C 21px)' }}
         />
       </div>
 

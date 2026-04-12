@@ -2,32 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap');
 
 :root {
-  --background: #1A1A1A;
-  --foreground: #F5F0E1;
-  --gold: #D4A843;
-  --charcoal: #1A1A1A;
+  --background: #040404;
+  --foreground: #FFFFFF;
+  --gold: #F3CA2C;
+  --charcoal: #040404;
   --olive: #3D4F2F;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Roboto', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Outfit', system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   ::selection {
-    background: rgba(212, 168, 67, 0.3);
-    color: #F5F0E1;
+    background: rgba(243, 202, 44, 0.3);
+    color: #FFFFFF;
   }
 
   ::-webkit-scrollbar {
@@ -36,23 +38,23 @@ body {
   }
 
   ::-webkit-scrollbar-track {
-    background: #111111;
+    background: #040404;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #333333;
+    background: #222222;
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #D4A843;
+    background: #F3CA2C;
   }
 }
 
 @layer components {
   .skeleton {
     @apply animate-pulse rounded;
-    background: linear-gradient(90deg, #2a2a2a 25%, #333333 50%, #2a2a2a 75%);
+    background: linear-gradient(90deg, #111111 25%, #1a1a1a 50%, #111111 75%);
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
   }
