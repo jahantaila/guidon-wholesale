@@ -509,6 +509,8 @@ export async function createApplication(app: WholesaleApplication): Promise<Whol
       phone: app.phone,
       address: app.address,
       message: '',
+      business_type: app.businessType || '',
+      expected_monthly_volume: app.expectedMonthlyVolume || '',
     });
     if (error) throw error;
     return app;

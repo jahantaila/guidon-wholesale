@@ -157,6 +157,8 @@ create table if not exists applications (
   phone text not null default '',
   address text not null default '',
   message text not null default '',
+  business_type text not null default '',
+  expected_monthly_volume text not null default '',
   status text not null default 'pending'
     check (status in ('pending', 'approved', 'rejected')),
   created_at timestamptz not null default now()

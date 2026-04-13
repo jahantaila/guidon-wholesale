@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import type { Customer, Order, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
@@ -44,9 +45,7 @@ export default function PortalPage() {
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-charcoal">
-        <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center animate-pulse-slow">
-          <span className="text-charcoal font-heading font-black text-xl">G</span>
-        </div>
+        <Image src="/logo.png" alt="Guidon Brewing" width={48} height={48} className="rounded-xl animate-pulse-slow" />
       </div>
     );
   }
@@ -99,9 +98,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center">
-              <span className="text-charcoal font-heading font-black text-xl">G</span>
-            </div>
+            <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
             <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
           </Link>
           <h1 className="text-display-sm font-heading text-cream">Sign In</h1>
@@ -198,9 +195,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/">
-              <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center">
-                <span className="text-charcoal font-heading font-black text-xl">G</span>
-              </div>
+              <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
             </Link>
             <div>
               <h1 className="text-lg sm:text-xl font-heading font-black text-cream">{customer.businessName}</h1>

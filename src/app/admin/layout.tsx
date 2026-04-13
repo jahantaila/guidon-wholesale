@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
@@ -95,9 +96,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (checking) {
     return (
       <div className="min-h-screen bg-charcoal flex items-center justify-center">
-        <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center animate-pulse-slow">
-          <span className="text-charcoal font-heading font-black text-lg">G</span>
-        </div>
+        <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg animate-pulse-slow" />
       </div>
     );
   }
@@ -107,9 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="min-h-screen bg-charcoal flex items-center justify-center p-4">
         <div className="card max-w-sm w-full">
           <div className="text-center mb-6">
-            <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center mx-auto mb-4">
-              <span className="text-charcoal font-heading font-black text-xl">G</span>
-            </div>
+            <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg mx-auto mb-4" />
             <h1 className="text-xl font-heading font-black text-cream mb-1">Admin Panel</h1>
             <p className="text-sm text-cream/25">Enter your password to continue</p>
           </div>
@@ -138,9 +135,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}>
         <div className="p-5 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center">
-              <span className="text-charcoal font-heading font-black text-sm">G</span>
-            </div>
+            <Image src="/logo.png" alt="Guidon Brewing" width={32} height={32} className="rounded-lg" />
             <div>
               <h2 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON</h2>
               <p className="text-[9px] uppercase tracking-[0.15em] text-cream/20 font-medium">Admin Panel</p>

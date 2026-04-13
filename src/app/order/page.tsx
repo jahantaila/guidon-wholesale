@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -82,6 +83,13 @@ export default function OrderPage() {
   const [submitError, setSubmitError] = useState('');
 
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
+
+  // Auth check — redirect to portal if not logged in
+  useEffect(() => {
+    fetch('/api/portal/login')
+      .then((r) => { if (!r.ok) router.replace('/portal'); })
+      .catch(() => router.replace('/portal'));
+  }, [router]);
 
   useEffect(() => {
     async function fetchData() {
@@ -230,9 +238,7 @@ export default function OrderPage() {
       <header className="sticky top-0 z-30 bg-charcoal/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 bg-gold rounded-lg flex items-center justify-center">
-              <span className="text-charcoal font-heading font-black text-lg">G</span>
-            </div>
+            <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
             <div className="hidden sm:block">
               <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING</h1>
               <p className="text-[10px] uppercase tracking-[0.15em] text-cream/30 font-medium -mt-0.5">Wholesale Orders</p>

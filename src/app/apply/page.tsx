@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 export default function ApplyPage() {
   const [form, setForm] = useState({
     businessName: '',
@@ -73,9 +74,7 @@ export default function ApplyPage() {
       {/* Header */}
       <header className="max-w-lg mx-auto mb-8">
         <Link href="/" className="flex items-center gap-3 mb-8">
-          <div className="w-9 h-9 bg-gold rounded-lg flex items-center justify-center">
-            <span className="text-charcoal font-heading font-black text-lg">G</span>
-          </div>
+          <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
           <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
         </Link>
 

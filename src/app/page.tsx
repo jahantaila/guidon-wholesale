@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function HomePage() {
   return (
@@ -7,9 +8,7 @@ export default function HomePage() {
       <header className="relative z-10 border-b border-white/[0.06]">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center">
-              <span className="text-charcoal font-heading font-black text-xl">G</span>
-            </div>
+            <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
             <span className="font-heading font-black text-lg text-cream tracking-tight">GUIDON</span>
           </div>
           <div className="flex items-center gap-3">
@@ -50,9 +49,6 @@ export default function HomePage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
-            </Link>
-            <Link href="/order" className="btn-outline text-base py-3.5 px-8">
-              Quick Order
             </Link>
             <Link href="/admin" className="btn-secondary text-base py-3.5 px-8">
               Admin

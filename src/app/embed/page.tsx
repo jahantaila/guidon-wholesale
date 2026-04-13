@@ -2,27 +2,22 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
-type EmbedType = 'order' | 'portal';
+type EmbedType = 'portal';
 
 const EMBED_OPTIONS: { key: EmbedType; label: string; description: string; path: string }[] = [
   {
-    key: 'order',
-    label: 'Order Widget',
-    description: 'Embeddable product catalog and ordering form. Customers can browse beers, add to cart, and place wholesale orders directly from your website.',
-    path: '/embed/order',
-  },
-  {
     key: 'portal',
     label: 'Customer Portal',
-    description: 'Full customer portal with login, order history, keg balances, and product browsing. Best for a dedicated wholesale page on your site.',
+    description: 'Full customer portal with login, order history, keg balances, and product browsing. Customers can sign in, browse beers, place orders, and track keg balances directly from your website.',
     path: '/embed/portal',
   },
 ];
 
 export default function EmbedPage() {
-  const [selectedType, setSelectedType] = useState<EmbedType>('order');
+  const [selectedType, setSelectedType] = useState<EmbedType>('portal');
   const [copied, setCopied] = useState(false);
   const [baseUrl, setBaseUrl] = useState('https://guidon-wholesale.vercel.app');
 
@@ -73,9 +68,7 @@ ${iframeCode}`;
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <Link href="/" className="flex items-center gap-3 mb-8">
-          <div className="w-9 h-9 bg-gold rounded-lg flex items-center justify-center">
-            <span className="text-charcoal font-heading font-black text-lg">G</span>
-          </div>
+          <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
           <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
         </Link>
 

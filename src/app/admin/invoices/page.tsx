@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { Invoice, InvoiceStatus, Customer } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 
@@ -65,9 +66,7 @@ export default function InvoicesPage() {
           <div className="flex justify-between items-start mb-10">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-charcoal rounded-lg flex items-center justify-center print:bg-gray-800">
-                  <span className="text-gold font-heading font-black text-xl">G</span>
-                </div>
+                <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
                 <div>
                   <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
