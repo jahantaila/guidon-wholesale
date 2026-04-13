@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { AdminStats, Order, Customer } from '@/lib/types';
+import Link from 'next/link';
+import { AdminStats, Order, Customer, WholesaleApplication, Invoice } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 
 function useCountUp(end: number, duration: number = 1200, active: boolean = true): number {
@@ -33,20 +34,26 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [applications, setApplications] = useState<(WholesaleApplication & { status?: string })[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [statsRes, ordersRes, customersRes] = await Promise.all([
+        const [statsRes, ordersRes, customersRes, appsRes, invoicesRes] = await Promise.all([
           fetch('/api/admin/stats'), fetch('/api/orders'), fetch('/api/customers'),
+          fetch('/api/applications'), fetch('/api/invoices'),
         ]);
-        const statsData = await statsRes.json();
+        setStats(await statsRes.json());
         const ordersData = await ordersRes.json();
-        const customersData = await customersRes.json();
-        setStats(statsData);
         setOrders(Array.isArray(ordersData) ? ordersData : []);
+        const customersData = await customersRes.json();
         setCustomers(Array.isArray(customersData) ? customersData : []);
+        const appsData = await appsRes.json();
+        setApplications(Array.isArray(appsData) ? appsData : []);
+        const invoicesData = await invoicesRes.json();
+        setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
       } catch (err) {
         console.error('Failed to load dashboard data', err);
       } finally { setLoading(false); }
@@ -55,9 +62,27 @@ export default function AdminDashboard() {
   }, []);
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
-  const recentOrders = [...orders]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+
+  // Build activity feed from orders, applications, invoices
+  type ActivityItem = { type: string; title: string; detail: string; date: string; color: string };
+  const activityFeed: ActivityItem[] = [];
+  orders.forEach(o => {
+    activityFeed.push({ type: 'order', title: `New order ${o.id}`, detail: customerMap.get(o.customerId)?.businessName || 'Unknown', date: o.createdAt, color: 'text-gold' });
+  });
+  applications.forEach(a => {
+    activityFeed.push({ type: 'application', title: `Application: ${a.businessName}`, detail: a.status || 'pending', date: a.createdAt, color: 'text-purple-400' });
+  });
+  invoices.filter(i => i.paidAt).forEach(i => {
+    activityFeed.push({ type: 'payment', title: `Invoice ${i.id} paid`, detail: formatCurrency(i.total), date: i.paidAt!, color: 'text-emerald-400' });
+  });
+  activityFeed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const recentActivity = activityFeed.slice(0, 10);
+
+  // Upcoming deliveries
+  const upcomingDeliveries = [...orders]
+    .filter(o => o.status === 'pending' || o.status === 'confirmed')
+    .sort((a, b) => new Date(a.deliveryDate).getTime() - new Date(b.deliveryDate).getTime())
+    .slice(0, 8);
 
   const kegsOut = useCountUp(stats?.kegsOut ?? 0, 1200, !!stats);
   const pendingOrders = useCountUp(stats?.pendingOrders ?? 0, 800, !!stats);
@@ -102,44 +127,69 @@ export default function AdminDashboard() {
             })}
       </div>
 
-      {/* Recent orders */}
-      <div>
-        <span className="section-label mb-4 block">Recent Orders</span>
-        <div className="card p-0 overflow-hidden">
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12 w-full rounded-lg" />)}
-            </div>
-          ) : recentOrders.length === 0 ? (
-            <p className="p-6 text-cream/25 text-sm">No orders yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-charcoal-200">
-                  <tr>
-                    <th className="table-header">Order ID</th>
-                    <th className="table-header">Customer</th>
-                    <th className="table-header">Date</th>
-                    <th className="table-header">Status</th>
-                    <th className="table-header text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.04]">
-                  {recentOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="table-cell font-heading font-bold text-cream">{order.id}</td>
-                      <td className="table-cell">{customerMap.get(order.customerId)?.businessName || order.customerId}</td>
-                      <td className="table-cell text-cream/40">{formatDate(order.createdAt)}</td>
-                      <td className="table-cell">
-                        <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
-                      </td>
-                      <td className="table-cell text-right font-heading font-bold text-cream">{formatCurrency(order.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        <Link href="/admin/orders" className="btn-primary text-xs py-2 px-4">View Pending Orders</Link>
+        <Link href="/admin/applications" className="btn-outline text-xs py-2 px-4">Review Applications</Link>
+        <Link href="/admin/products" className="btn-secondary text-xs py-2 px-4">Manage Products</Link>
+        <Link href="/admin/kegs" className="btn-secondary text-xs py-2 px-4">Keg Tracker</Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Activity Feed */}
+        <div>
+          <span className="section-label mb-4 block">Recent Activity</span>
+          <div className="card p-0 overflow-hidden">
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded-lg" />)}
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <p className="p-4 text-cream/25 text-sm">No activity yet.</p>
+            ) : (
+              <div className="divide-y divide-white/[0.04]">
+                {recentActivity.map((item, idx) => (
+                  <div key={idx} className="px-4 py-3 flex items-center gap-3">
+                    <div className={cn('w-2 h-2 rounded-full shrink-0', item.color.replace('text-', 'bg-'))} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-cream/70 truncate">{item.title}</p>
+                      <p className="text-xs text-cream/25">{item.detail}</p>
+                    </div>
+                    <span className="text-[10px] text-cream/20 shrink-0">{formatDate(item.date)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Deliveries */}
+        <div>
+          <span className="section-label mb-4 block">Upcoming Deliveries</span>
+          <div className="card p-0 overflow-hidden">
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded-lg" />)}
+              </div>
+            ) : upcomingDeliveries.length === 0 ? (
+              <p className="p-4 text-cream/25 text-sm">No upcoming deliveries.</p>
+            ) : (
+              <div className="divide-y divide-white/[0.04]">
+                {upcomingDeliveries.map((order) => (
+                  <div key={order.id} className="px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-heading font-bold text-cream">{customerMap.get(order.customerId)?.businessName || 'Unknown'}</p>
+                      <p className="text-xs text-cream/25">{order.id} &middot; {order.items.length} item{order.items.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-heading font-bold text-gold">{formatDate(order.deliveryDate)}</p>
+                      <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
