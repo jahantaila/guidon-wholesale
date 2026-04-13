@@ -48,8 +48,8 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       <div>
+        <span className="section-label mb-1 block">Management</span>
         <h2 className="font-heading text-2xl font-black text-cream">Orders</h2>
-        <p className="text-cream/30 text-sm mt-1">Manage and track all wholesale orders</p>
       </div>
 
       {/* Status filter tabs */}
@@ -57,10 +57,10 @@ export default function OrdersPage() {
         {(['all', ...STATUS_FLOW] as const).map((status) => (
           <button key={status} onClick={() => setFilter(status)}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+              'px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all duration-150',
               filter === status
                 ? status === 'all' ? 'bg-gold text-charcoal' : getStatusColor(status)
-                : 'bg-white/5 text-cream/40 border border-white/10 hover:border-white/20 hover:text-cream/60'
+                : 'bg-charcoal-200 text-cream/35 border border-white/[0.08] hover:text-cream/50'
             )}>
             {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
             {status !== 'all' && (
@@ -73,7 +73,7 @@ export default function OrdersPage() {
       {/* Orders table */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-12 w-full" />)}</div>
+          <div className="p-6 space-y-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-12 w-full rounded-lg" />)}</div>
         ) : sorted.length === 0 ? (
           <p className="p-6 text-cream/30 text-sm">No orders found.</p>
         ) : (
@@ -90,7 +90,7 @@ export default function OrdersPage() {
                   <th className="table-header text-right">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.06]">
+              <tbody className="divide-y divide-white/[0.04]">
                 {sorted.map((order) => {
                   const isExpanded = expandedId === order.id;
                   const currentIdx = STATUS_FLOW.indexOf(order.status);

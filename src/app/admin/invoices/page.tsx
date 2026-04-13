@@ -52,7 +52,7 @@ export default function InvoicesPage() {
     return (
       <div>
         <div className="no-print mb-6 flex items-center gap-4">
-          <button onClick={() => setViewingInvoice(null)} className="btn-ghost border border-white/10 px-4 py-2">
+          <button onClick={() => setViewingInvoice(null)} className="btn-secondary px-4 py-2">
             &larr; Back to Invoices
           </button>
           <button onClick={() => window.print()} className="btn-primary">
@@ -183,8 +183,8 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       <div>
+        <span className="section-label mb-1 block">Billing</span>
         <h2 className="font-heading text-2xl font-black text-cream">Invoices</h2>
-        <p className="text-cream/30 text-sm mt-1">View and manage customer invoices</p>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -195,7 +195,7 @@ export default function InvoicesPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-white/[0.02]">
+              <thead className="bg-charcoal-200">
                 <tr>
                   <th className="table-header">Invoice ID</th>
                   <th className="table-header">Order ID</th>
@@ -206,7 +206,7 @@ export default function InvoicesPage() {
                   <th className="table-header text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.06]">
+              <tbody className="divide-y divide-white/[0.04]">
                 {sorted.map((inv) => (
                   <tr key={inv.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="table-cell font-semibold text-cream">{inv.id}</td>

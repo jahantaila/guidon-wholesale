@@ -95,29 +95,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (checking) {
     return (
       <div className="min-h-screen bg-charcoal flex items-center justify-center">
-        <div className="skeleton w-10 h-10 rounded-full" />
+        <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center animate-pulse-slow">
+          <span className="text-charcoal font-heading font-black text-lg">G</span>
+        </div>
       </div>
     );
   }
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-charcoal flex items-center justify-center p-4 relative">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/3 right-1/3 w-96 h-96 bg-gold/[0.02] rounded-full blur-3xl" />
-        </div>
-        <div className="relative card max-w-sm w-full">
+      <div className="min-h-screen bg-charcoal flex items-center justify-center p-4">
+        <div className="card max-w-sm w-full">
           <div className="text-center mb-6">
-            <div className="w-12 h-12 bg-gold-gradient rounded-xl flex items-center justify-center shadow-gold mx-auto mb-4">
+            <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center mx-auto mb-4">
               <span className="text-charcoal font-heading font-black text-xl">G</span>
             </div>
-            <h1 className="text-2xl font-heading font-black text-cream mb-1">Admin Panel</h1>
-            <p className="text-sm text-cream/30">Enter your password to continue</p>
+            <h1 className="text-xl font-heading font-black text-cream mb-1">Admin Panel</h1>
+            <p className="text-sm text-cream/25">Enter your password to continue</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="Admin password" className="input" autoFocus />
-            {loginError && <p className="text-red-400 text-sm bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">{loginError}</p>}
+            {loginError && <p className="text-red-400 text-sm bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{loginError}</p>}
             <button type="submit" disabled={loggingIn} className="btn-primary w-full py-3">
               {loggingIn ? 'Signing in...' : 'Sign In'}
             </button>
@@ -134,32 +133,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Sidebar */}
       <aside className={cn(
-        'fixed lg:static inset-y-0 left-0 z-40 w-64 bg-charcoal-700 border-r border-white/[0.06] text-white flex flex-col transition-transform duration-300 lg:translate-x-0',
+        'fixed lg:static inset-y-0 left-0 z-40 w-56 bg-charcoal-100 border-r border-white/[0.06] flex flex-col transition-transform duration-300 lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <div className="p-6 border-b border-white/[0.06]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gold-gradient rounded-lg flex items-center justify-center shadow-gold">
-              <span className="text-charcoal font-heading font-black text-lg">G</span>
+        <div className="p-5 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center">
+              <span className="text-charcoal font-heading font-black text-sm">G</span>
             </div>
             <div>
-              <h2 className="font-heading text-base font-bold text-gold tracking-wide">GUIDON</h2>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-cream/25 font-semibold">Admin Panel</p>
+              <h2 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON</h2>
+              <p className="text-[9px] uppercase tracking-[0.15em] text-cream/20 font-medium">Admin Panel</p>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 py-3">
+        <nav className="flex-1 py-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-6 py-3 text-sm font-medium transition-all duration-200 mx-2 rounded-lg my-0.5',
+                  'flex items-center gap-2.5 px-5 py-2.5 text-sm font-medium transition-all duration-150 mx-2 rounded-xl my-0.5',
                   isActive
-                    ? 'bg-gold/10 text-gold border-l-2 border-gold'
-                    : 'text-cream/40 hover:bg-white/[0.03] hover:text-cream/70'
+                    ? 'bg-gold/10 text-gold'
+                    : 'text-cream/30 hover:bg-white/[0.03] hover:text-cream/50'
                 )}>
                 <Icon className={isActive ? 'text-gold' : ''} />
                 {item.label}
@@ -169,8 +168,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="p-4 border-t border-white/[0.06]">
-          <Link href="/" className="flex items-center gap-2 text-xs text-cream/20 hover:text-cream/40 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Link href="/" className="flex items-center gap-2 text-xs text-cream/15 hover:text-cream/30 transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Site
@@ -180,16 +179,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen">
-        <header className="bg-charcoal/80 backdrop-blur-md border-b border-white/[0.06] px-4 lg:px-8 py-4 flex items-center justify-between no-print sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-cream/40 hover:text-cream p-1 transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div className="hidden lg:block" />
-          </div>
-          <button onClick={handleLogout} className="btn-ghost text-xs border border-white/10 px-3 py-1.5 rounded-lg">
+        <header className="bg-charcoal/90 backdrop-blur-md border-b border-white/[0.06] px-4 lg:px-8 py-3.5 flex items-center justify-between no-print sticky top-0 z-20">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-cream/30 hover:text-cream p-1 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="hidden lg:block" />
+          <button onClick={handleLogout} className="btn-ghost text-xs border border-white/[0.08] px-3 py-1.5 rounded-xl">
             Logout
           </button>
         </header>

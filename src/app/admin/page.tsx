@@ -17,7 +17,7 @@ function useCountUp(end: number, duration: number = 1200, active: boolean = true
     function tick() {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+      const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(startVal + diff * eased);
       setValue(current);
       ref.current = current;
@@ -65,17 +65,17 @@ export default function AdminDashboard() {
   const totalCustomers = useCountUp(stats?.totalCustomers ?? 0, 900, !!stats);
 
   const statCards = [
-    { label: 'Kegs Out', value: kegsOut, display: kegsOut.toString(), color: 'text-gold', iconBg: 'bg-gold/10', borderColor: 'border-gold/20', icon: KegsOutIcon },
-    { label: 'Pending Orders', value: pendingOrders, display: pendingOrders.toString(), color: 'text-amber-400', iconBg: 'bg-amber-500/10', borderColor: 'border-amber-500/20', icon: PendingIcon },
-    { label: 'Total Revenue', value: totalRevenue, display: formatCurrency(totalRevenue), color: 'text-emerald-400', iconBg: 'bg-emerald-500/10', borderColor: 'border-emerald-500/20', icon: RevenueIcon },
-    { label: 'Total Customers', value: totalCustomers, display: totalCustomers.toString(), color: 'text-blue-400', iconBg: 'bg-blue-500/10', borderColor: 'border-blue-500/20', icon: CustomersCountIcon },
+    { label: 'Kegs Out', value: kegsOut, display: kegsOut.toString(), color: 'text-gold', borderColor: 'border-gold/15', icon: KegsOutIcon },
+    { label: 'Pending Orders', value: pendingOrders, display: pendingOrders.toString(), color: 'text-amber-400', borderColor: 'border-amber-500/15', icon: PendingIcon },
+    { label: 'Total Revenue', value: totalRevenue, display: formatCurrency(totalRevenue), color: 'text-emerald-400', borderColor: 'border-emerald-500/15', icon: RevenueIcon },
+    { label: 'Total Customers', value: totalCustomers, display: totalCustomers.toString(), color: 'text-blue-400', borderColor: 'border-blue-500/15', icon: CustomersCountIcon },
   ];
 
   return (
     <div className="space-y-8">
       <div>
+        <span className="section-label mb-1 block">Overview</span>
         <h2 className="font-heading text-2xl font-black text-cream">Dashboard</h2>
-        <p className="text-cream/30 text-sm mt-1">Overview of your wholesale operations</p>
       </div>
 
       {/* Stat cards */}
@@ -88,60 +88,57 @@ export default function AdminDashboard() {
               const Icon = card.icon;
               return (
                 <div key={card.label}
-                  className={cn('card border animate-slide-up', card.borderColor)}
-                  style={{ animationDelay: `${i * 100}ms` }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-cream/40 uppercase tracking-widest">{card.label}</span>
-                    <div className={cn('p-2 rounded-lg', card.iconBg)}>
-                      <Icon className={cn('w-4 h-4', card.color)} />
-                    </div>
+                  className={cn('stat-card border animate-slide-up', card.borderColor)}
+                  style={{ animationDelay: `${i * 80}ms` }}>
+                  <div className="relative flex items-center justify-between mb-3">
+                    <span className="section-label">{card.label}</span>
+                    <Icon className={cn('w-4 h-4', card.color)} />
                   </div>
-                  <p className={cn('text-3xl font-black', card.color)}>{card.display}</p>
+                  <p className={cn('relative text-3xl font-heading font-black', card.color)}>{card.display}</p>
                 </div>
               );
             })}
       </div>
 
       {/* Recent orders */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
-          <div className="w-1 h-4 bg-gold rounded-full" />
-          <h3 className="font-heading text-lg font-bold text-cream">Recent Orders</h3>
-        </div>
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12 w-full" />)}
-          </div>
-        ) : recentOrders.length === 0 ? (
-          <p className="p-6 text-cream/30 text-sm">No orders yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-white/[0.02]">
-                <tr>
-                  <th className="table-header">Order ID</th>
-                  <th className="table-header">Customer</th>
-                  <th className="table-header">Date</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.06]">
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="table-cell font-semibold text-cream">{order.id}</td>
-                    <td className="table-cell">{customerMap.get(order.customerId)?.businessName || order.customerId}</td>
-                    <td className="table-cell">{formatDate(order.createdAt)}</td>
-                    <td className="table-cell">
-                      <span className={cn('badge', getStatusColor(order.status))}>{order.status}</span>
-                    </td>
-                    <td className="table-cell text-right font-semibold text-cream">{formatCurrency(order.total)}</td>
+      <div>
+        <span className="section-label mb-4 block">Recent Orders</span>
+        <div className="card p-0 overflow-hidden">
+          {loading ? (
+            <div className="p-6 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12 w-full rounded-lg" />)}
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <p className="p-6 text-cream/25 text-sm">No orders yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-charcoal-200">
+                  <tr>
+                    <th className="table-header">Order ID</th>
+                    <th className="table-header">Customer</th>
+                    <th className="table-header">Date</th>
+                    <th className="table-header">Status</th>
+                    <th className="table-header text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {recentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="table-cell font-heading font-bold text-cream">{order.id}</td>
+                      <td className="table-cell">{customerMap.get(order.customerId)?.businessName || order.customerId}</td>
+                      <td className="table-cell text-cream/40">{formatDate(order.createdAt)}</td>
+                      <td className="table-cell">
+                        <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
+                      </td>
+                      <td className="table-cell text-right font-heading font-bold text-cream">{formatCurrency(order.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

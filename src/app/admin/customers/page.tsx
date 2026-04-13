@@ -64,10 +64,10 @@ export default function CustomersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <span className="section-label mb-1 block">Management</span>
           <h2 className="font-heading text-2xl font-black text-cream">Customers</h2>
-          <p className="text-cream/30 text-sm mt-1">Manage your wholesale customer accounts</p>
         </div>
-        <button onClick={openAdd} className="btn-primary flex items-center gap-2 self-start">
+        <button onClick={openAdd} className="btn-primary self-start">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -83,7 +83,7 @@ export default function CustomersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-white/[0.02]">
+              <thead className="bg-charcoal-200">
                 <tr>
                   <th className="table-header">Business Name</th>
                   <th className="table-header">Contact</th>
@@ -93,7 +93,7 @@ export default function CustomersPage() {
                   <th className="table-header text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.06]">
+              <tbody className="divide-y divide-white/[0.04]">
                 {customers.map((c) => (
                   <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="table-cell font-semibold text-cream">{c.businessName}</td>
@@ -129,7 +129,7 @@ export default function CustomersPage() {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-charcoal-100 border border-white/[0.06] rounded-xl shadow-dark-lg max-w-lg w-full p-6 animate-scale-in">
+          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl shadow-dark-lg max-w-lg w-full p-6 animate-scale-in">
             <h3 className="font-heading text-xl font-bold text-cream mb-5">
               {editingId ? 'Edit Customer' : 'Add Customer'}
             </h3>
@@ -158,7 +158,7 @@ export default function CustomersPage() {
               </div>
               <div className="flex justify-end gap-3 pt-3">
                 <button type="button" onClick={() => { setModalOpen(false); setEditingId(null); }}
-                  className="btn-ghost border border-white/10 px-4 py-2">Cancel</button>
+                  className="btn-secondary px-4 py-2">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary">
                   {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
                 </button>

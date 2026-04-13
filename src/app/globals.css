@@ -5,10 +5,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap');
 
 :root {
-  --background: #040404;
-  --foreground: #FFFFFF;
-  --gold: #F3CA2C;
-  --charcoal: #040404;
+  --background: #0A0A0A;
+  --foreground: #F2EDE4;
+  --gold: #D4A017;
+  --charcoal: #0A0A0A;
   --olive: #3D4F2F;
 }
 
@@ -24,107 +24,180 @@ body {
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Outfit', system-ui, sans-serif;
     font-weight: 800;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
   }
 
   ::selection {
-    background: rgba(243, 202, 44, 0.3);
+    background: rgba(212, 160, 23, 0.3);
     color: #FFFFFF;
   }
 
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #040404;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #222222;
-    border-radius: 4px;
+    background: #333;
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #F3CA2C;
+    background: #D4A017;
   }
 }
 
 @layer components {
   .skeleton {
-    @apply animate-pulse rounded;
-    background: linear-gradient(90deg, #111111 25%, #1a1a1a 50%, #111111 75%);
+    @apply animate-pulse rounded-lg;
+    background: linear-gradient(90deg, #181818 25%, #222 50%, #181818 75%);
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
   }
 
   .btn-primary {
-    @apply bg-gold text-charcoal px-6 py-2.5 rounded-lg font-semibold
-      hover:bg-gold-300 active:bg-gold-500 transition-all duration-200
+    @apply inline-flex items-center justify-center gap-2
+      bg-gold text-charcoal px-6 py-2.5 rounded-lg font-heading font-bold text-sm
+      hover:bg-gold-300 active:bg-gold-500 transition-all duration-150
       focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-charcoal
-      shadow-sm hover:shadow-gold;
+      shadow-gold-sm hover:shadow-gold;
   }
 
   .btn-secondary {
-    @apply bg-olive text-cream px-6 py-2.5 rounded-lg font-semibold
-      hover:bg-olive-600 active:bg-olive-800 transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-olive-400/50 focus:ring-offset-2 focus:ring-offset-charcoal;
+    @apply inline-flex items-center justify-center gap-2
+      bg-charcoal-200 text-cream px-6 py-2.5 rounded-lg font-heading font-bold text-sm
+      border border-white/10
+      hover:bg-charcoal-300 hover:border-white/20 active:bg-charcoal-400 transition-all duration-150
+      focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-charcoal;
   }
 
   .btn-outline {
-    @apply border-2 border-gold/40 text-gold px-6 py-2.5 rounded-lg font-semibold
-      hover:bg-gold/10 hover:border-gold transition-all duration-200
+    @apply inline-flex items-center justify-center gap-2
+      border-2 border-gold/50 text-gold px-6 py-2.5 rounded-lg font-heading font-bold text-sm
+      hover:bg-gold/10 hover:border-gold transition-all duration-150
       focus:outline-none focus:ring-2 focus:ring-gold/30 focus:ring-offset-2 focus:ring-offset-charcoal;
   }
 
   .btn-ghost {
-    @apply text-cream/60 px-4 py-2 rounded-lg font-medium
-      hover:text-cream hover:bg-white/5 transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2
+      text-cream/60 px-4 py-2 rounded-lg font-medium text-sm
+      hover:text-cream hover:bg-white/5 transition-all duration-150;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+      bg-red-600 text-white px-6 py-2.5 rounded-lg font-heading font-bold text-sm
+      hover:bg-red-500 transition-all duration-150;
   }
 
   .card {
-    @apply bg-charcoal-100 rounded-xl border border-white/[0.06] p-6
-      transition-all duration-300 hover:border-gold/20 hover:shadow-gold;
+    @apply bg-charcoal-100 rounded-2xl border border-white/[0.08] p-6
+      transition-all duration-200;
   }
 
-  .card-dark {
-    @apply bg-charcoal rounded-xl border border-white/[0.06] p-6
-      transition-all duration-300;
+  .card-interactive {
+    @apply bg-charcoal-100 rounded-2xl border border-white/[0.08] p-6
+      transition-all duration-200
+      hover:border-gold/25 hover:bg-charcoal-200;
+  }
+
+  .card-product {
+    @apply bg-charcoal-100 rounded-2xl border border-white/[0.08] p-0 overflow-hidden
+      transition-all duration-200
+      hover:border-gold/30 hover:shadow-gold;
   }
 
   .input {
-    @apply w-full px-4 py-2.5 border border-white/10 rounded-lg
-      bg-charcoal text-cream
-      focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold/60
-      placeholder:text-cream/30 transition-all duration-200;
-  }
-
-  .input-light {
-    @apply w-full px-4 py-2.5 border border-cream-200 rounded-lg
-      bg-white text-brown
-      focus:outline-none focus:ring-2 focus:ring-olive-400 focus:border-olive
-      placeholder:text-brown-200 transition-all duration-200;
+    @apply w-full px-4 py-3 border border-white/[0.12] rounded-xl
+      bg-charcoal-100 text-cream font-body text-sm
+      focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold/50
+      placeholder:text-cream/25 transition-all duration-150;
   }
 
   .badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider;
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider;
+  }
+
+  .badge-sm {
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider;
   }
 
   .table-header {
-    @apply px-4 py-3 text-left text-[11px] font-bold uppercase tracking-widest text-gold/70;
+    @apply px-4 py-3 text-left text-[11px] font-heading font-bold uppercase tracking-widest text-cream/40;
   }
 
   .table-cell {
-    @apply px-4 py-3.5 text-sm text-cream/80;
+    @apply px-4 py-3.5 text-sm text-cream/70;
   }
 
-  .divider-gold {
-    @apply border-t border-gold/20;
+  .section-label {
+    @apply text-[11px] font-heading font-bold uppercase tracking-[0.15em] text-gold/70;
+  }
+
+  .divider {
+    @apply border-t border-white/[0.06];
   }
 
   .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gold-gradient;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #E8B830 0%, #D4A017 50%, #C17B24 100%);
+  }
+
+  .toast {
+    @apply fixed bottom-6 left-1/2 -translate-x-1/2 z-[100]
+      bg-charcoal-200 border border-white/[0.12] rounded-xl px-5 py-3
+      shadow-dark-lg animate-toast-in
+      flex items-center gap-3 text-sm font-medium text-cream;
+  }
+
+  .stat-card {
+    @apply card relative overflow-hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-[0.03];
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+  }
+
+  .order-stepper {
+    @apply flex items-center gap-0;
+  }
+
+  .order-stepper .step {
+    @apply flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider;
+  }
+
+  .order-stepper .step.active {
+    @apply text-gold;
+  }
+
+  .order-stepper .step.completed {
+    @apply text-emerald-400;
+  }
+
+  .order-stepper .step.inactive {
+    @apply text-cream/20;
+  }
+
+  .order-stepper .connector {
+    @apply w-6 h-px mx-1;
+  }
+
+  .order-stepper .connector.active {
+    @apply bg-gold/50;
+  }
+
+  .order-stepper .connector.completed {
+    @apply bg-emerald-400/50;
+  }
+
+  .order-stepper .connector.inactive {
+    @apply bg-white/10;
   }
 }
 
@@ -132,12 +205,6 @@ body {
   .text-balance {
     text-wrap: balance;
   }
-
-  .stagger-1 { animation-delay: 0.1s; }
-  .stagger-2 { animation-delay: 0.2s; }
-  .stagger-3 { animation-delay: 0.3s; }
-  .stagger-4 { animation-delay: 0.4s; }
-  .stagger-5 { animation-delay: 0.5s; }
 }
 
 /* Print styles for invoices */
@@ -149,7 +216,7 @@ body {
     background: white !important;
     color: #1A1A1A !important;
   }
-  .card, .card-dark {
+  .card, .card-interactive {
     background: white !important;
     border: 1px solid #ccc !important;
     box-shadow: none !important;
