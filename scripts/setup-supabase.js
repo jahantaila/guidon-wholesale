@@ -20,7 +20,7 @@ const path = require('path');
 
 // Load .env.local
 const envPath = path.join(__dirname, '..', '.env.local');
-const envLines = fs.readFileSync(envPath, 'utf-8').split('\n');
+const envLines = fs.readFileSync(envPath, 'utf-8').replace(/\r/g, '').split('\n');
 const env = {};
 for (const line of envLines) {
   const match = line.match(/^([^#=]+)=(.*)$/);
