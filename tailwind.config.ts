@@ -89,15 +89,16 @@ const config: Config = {
         "display-sm": ["3rem", { lineHeight: "0.95", letterSpacing: "-0.025em", fontWeight: "900" }],
       },
       animation: {
-        "fade-in": "fadeIn 0.4s ease-out both",
-        "slide-up": "slideUp 0.4s ease-out both",
-        "slide-down": "slideDown 0.3s ease-out both",
-        "slide-in-right": "slideInRight 0.3s ease-out both",
-        "scale-in": "scaleIn 0.25s ease-out both",
-        "shimmer": "shimmer 2s linear infinite",
+        "fade-in": "fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-up": "slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-down": "slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-in-right": "slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "scale-in": "scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "shimmer": "shimmer 1.5s ease-in-out infinite",
         "pulse-slow": "pulseSlow 3s ease-in-out infinite",
-        "toast-in": "toastIn 0.3s ease-out both",
+        "toast-in": "toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
         "toast-out": "toastOut 0.3s ease-in both",
+        "float": "float 6s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -135,6 +136,10 @@ const config: Config = {
         toastOut: {
           "0%": { transform: "translateY(0) scale(1)", opacity: "1" },
           "100%": { transform: "translateY(100%) scale(0.95)", opacity: "0" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-6px)" },
         },
       },
       backgroundImage: {

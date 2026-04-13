@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getOrders, getCustomers, getAllKegBalances, getApplications } from '@/lib/data';
 import type { AdminStats } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const [orders, customers, balances, applications] = await Promise.all([
     getOrders(),
