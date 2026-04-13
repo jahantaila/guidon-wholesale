@@ -63,12 +63,14 @@ export default function AdminDashboard() {
   const pendingOrders = useCountUp(stats?.pendingOrders ?? 0, 800, !!stats);
   const totalRevenue = useCountUp(Math.round(stats?.totalRevenue ?? 0), 1500, !!stats);
   const totalCustomers = useCountUp(stats?.totalCustomers ?? 0, 900, !!stats);
+  const pendingApps = useCountUp(stats?.pendingApplications ?? 0, 700, !!stats);
 
   const statCards = [
     { label: 'Kegs Out', value: kegsOut, display: kegsOut.toString(), color: 'text-gold', borderColor: 'border-gold/15', icon: KegsOutIcon },
     { label: 'Pending Orders', value: pendingOrders, display: pendingOrders.toString(), color: 'text-amber-400', borderColor: 'border-amber-500/15', icon: PendingIcon },
     { label: 'Total Revenue', value: totalRevenue, display: formatCurrency(totalRevenue), color: 'text-emerald-400', borderColor: 'border-emerald-500/15', icon: RevenueIcon },
     { label: 'Total Customers', value: totalCustomers, display: totalCustomers.toString(), color: 'text-blue-400', borderColor: 'border-blue-500/15', icon: CustomersCountIcon },
+    { label: 'Applications', value: pendingApps, display: pendingApps.toString(), color: 'text-purple-400', borderColor: 'border-purple-500/15', icon: ApplicationsIcon },
   ];
 
   return (
@@ -79,7 +81,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="card"><div className="skeleton h-4 w-24 mb-4" /><div className="skeleton h-10 w-20" /></div>
@@ -158,4 +160,8 @@ function RevenueIcon({ className }: { className?: string }) {
 
 function CustomersCountIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+}
+
+function ApplicationsIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
 }

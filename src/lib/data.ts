@@ -224,6 +224,100 @@ export async function getProduct(id: string): Promise<Product | undefined> {
   return readJSON<Product[]>('products.json').find(p => p.id === id);
 }
 
+export async function getAllProducts(): Promise<Product[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('products')
+      .select('*, product_sizes(*)')
+      .order('name');
+    if (error) throw error;
+    return (data || []).map(rowToProduct);
+  }
+  return readJSON<Product[]>('products.json');
+}
+
+export async function createProduct(product: Product): Promise<Product> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('products').insert({
+      id: product.id,
+      name: product.name,
+      style: product.style,
+      abv: product.abv,
+      description: product.description,
+      category: product.category,
+      available: product.available,
+    });
+    if (error) throw error;
+    for (const size of product.sizes) {
+      const { error: sizeError } = await sb.from('product_sizes').insert({
+        product_id: product.id,
+        size: size.size,
+        price: size.price,
+        deposit: size.deposit,
+      });
+      if (sizeError) throw sizeError;
+    }
+    return product;
+  }
+  const products = readJSON<Product[]>('products.json');
+  products.push(product);
+  writeJSON('products.json', products);
+  return product;
+}
+
+export async function updateProduct(id: string, fields: Partial<Product>): Promise<Product | null> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const updateFields: Record<string, unknown> = {};
+    if (fields.name !== undefined) updateFields.name = fields.name;
+    if (fields.style !== undefined) updateFields.style = fields.style;
+    if (fields.abv !== undefined) updateFields.abv = fields.abv;
+    if (fields.description !== undefined) updateFields.description = fields.description;
+    if (fields.category !== undefined) updateFields.category = fields.category;
+    if (fields.available !== undefined) updateFields.available = fields.available;
+    if (Object.keys(updateFields).length > 0) {
+      const { error } = await sb.from('products').update(updateFields).eq('id', id);
+      if (error) throw error;
+    }
+    if (fields.sizes) {
+      await sb.from('product_sizes').delete().eq('product_id', id);
+      for (const size of fields.sizes) {
+        const { error: sizeError } = await sb.from('product_sizes').insert({
+          product_id: id,
+          size: size.size,
+          price: size.price,
+          deposit: size.deposit,
+        });
+        if (sizeError) throw sizeError;
+      }
+    }
+    const updated = await getProduct(id);
+    return updated || null;
+  }
+  const products = readJSON<Product[]>('products.json');
+  const idx = products.findIndex(p => p.id === id);
+  if (idx === -1) return null;
+  products[idx] = { ...products[idx], ...fields };
+  writeJSON('products.json', products);
+  return products[idx];
+}
+
+export async function deleteProduct(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  }
+  const products = readJSON<Product[]>('products.json');
+  const filtered = products.filter(p => p.id !== id);
+  if (filtered.length === products.length) return false;
+  writeJSON('products.json', filtered);
+  return true;
+}
+
 // ─── Orders ────────────────────────────────────────────────────────────────────
 
 export async function getOrders(): Promise<Order[]> {
@@ -519,4 +613,19 @@ export async function createApplication(app: WholesaleApplication): Promise<Whol
   apps.push(app);
   writeJSON('applications.json', apps);
   return app;
+}
+
+export async function updateApplication(id: string, status: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('applications').update({ status }).eq('id', id);
+    if (error) throw error;
+    return true;
+  }
+  const apps = readJSON<WholesaleApplication[]>('applications.json');
+  const idx = apps.findIndex(a => a.id === id);
+  if (idx === -1) return false;
+  apps[idx] = { ...apps[idx], status: status as WholesaleApplication['status'] };
+  writeJSON('applications.json', apps);
+  return true;
 }

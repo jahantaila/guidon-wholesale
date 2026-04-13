@@ -8,9 +8,11 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: DashboardIcon },
+  { href: '/admin/products', label: 'Products', icon: ProductsIcon },
   { href: '/admin/orders', label: 'Orders', icon: OrdersIcon },
   { href: '/admin/kegs', label: 'Keg Tracker', icon: KegsIcon },
   { href: '/admin/customers', label: 'Customers', icon: CustomersIcon },
+  { href: '/admin/applications', label: 'Applications', icon: ApplicationsIcon },
   { href: '/admin/invoices', label: 'Invoices', icon: InvoicesIcon },
 ];
 
@@ -50,6 +52,22 @@ function InvoicesIcon({ className }: { className?: string }) {
   return (
     <svg className={cn('w-5 h-5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+    </svg>
+  );
+}
+
+function ProductsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cn('w-5 h-5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  );
+}
+
+function ApplicationsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={cn('w-5 h-5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   );
 }

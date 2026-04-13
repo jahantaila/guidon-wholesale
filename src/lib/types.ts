@@ -18,6 +18,7 @@ export interface WholesaleApplication {
   address: string;
   businessType: string;
   expectedMonthlyVolume: string;
+  status?: ApplicationStatus;
   createdAt: string;
 }
 
@@ -115,11 +116,14 @@ export interface KegBalance {
   '1/6bbl': number;
 }
 
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
 export interface AdminStats {
   kegsOut: number;
   pendingOrders: number;
   totalRevenue: number;
   totalCustomers: number;
+  pendingApplications: number;
 }
 
 export const KEG_DEPOSITS: Record<KegSize, number> = {

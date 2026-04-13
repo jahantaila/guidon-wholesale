@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getOrders, getCustomers, getAllKegBalances } from '@/lib/data';
+import { getOrders, getCustomers, getAllKegBalances, getApplications } from '@/lib/data';
 import type { AdminStats } from '@/lib/types';
 
 export async function GET() {
-  const [orders, customers, balances] = await Promise.all([
+  const [orders, customers, balances, applications] = await Promise.all([
     getOrders(),
     getCustomers(),
     getAllKegBalances(),
+    getApplications(),
   ]);
 
   let kegsOut = 0;
@@ -22,11 +23,16 @@ export async function GET() {
     .filter(o => o.status === 'delivered' || o.status === 'completed')
     .reduce((sum, o) => sum + o.total, 0);
 
+  const pendingApplications = applications.filter(
+    a => !a.status || a.status === 'pending'
+  ).length;
+
   const stats: AdminStats = {
     kegsOut,
     pendingOrders,
     totalRevenue,
     totalCustomers: customers.length,
+    pendingApplications,
   };
 
   return NextResponse.json(stats);
