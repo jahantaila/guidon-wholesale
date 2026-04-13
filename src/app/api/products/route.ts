@@ -45,7 +45,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Product ID is required.' }, { status: 400 });
   }
 
-  const updated = await updateProduct(body.id, body);
+  const { id, ...fields } = body;
+  const updated = await updateProduct(id, fields);
   if (!updated) {
     return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
   }

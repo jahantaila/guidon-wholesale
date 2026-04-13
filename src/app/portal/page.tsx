@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Customer, Order, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
+import type { Customer, Order, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
 
@@ -139,7 +139,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
 /*  DASHBOARD                                                         */
 /* ================================================================== */
 
-type Tab = 'overview' | 'products' | 'orders';
+type Tab = 'overview' | 'products' | 'orders' | 'invoices' | 'settings';
 
 function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -147,8 +147,18 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
   const [balances, setBalances] = useState<KegBalance | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [loadingBalances, setLoadingBalances] = useState(true);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
+
+  const fetchInvoices = useCallback(() => {
+    setLoadingInvoices(true);
+    fetch(`/api/invoices?customerId=${customer.id}`)
+      .then((r) => r.json())
+      .then((data: Invoice[]) => { setInvoices(Array.isArray(data) ? data : []); setLoadingInvoices(false); })
+      .catch(() => setLoadingInvoices(false));
+  }, [customer.id]);
 
   const fetchOrders = useCallback(() => {
     setLoadingOrders(true);
@@ -175,7 +185,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
       .catch(() => setLoadingBalances(false));
   }, [customer.id]);
 
-  useEffect(() => { fetchOrders(); fetchBalances(); }, [fetchOrders, fetchBalances]);
+  useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); }, [fetchOrders, fetchBalances, fetchInvoices]);
 
   // Quick reorder
   const handleReorder = useCallback(() => {
@@ -215,6 +225,8 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             { key: 'overview', label: 'Overview' },
             { key: 'products', label: 'Browse & Order' },
             { key: 'orders', label: 'Order History' },
+            { key: 'invoices', label: 'Invoices' },
+            { key: 'settings', label: 'Account' },
           ] as { key: Tab; label: string }[]).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={cn(
@@ -257,6 +269,12 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             setExpandedOrderId={setExpandedOrderId}
             onReorder={handleReorder}
           />
+        )}
+        {tab === 'invoices' && (
+          <InvoicesTab invoices={invoices} loading={loadingInvoices} />
+        )}
+        {tab === 'settings' && (
+          <SettingsTab customer={customer} onLogout={onLogout} />
         )}
       </main>
 
@@ -862,6 +880,180 @@ function OrderDetail({ order }: { order: Order }) {
         <span className="text-cream/30">Subtotal: {formatCurrency(order.subtotal)}</span>
         <span className="text-cream/30">Deposit: {formatCurrency(order.totalDeposit)}</span>
         <span className="text-gold font-heading font-bold">Total: {formatCurrency(order.total)}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  INVOICES TAB                                                      */
+/* ================================================================== */
+
+function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: boolean }) {
+  const sorted = [...invoices].sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+
+  return (
+    <div className="animate-fade-in">
+      <span className="section-label mb-4 block">Billing</span>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <div key={i} className="skeleton h-14 w-full rounded-xl" />)}
+        </div>
+      ) : sorted.length === 0 ? (
+        <div className="card text-center text-cream/25 py-10">
+          <p>No invoices yet. Invoices are generated when orders are delivered.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((inv) => (
+            <div key={inv.id} className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-heading font-bold text-cream text-sm">{inv.id}</p>
+                  <p className="text-xs text-cream/20 mt-0.5">Order: {inv.orderId} &middot; {formatDate(inv.issuedAt)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={cn('badge-sm', getStatusColor(inv.status))}>{inv.status}</span>
+                  <span className="text-sm font-heading font-bold text-cream">{formatCurrency(inv.total)}</span>
+                </div>
+              </div>
+              {inv.paidAt && (
+                <p className="text-xs text-cream/20 mt-2">Paid: {formatDate(inv.paidAt)}</p>
+              )}
+              <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-1">
+                {inv.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span className="text-cream/35">{item.productName} ({item.size}) x{item.quantity}</span>
+                    <span className="text-cream/50">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-xs pt-1 border-t border-white/[0.04]">
+                  <span className="text-cream/25">Total</span>
+                  <span className="text-gold font-heading font-bold">{formatCurrency(inv.total)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  SETTINGS TAB                                                      */
+/* ================================================================== */
+
+function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () => void }) {
+  const [form, setForm] = useState({
+    contactName: customer.contactName,
+    phone: customer.phone,
+    address: customer.address,
+  });
+  const [passwordForm, setPasswordForm] = useState({ current: '', newPassword: '', confirm: '' });
+  const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [message, setMessage] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id, ...form }),
+      });
+      if (res.ok) setMessage('Settings updated.');
+    } catch { setMessage('Failed to save.'); }
+    finally { setSaving(false); }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirm) {
+      setPasswordMessage('Passwords do not match.');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordMessage('Password must be at least 6 characters.');
+      return;
+    }
+    setSavingPassword(true);
+    setPasswordMessage('');
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id, password: passwordForm.newPassword }),
+      });
+      if (res.ok) {
+        setPasswordMessage('Password updated.');
+        setPasswordForm({ current: '', newPassword: '', confirm: '' });
+      }
+    } catch { setPasswordMessage('Failed to update password.'); }
+    finally { setSavingPassword(false); }
+  };
+
+  return (
+    <div className="animate-fade-in max-w-lg space-y-8">
+      <div>
+        <span className="section-label mb-4 block">Account Information</span>
+        <form onSubmit={handleSave} className="card space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Business Name</label>
+            <input className="input opacity-50 cursor-not-allowed" value={customer.businessName} disabled />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
+            <input className="input opacity-50 cursor-not-allowed" value={customer.email} disabled />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Contact Name</label>
+            <input className="input" value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
+            <input className="input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Address</label>
+            <input className="input" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+          </div>
+          {message && <p className="text-sm text-emerald-400">{message}</p>}
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <span className="section-label mb-4 block">Change Password</span>
+        <form onSubmit={handlePasswordChange} className="card space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">New Password</label>
+            <input type="password" className="input" placeholder="Min 6 characters" value={passwordForm.newPassword}
+              onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Confirm Password</label>
+            <input type="password" className="input" placeholder="Confirm new password" value={passwordForm.confirm}
+              onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))} required />
+          </div>
+          {passwordMessage && <p className={cn('text-sm', passwordMessage.includes('updated') ? 'text-emerald-400' : 'text-red-400')}>{passwordMessage}</p>}
+          <button type="submit" disabled={savingPassword} className="btn-primary">
+            {savingPassword ? 'Updating...' : 'Update Password'}
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <button onClick={onLogout} className="btn-danger w-full py-3">
+          Log Out
+        </button>
       </div>
     </div>
   );

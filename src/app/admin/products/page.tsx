@@ -27,6 +27,7 @@ const emptyForm: ProductForm = {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
@@ -118,7 +119,7 @@ export default function ProductsPage() {
     } catch (err) { console.error('Failed to delete product', err); }
   };
 
-  const updateSize = (sizeKey: KegSize, field: 'price' | 'deposit', value: number) => {
+  const updateSize = (sizeKey: KegSize, field: 'price', value: number) => {
     setForm(prev => ({
       ...prev,
       sizes: prev.sizes.map(s => s.size === sizeKey ? { ...s, [field]: value } : s),
@@ -132,12 +133,16 @@ export default function ProductsPage() {
           <span className="section-label mb-1 block">Inventory</span>
           <h2 className="font-heading text-2xl font-black text-cream">Products</h2>
         </div>
-        <button onClick={openAdd} className="btn-primary self-start">
+        <div className="flex items-center gap-3 self-start">
+          <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="input max-w-[200px] text-sm" />
+          <button onClick={openAdd} className="btn-primary">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Product
-        </button>
+          </button>
+        </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -160,7 +165,11 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {products.map(product => (
+                {products.filter(p => {
+                  if (!search) return true;
+                  const q = search.toLowerCase();
+                  return p.name.toLowerCase().includes(q) || p.style.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+                }).map(product => (
                   <tr key={product.id} className={cn('transition-colors', product.available ? 'hover:bg-white/[0.02]' : 'opacity-50')}>
                     <td className="table-cell font-heading font-bold text-cream">{product.name}</td>
                     <td className="table-cell text-cream/50">{product.style}</td>
@@ -263,18 +272,12 @@ export default function ProductsPage() {
                     const sizeData = form.sizes.find(s => s.size === size);
                     return (
                       <div key={size} className="flex items-center gap-3 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04]">
-                        <span className="text-xs font-heading font-bold text-cream/50 w-20">{SIZE_LABELS[size]}</span>
+                        <span className="text-xs font-heading font-bold text-cream/50 w-24">{SIZE_LABELS[size]}</span>
                         <div className="flex-1">
                           <label className="text-[10px] text-cream/25 block mb-0.5">Price ($)</label>
                           <input type="number" step="1" min="0" className="input text-sm py-1.5"
                             value={sizeData?.price || 0}
                             onChange={e => updateSize(size, 'price', parseInt(e.target.value) || 0)} />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-[10px] text-cream/25 block mb-0.5">Deposit ($)</label>
-                          <input type="number" step="1" min="0" className="input text-sm py-1.5"
-                            value={sizeData?.deposit || 0}
-                            onChange={e => updateSize(size, 'deposit', parseInt(e.target.value) || 0)} />
                         </div>
                       </div>
                     );

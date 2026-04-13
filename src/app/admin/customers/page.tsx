@@ -10,13 +10,15 @@ interface CustomerForm {
   email: string;
   phone: string;
   address: string;
+  password: string;
 }
 
-const emptyForm: CustomerForm = { businessName: '', contactName: '', email: '', phone: '', address: '' };
+const emptyForm: CustomerForm = { businessName: '', contactName: '', email: '', phone: '', address: '', password: '' };
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerForm>(emptyForm);
@@ -36,7 +38,7 @@ export default function CustomersPage() {
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setModalOpen(true); };
   const openEdit = (customer: Customer) => {
-    setForm({ businessName: customer.businessName, contactName: customer.contactName, email: customer.email, phone: customer.phone, address: customer.address });
+    setForm({ businessName: customer.businessName, contactName: customer.contactName, email: customer.email, phone: customer.phone, address: customer.address, password: '' });
     setEditingId(customer.id); setModalOpen(true);
   };
 
@@ -67,12 +69,16 @@ export default function CustomersPage() {
           <span className="section-label mb-1 block">Management</span>
           <h2 className="font-heading text-2xl font-black text-cream">Customers</h2>
         </div>
-        <button onClick={openAdd} className="btn-primary self-start">
+        <div className="flex items-center gap-3 self-start">
+          <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="input max-w-[200px] text-sm" />
+          <button onClick={openAdd} className="btn-primary">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Customer
-        </button>
+          </button>
+        </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -94,7 +100,11 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {customers.map((c) => (
+                {customers.filter(c => {
+                  if (!search) return true;
+                  const q = search.toLowerCase();
+                  return c.businessName.toLowerCase().includes(q) || c.contactName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+                }).map((c) => (
                   <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="table-cell font-semibold text-cream">{c.businessName}</td>
                     <td className="table-cell">{c.contactName}</td>
@@ -156,6 +166,13 @@ export default function CustomersPage() {
                   <input className="input" value={form.address} onChange={(e) => updateField('address', e.target.value)} required />
                 </div>
               </div>
+              {!editingId && (
+                <div>
+                  <label className="block text-sm font-semibold text-cream/60 mb-1.5">Password</label>
+                  <input type="text" className="input" placeholder="Set a login password" value={form.password} onChange={(e) => updateField('password', e.target.value)} required />
+                  <p className="text-[10px] text-cream/20 mt-1">Share this with the customer so they can log into the portal.</p>
+                </div>
+              )}
               <div className="flex justify-end gap-3 pt-3">
                 <button type="button" onClick={() => { setModalOpen(false); setEditingId(null); }}
                   className="btn-secondary px-4 py-2">Cancel</button>

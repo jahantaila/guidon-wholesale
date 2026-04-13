@@ -18,6 +18,7 @@ interface CustomerForm {
   email: string;
   phone: string;
   address: string;
+  password: string;
 }
 
 export default function ApplicationsPage() {
@@ -29,7 +30,7 @@ export default function ApplicationsPage() {
 
   // Customer creation modal
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
-  const [customerForm, setCustomerForm] = useState<CustomerForm>({ businessName: '', contactName: '', email: '', phone: '', address: '' });
+  const [customerForm, setCustomerForm] = useState<CustomerForm>({ businessName: '', contactName: '', email: '', phone: '', address: '', password: '' });
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [customerSuccess, setCustomerSuccess] = useState('');
 
@@ -61,6 +62,7 @@ export default function ApplicationsPage() {
           email: app.email,
           phone: app.phone || '',
           address: app.address || '',
+          password: '',
         });
         setShowCreateCustomer(true);
       }
@@ -257,6 +259,12 @@ export default function ApplicationsPage() {
                     <input className="input" value={customerForm.address}
                       onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))} />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Password</label>
+                  <input type="text" className="input" placeholder="Set a login password" value={customerForm.password}
+                    onChange={e => setCustomerForm(p => ({ ...p, password: e.target.value }))} required />
+                  <p className="text-[10px] text-cream/20 mt-1">Share this with the customer so they can log in.</p>
                 </div>
                 <div className="flex justify-end gap-3 pt-3">
                   <button type="button" onClick={() => setShowCreateCustomer(false)} className="btn-secondary px-4 py-2">Skip</button>

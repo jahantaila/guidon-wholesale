@@ -20,10 +20,13 @@ export async function POST(request: NextRequest) {
     email: body.email,
     phone: body.phone || '',
     address: body.address || '',
+    password: body.password || '',
     createdAt: new Date().toISOString(),
   };
   await createCustomer(customer);
-  return NextResponse.json(customer, { status: 201 });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password, ...safe } = customer;
+  return NextResponse.json(safe, { status: 201 });
 }
 
 export async function PUT(request: NextRequest) {
@@ -37,8 +40,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
+  const body = await request.json();
+  const id = body.id;
   if (!id) {
     return NextResponse.json({ error: 'ID required' }, { status: 400 });
   }

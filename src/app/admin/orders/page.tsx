@@ -11,6 +11,7 @@ export default function OrdersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
+  const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
@@ -43,13 +44,22 @@ export default function OrdersPage() {
   }, []);
 
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter);
-  const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const searched = search ? filtered.filter(o => {
+    const cust = customerMap.get(o.customerId);
+    const q = search.toLowerCase();
+    return o.id.toLowerCase().includes(q) || (cust?.businessName || '').toLowerCase().includes(q);
+  }) : filtered;
+  const sorted = [...searched].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="space-y-6">
-      <div>
-        <span className="section-label mb-1 block">Management</span>
-        <h2 className="font-heading text-2xl font-black text-cream">Orders</h2>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <span className="section-label mb-1 block">Management</span>
+          <h2 className="font-heading text-2xl font-black text-cream">Orders</h2>
+        </div>
+        <input type="text" placeholder="Search orders..." value={search} onChange={(e) => setSearch(e.target.value)}
+          className="input max-w-xs text-sm" />
       </div>
 
       {/* Status filter tabs */}
