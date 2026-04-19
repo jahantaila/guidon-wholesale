@@ -85,7 +85,9 @@ export default function OrderPage() {
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   // Auth check — redirect to portal if not logged in
+  // Skipped under /embed/* so anonymous WordPress visitors can browse the catalog
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/embed')) return;
     fetch('/api/portal/login')
       .then((r) => { if (!r.ok) router.replace('/portal'); })
       .catch(() => router.replace('/portal'));
