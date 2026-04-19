@@ -45,7 +45,7 @@ export default function PortalPage() {
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-charcoal">
-        <Image src="/logo.png" alt="Guidon Brewing" width={48} height={48} className="rounded-xl animate-pulse-slow" />
+        <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} priority className="h-10 w-auto rounded-xl animate-pulse-slow" />
       </div>
     );
   }
@@ -98,7 +98,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
+            <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
             <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
           </Link>
           <h1 className="text-display-sm font-heading text-cream">Sign In</h1>
@@ -205,7 +205,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/">
-              <Image src="/logo.png" alt="Guidon Brewing" width={40} height={40} className="rounded-lg" />
+              <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
             </Link>
             <div>
               <h1 className="text-lg sm:text-xl font-heading font-black text-cream">{customer.businessName}</h1>

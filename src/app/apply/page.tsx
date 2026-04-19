@@ -74,7 +74,7 @@ export default function ApplyPage() {
       {/* Header */}
       <header className="max-w-lg mx-auto mb-8">
         <Link href="/" className="flex items-center gap-3 mb-8">
-          <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
+          <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
           <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
         </Link>
 

@@ -11,9 +11,10 @@ export default function HomePage() {
           <Image
             src="/logo.png"
             alt="Guidon Brewing"
-            width={72}
-            height={72}
-            className="relative rounded-2xl"
+            width={350}
+            height={194}
+            priority
+            className="relative h-16 w-auto rounded-2xl"
           />
         </div>
 

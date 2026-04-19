@@ -238,7 +238,7 @@ export default function OrderPage() {
       <header className="sticky top-0 z-30 bg-charcoal/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3 group">
-            <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
+            <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
             <div className="hidden sm:block">
               <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING</h1>
               <p className="text-[10px] uppercase tracking-[0.15em] text-cream/30 font-medium -mt-0.5">Wholesale Orders</p>

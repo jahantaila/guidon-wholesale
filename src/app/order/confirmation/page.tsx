@@ -124,7 +124,7 @@ function ConfirmationContent() {
       <header className="border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-16">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Guidon Brewing" width={36} height={36} className="rounded-lg" />
+            <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
             <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING</h1>
           </Link>
         </div>
