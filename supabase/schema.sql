@@ -1,5 +1,8 @@
 -- Guidon Brewing Wholesale - Supabase Schema
--- Run this in your Supabase project SQL editor to create all tables
+-- Run this in your Supabase project SQL editor to create all tables.
+-- SAFE TO RE-RUN: every CREATE uses IF NOT EXISTS and every ALTER uses
+-- ADD COLUMN IF NOT EXISTS, so re-applying this file after an app update
+-- that adds columns (inventory, awards, etc.) is the migration path.
 
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
@@ -36,9 +39,14 @@ create table if not exists products (
   name text not null,
   style text not null,
   abv numeric(4,2) not null,
+  ibu int,
   description text not null default '',
   category text not null,
   available boolean not null default true,
+  image_url text,
+  awards jsonb not null default '[]'::jsonb,
+  new_release boolean not null default false,
+  limited_release boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -48,8 +56,17 @@ create table if not exists product_sizes (
   size text not null check (size in ('1/2bbl', '1/4bbl', '1/6bbl')),
   price numeric(10,2) not null,
   deposit numeric(10,2) not null,
+  inventory_count int not null default 0,
   available boolean not null default true
 );
+
+-- Idempotent migration: ensure new columns exist on previously created tables.
+alter table products add column if not exists ibu int;
+alter table products add column if not exists image_url text;
+alter table products add column if not exists awards jsonb not null default '[]'::jsonb;
+alter table products add column if not exists new_release boolean not null default false;
+alter table products add column if not exists limited_release boolean not null default false;
+alter table product_sizes add column if not exists inventory_count int not null default 0;
 
 alter table products enable row level security;
 create policy "Public read access" on products for select using (true);

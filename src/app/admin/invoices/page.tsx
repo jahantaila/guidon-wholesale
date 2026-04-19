@@ -69,12 +69,12 @@ export default function InvoicesPage() {
                 <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-10 w-auto rounded-lg" />
                 <div>
                   <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Louisville Craft Brewery</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
                 </div>
               </div>
               <div className="text-sm text-gray-500 space-y-0.5 mt-4">
-                <p>123 Brewery Lane</p>
-                <p>Louisville, KY 40202</p>
+                <p>415 8th Ave. E.</p>
+                <p>Hendersonville, NC 28792</p>
                 <p>info@guidonbrewing.com</p>
               </div>
             </div>
@@ -172,7 +172,7 @@ export default function InvoicesPage() {
 
           {/* Footer */}
           <div className="mt-10 pt-6 border-t border-gray-200 text-center text-xs text-gray-400">
-            <p>Guidon Brewing Company &bull; Louisville, Kentucky</p>
+            <p>Guidon Brewing Company &bull; Veteran-Owned &bull; 415 8th Ave. E., Hendersonville, NC 28792</p>
           </div>
         </div>
       </div>

@@ -26,6 +26,10 @@ export interface ProductSize {
   size: KegSize;
   price: number;
   deposit: number;
+  /** On-hand keg count for this product+size. Decrements when an order is
+   * confirmed; can be adjusted manually by admin. 0 means out of stock but
+   * checkout doesn't hard-block (brewery can brew-to-order). */
+  inventoryCount: number;
 }
 
 export interface Product {
@@ -33,10 +37,21 @@ export interface Product {
   name: string;
   style: string;
   abv: number;
+  ibu?: number;
   description: string;
   sizes: ProductSize[];
   category: string;
   available: boolean;
+  /** Path under /public/images/products or external URL. Empty = use
+   * typographic card treatment (no raster image). */
+  imageUrl?: string;
+  /** Award strings like "2025 NC Brewers Cup Gold Medal". Rendered as a
+   * small accolade row on the product card. */
+  awards?: string[];
+  /** "NEW RELEASE" badge on the card. */
+  newRelease?: boolean;
+  /** "LIMITED" badge — typically means only one size available. */
+  limitedRelease?: boolean;
 }
 
 export type KegSize = '1/2bbl' | '1/4bbl' | '1/6bbl';

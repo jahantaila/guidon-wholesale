@@ -3,8 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Guidon Brewing Wholesale",
-  description: "Wholesale keg ordering and management for Guidon Brewing Company in Louisville, KY",
-  keywords: ["craft beer", "wholesale", "kegs", "Louisville", "Kentucky", "brewery"],
+  description: "Wholesale keg ordering and management for Guidon Brewing Company — veteran-owned craft brewery in Hendersonville, NC",
+  keywords: ["craft beer", "wholesale", "kegs", "Hendersonville", "North Carolina", "brewery", "veteran-owned"],
   openGraph: {
     title: "Guidon Brewing Wholesale",
     description: "Wholesale keg ordering and management for Guidon Brewing Company",

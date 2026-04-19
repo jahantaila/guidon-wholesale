@@ -48,13 +48,19 @@ function rowToProduct(row: any): Product {
     name: row.name,
     style: row.style,
     abv: row.abv,
+    ibu: row.ibu ?? undefined,
     description: row.description,
     category: row.category,
     available: row.available,
-    sizes: (row.product_sizes || []).map((s: { size: string; price: number; deposit: number }) => ({
+    imageUrl: row.image_url ?? undefined,
+    awards: Array.isArray(row.awards) ? row.awards : [],
+    newRelease: row.new_release ?? false,
+    limitedRelease: row.limited_release ?? false,
+    sizes: (row.product_sizes || []).map((s: { size: string; price: number; deposit: number; inventory_count?: number }) => ({
       size: s.size,
       price: s.price,
       deposit: s.deposit,
+      inventoryCount: s.inventory_count ?? 0,
     })),
   };
 }

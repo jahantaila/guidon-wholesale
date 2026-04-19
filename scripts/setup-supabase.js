@@ -45,44 +45,71 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 async function seedCustomers() {
-  console.log('Seeding customers...');
+  console.log('Seeding customers (Hendersonville / WNC area)...');
   const customers = [
-    { id: 'cust-001', business_name: 'The Brick House Bar & Grill', contact_name: 'Marcus Johnson', email: 'marcus@brickhousebar.com', phone: '(502) 555-0101', address: '1234 Bardstown Rd, Louisville, KY 40204', created_at: '2025-08-15T10:00:00Z' },
-    { id: 'cust-002', business_name: 'River City Taproom', contact_name: 'Sarah Mitchell', email: 'sarah@rivercitytap.com', phone: '(502) 555-0202', address: '567 Main St, Louisville, KY 40202', created_at: '2025-09-01T14:30:00Z' },
-    { id: 'cust-003', business_name: 'Derby Day Sports Bar', contact_name: 'James Patterson', email: 'james@derbydaysports.com', phone: '(502) 555-0303', address: '890 Frankfort Ave, Louisville, KY 40206', created_at: '2025-09-20T09:15:00Z' },
-    { id: 'cust-004', business_name: 'Magnolia Kitchen & Bar', contact_name: 'Elena Rodriguez', email: 'elena@magnoliakb.com', phone: '(502) 555-0404', address: '2345 Shelbyville Rd, Louisville, KY 40207', created_at: '2025-10-05T11:00:00Z' },
-    { id: 'cust-005', business_name: 'Old Louisville Brewing Co-op', contact_name: 'David Chen', email: 'david@oldloubrewing.com', phone: '(502) 555-0505', address: '678 S 3rd St, Louisville, KY 40203', created_at: '2025-10-18T16:45:00Z' },
-    { id: 'cust-006', business_name: 'Derby Digital', contact_name: 'Jahan', email: 'jahan@derbydigital.us', phone: '(502) 555-0606', address: 'Louisville, KY 40202', created_at: '2026-04-12T00:00:00Z' },
+    { id: 'cust-001', business_name: 'The Brass Bell Tavern', contact_name: 'Marcus Johnson', email: 'marcus@brassbelltavern.com', phone: '(828) 555-0101', address: '142 Main St, Hendersonville, NC 28792', created_at: '2025-08-15T10:00:00Z' },
+    { id: 'cust-002', business_name: 'Mountain Run Taphouse', contact_name: 'Sarah Mitchell', email: 'sarah@mountainruntap.com', phone: '(828) 555-0202', address: '87 Haywood Rd, Asheville, NC 28806', created_at: '2025-09-01T14:30:00Z' },
+    { id: 'cust-003', business_name: 'Pisgah Social Club', contact_name: 'James Patterson', email: 'james@pisgahsocial.com', phone: '(828) 555-0303', address: '315 S Broad St, Brevard, NC 28712', created_at: '2025-09-20T09:15:00Z' },
+    { id: 'cust-004', business_name: 'Biltmore Village Pub', contact_name: 'Elena Rodriguez', email: 'elena@biltmorevillagepub.com', phone: '(828) 555-0404', address: '10 Kitchen Pl, Asheville, NC 28803', created_at: '2025-10-05T11:00:00Z' },
+    { id: 'cust-005', business_name: 'Flat Rock Cinema Grill', contact_name: 'David Chen', email: 'david@flatrockcinema.com', phone: '(828) 555-0505', address: '2700 Greenville Hwy, Flat Rock, NC 28731', created_at: '2025-10-18T16:45:00Z' },
+    { id: 'cust-006', business_name: 'Derby Digital', contact_name: 'Jahan', email: 'jahan@derbydigital.us', phone: '(828) 555-0606', address: 'Hendersonville, NC 28792', created_at: '2026-04-12T00:00:00Z' },
   ];
-  const { error } = await supabase.from('customers').upsert(customers, { onConflict: 'id', ignoreDuplicates: true });
+  // Wipe any stale Louisville customers before seeding the real Hendersonville list.
+  await supabase.from('customers').delete().neq('id', '__sentinel__');
+  const { error } = await supabase.from('customers').insert(customers);
   if (error) throw new Error(`Customers seed failed: ${error.message}`);
   console.log(`  ✓ ${customers.length} customers`);
 }
 
 async function seedProducts() {
-  console.log('Seeding products...');
+  console.log('Seeding products (7 real Guidon beers)...');
   const products = [
-    { id: 'prod-001', name: 'Guidon Gold', style: 'American Lager', abv: 4.5, description: 'Crisp and clean with a light malt sweetness', category: 'Lager', available: true },
-    { id: 'prod-002', name: 'Derby Day IPA', style: 'West Coast IPA', abv: 6.8, description: 'Bold citrus and pine hops with a clean bitter finish', category: 'IPA', available: true },
-    { id: 'prod-003', name: 'Bourbon Barrel Stout', style: 'Imperial Stout', abv: 9.2, description: 'Rich chocolate and vanilla with bourbon warmth', category: 'Stout', available: true },
-    { id: 'prod-004', name: 'Bardstown Blonde', style: 'American Blonde Ale', abv: 4.2, description: 'Light and approachable with subtle honey notes', category: 'Ale', available: true },
-    { id: 'prod-005', name: 'Louisville Wheat', style: 'American Hefeweizen', abv: 5.0, description: 'Refreshing citrus and banana with a hazy finish', category: 'Wheat', available: true },
-    { id: 'prod-006', name: 'Thunder Over Porter', style: 'Robust Porter', abv: 5.8, description: 'Dark roasted malt with hints of coffee and dark chocolate', category: 'Porter', available: true },
-    { id: 'prod-007', name: 'Falls City Pale', style: 'American Pale Ale', abv: 5.2, description: 'Balanced hop character with light caramel malt', category: 'Ale', available: true },
-    { id: 'prod-008', name: 'Ohio River Red', style: 'American Amber Ale', abv: 5.5, description: 'Caramel malt forward with earthy hop notes', category: 'Ale', available: true },
+    { id: 'prod-001', name: 'German Pilsner', style: 'German Pilsner', abv: 4.9, ibu: 20, description: "Another authentic German-style beer that has been approved by the Germans in Hendersonville. This Blue Ribbon winner is a crisp, clean pilsner with a beautiful golden-straw color and wonderful malty body, just the right amount of bitterness at the end to balance it out.", category: 'Lager', available: true, awards: ['Blue Ribbon Winner, Brew Horizons Fest'], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-002', name: 'Hefeweizen', style: 'German Hefeweizen', abv: 4.8, ibu: 12, description: "A favorite amongst Hendersonville's large German population. True to style with wonderful banana and clove characters essential in an authentic Hefeweizen, and a hazy, unfiltered appearance. Superbly refreshing. Prost!", category: 'Wheat', available: true, awards: [], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-003', name: 'Guidon Kolsch', style: 'German Kolsch', abv: 4.8, ibu: 24, description: "A delightfully refreshing German Kolsch reminiscent of Koln (Cologne), Germany. Light body with a soft mouthfeel and pale white-gold color. Spicy, herbal Noble hop bitterness, medium to slightly assertive, less than a Pilsner but not by much. A somewhat fruity flavor with a crisp, dry finish.", category: 'Ale', available: true, awards: ['2025 N.C. Brewers Cup, Gold Medal Winner'], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-004', name: 'Schwarzbier', style: 'German Black Lager', abv: 5.0, ibu: 25, description: "A dark lager originating from the Thuringia region of Germany. As it should, ours has an opaque, black color with light roast flavors just like what you'd get in Germany.", category: 'Lager', available: true, awards: ['2021 N.C. Brewers Cup, Gold Medal Winner', '2021 N.C. Brewers Cup, 3rd Place Best of Show'], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-005', name: 'Bandera Mexican Amber Lager', style: 'Mexican Amber Lager', abv: 4.7, ibu: 25, description: "Where European craft meets Mexican tradition. Copper-bright amber lager tracing its roots to 19th-century Austrian immigrants who brought their brewing traditions to Mexico, marrying Vienna and Munich malts with flaked maize. Pours a clear reddish amber with a clean, persistent head. Toasted grain, soft caramel, and light breadiness on the nose; malt sweetness leads on the palate with biscuit and lightly caramelized notes. Flaked maize keeps the body medium and the finish refreshingly dry. Smooth, clean, and dangerously drinkable.", category: 'Lager', available: true, awards: ['2025 N.C. Brewers Cup, Honorable Mention'], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-006', name: 'Doppelbock', style: 'German Doppelbock', abv: 8.3, ibu: null, description: "A strong, malty German lager. A 'double bock,' originally brewed by monks in Munich for sustenance. Rich, deep reddish-dark brown color, complex sweet malt flavors (caramel, toast, dark fruit), smooth body, low bitterness, clean finish.", category: 'Lager', available: true, awards: [], new_release: false, limited_release: false, image_url: null },
+    { id: 'prod-007', name: 'Ciao Matteo Italian Pilsner', style: 'Italian Pilsner', abv: 5.0, ibu: null, description: "New release. Dry-hopped with noble hops for intense floral, herbal, and spicy aromas, resulting in a crisp, complex, yet softly malty beer with a refreshing, earthy finish. Offered only in 1/6 BBL kegs for limited availability.", category: 'Lager', available: true, awards: [], new_release: true, limited_release: true, image_url: null },
   ];
-  const { error } = await supabase.from('products').upsert(products, { onConflict: 'id', ignoreDuplicates: true });
+
+  // Wipe stale products + sizes, then insert fresh.
+  await supabase.from('product_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('products').delete().neq('id', '__sentinel__');
+  const { error } = await supabase.from('products').insert(products);
   if (error) throw new Error(`Products seed failed: ${error.message}`);
 
+  // Per-beer size + inventory. Baseline triple-size grid for 5 beers;
+  // Doppelbock gets a cheaper tier; Ciao Matteo is 1/6 BBL only.
   const sizes = [];
-  for (const prod of products) {
-    sizes.push({ product_id: prod.id, size: '1/2bbl', price: 200, deposit: 50, available: true });
-    sizes.push({ product_id: prod.id, size: '1/4bbl', price: 140, deposit: 40, available: true });
-    sizes.push({ product_id: prod.id, size: '1/6bbl', price: 90, deposit: 30, available: true });
+  const triple = [
+    { size: '1/6bbl', price: 60, deposit: 30, inv: { default: 20, gold: 18, award: 16 } },
+    { size: '1/4bbl', price: 119, deposit: 40, inv: { default: 15, gold: 14, award: 12 } },
+    { size: '1/2bbl', price: 179, deposit: 50, inv: { default: 10, gold: 9, award: 8 } },
+  ];
+  const baseline = ['prod-001', 'prod-002']; // no awards / lesser awards
+  const goldWinner = ['prod-003']; // 2025 gold
+  const multiAward = ['prod-004', 'prod-005'];
+
+  for (const pid of baseline) {
+    for (const t of triple) sizes.push({ product_id: pid, size: t.size, price: t.price, deposit: t.deposit, inventory_count: t.inv.default, available: true });
   }
-  const { error: sizesError } = await supabase.from('product_sizes').upsert(sizes, { ignoreDuplicates: true });
+  for (const pid of goldWinner) {
+    for (const t of triple) sizes.push({ product_id: pid, size: t.size, price: t.price, deposit: t.deposit, inventory_count: t.inv.gold, available: true });
+  }
+  for (const pid of multiAward) {
+    for (const t of triple) sizes.push({ product_id: pid, size: t.size, price: t.price, deposit: t.deposit, inventory_count: t.inv.award, available: true });
+  }
+  // Doppelbock: three sizes, different pricing tier.
+  sizes.push({ product_id: 'prod-006', size: '1/6bbl', price: 45, deposit: 30, inventory_count: 12, available: true });
+  sizes.push({ product_id: 'prod-006', size: '1/4bbl', price: 75, deposit: 40, inventory_count: 8, available: true });
+  sizes.push({ product_id: 'prod-006', size: '1/2bbl', price: 99, deposit: 50, inventory_count: 6, available: true });
+  // Ciao Matteo: 1/6 BBL only (new release, limited).
+  sizes.push({ product_id: 'prod-007', size: '1/6bbl', price: 79, deposit: 30, inventory_count: 8, available: true });
+
+  const { error: sizesError } = await supabase.from('product_sizes').insert(sizes);
   if (sizesError) throw new Error(`Product sizes seed failed: ${sizesError.message}`);
-  console.log(`  ✓ ${products.length} products with sizes`);
+  console.log(`  ✓ ${products.length} products + ${sizes.length} size-tiers with inventory`);
 }
 
 async function createAuthUsers() {
