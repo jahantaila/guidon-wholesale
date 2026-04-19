@@ -20,6 +20,21 @@ Key routing rules:
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
 
+## Design System
+
+Always read `DESIGN.md` before making any visual or UI decisions. All font choices,
+colors, spacing, motion, and aesthetic direction are defined there.
+
+- Do NOT deviate from DESIGN.md without explicit user approval.
+- The system is intentionally restrained (cream paper, brass + olive, serif typography,
+  minimal motion, no stats cards). The default is "trade portal," not "SaaS dashboard."
+- When writing new UI, match tokens exactly (`--paper`, `--ink`, `--brass`, etc.).
+  Never introduce hex values outside the palette.
+- Fonts are Fraunces (display), Source Serif 4 (body), Instrument Sans (UI),
+  Geist (tabular data). Never Inter, Poppins, or `system-ui` as primary.
+- In `/qa` mode, flag any code that doesn't match DESIGN.md.
+- If a user request contradicts DESIGN.md, ask before overriding.
+
 ## Testing
 
 - **Run:** `bun run test` (vitest) and `bun run test:e2e` (playwright).
