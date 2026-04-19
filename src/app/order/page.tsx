@@ -57,6 +57,7 @@ export default function OrderPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [search, setSearch] = useState('');
   const [sizeFilter, setSizeFilter] = useState<string>('All');
@@ -100,12 +101,15 @@ export default function OrderPage() {
           fetch('/api/products'),
           fetch('/api/customers'),
         ]);
+        if (!prodRes.ok) throw new Error(`products ${prodRes.status}`);
+        if (!custRes.ok) throw new Error(`customers ${custRes.status}`);
         const prods: Product[] = await prodRes.json();
         const custs: Customer[] = await custRes.json();
         setProducts(prods.filter((p) => p.available));
         setCustomers(custs);
-      } catch {
-        // Silent fail
+      } catch (err) {
+        console.error('Failed to load catalog data:', err);
+        setLoadError("We couldn't load the catalog. Please refresh the page or try again shortly.");
       } finally {
         setLoading(false);
       }
@@ -334,6 +338,18 @@ export default function OrderPage() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {Array.from({ length: 8 }).map((_, i) => <ProductSkeleton key={i} />)}
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-20">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+              <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z" />
+              </svg>
+            </div>
+            <p className="text-cream text-base mb-2">{loadError}</p>
+            <button onClick={() => window.location.reload()} className="btn-ghost text-sm text-gold">
+              Reload page
+            </button>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-20">
