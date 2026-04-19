@@ -1,5 +1,11 @@
 import type { Config } from "tailwindcss";
 
+// Letterpress Trade Portal design system — see DESIGN.md
+// Color names kept as-is (charcoal/gold/cream/olive/amber/brown) for backwards-
+// compat with existing class usages, but all hex values are remapped to the new
+// cream-paper + brass + olive palette. A follow-up commit should rename semantic
+// classes (bg-charcoal → bg-paper, text-cream → text-ink, text-gold → text-brass)
+// once the aesthetic is validated.
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,160 +15,157 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // `charcoal` is now the paper/surface palette. `DEFAULT` is the primary
+        // page background. Darker "shades" are elevated surfaces and rules.
         charcoal: {
-          DEFAULT: "#0A0A0A",
-          50: "#f5f5f5",
-          100: "#141414",
-          200: "#1C1C1C",
-          300: "#252525",
-          400: "#333333",
-          500: "#0A0A0A",
-          600: "#080808",
-          700: "#050505",
-          800: "#030303",
-          900: "#000000",
+          DEFAULT: "#F5EFDF", // --paper
+          50: "#FBF7EA",
+          100: "#EEE5CE", // --surface (previously "elevated dark"; now "cardstock")
+          200: "#E5DABE", // card hover
+          300: "#D8CDA8", // --divider
+          400: "#C5B78D", // stronger rule
+          500: "#F5EFDF",
+          600: "#EEE5CE",
+          700: "#E5DABE",
+          800: "#D8CDA8",
+          900: "#C5B78D",
         },
-        gold: {
-          DEFAULT: "#D4A017",
-          50: "#fdf8e8",
-          100: "#faefc0",
-          200: "#f5df7a",
-          300: "#E8B830",
-          400: "#D4A017",
-          500: "#B8880F",
-          600: "#9A710A",
-          700: "#7C5B08",
-          800: "#5E4506",
-          900: "#3F2E04",
-        },
+        // `cream` is now the ink palette (foreground text).
         cream: {
-          DEFAULT: "#F2EDE4",
-          50: "#FFFFFF",
-          100: "#FAF8F5",
-          200: "#F2EDE4",
-          300: "#E5DED2",
-          400: "#D4CAB8",
+          DEFAULT: "#2A2416", // --ink
+          50: "#F5EFDF",
+          100: "#2A2416", // --ink
+          200: "#3A3220", // slightly lighter ink
+          300: "#6B5F48", // --muted
+          400: "#9B8D6F", // --faint
         },
+        // `gold` is now the brass palette (weathered amber accent).
+        gold: {
+          DEFAULT: "#9E7A3B", // --brass
+          50: "#F5EFDF",
+          100: "#E8D9AC",
+          200: "#C8A868",
+          300: "#B2924D",
+          400: "#9E7A3B", // --brass (primary)
+          500: "#7C5F2E", // --brass-dim
+          600: "#634B24",
+          700: "#4A381B",
+          800: "#332612",
+          900: "#1F170B",
+        },
+        // `olive` kept (matches the Guidon brand color in both systems).
         olive: {
           DEFAULT: "#3D4F2F",
-          50: "#f4f6f1",
-          100: "#e6eadf",
-          200: "#ced6c2",
-          300: "#adb99b",
-          400: "#8a9b74",
-          500: "#6b7d56",
-          600: "#536342",
-          700: "#3D4F2F",
-          800: "#354430",
-          900: "#2d3a28",
+          50: "#EAEDE2",
+          100: "#C7CFB2",
+          200: "#9AA87C",
+          300: "#6E8250",
+          400: "#556842",
+          500: "#3D4F2F", // primary
+          600: "#2C3921", // --olive-dim
+          700: "#202918",
+          800: "#151B10",
+          900: "#0B0E08",
         },
-        brown: {
-          DEFAULT: "#2C1810",
-          50: "#f7f3f1",
-          100: "#ede5df",
-          200: "#dcc9bc",
-          300: "#c4a68f",
-          400: "#a88468",
-          500: "#8b6548",
-          600: "#6e4d36",
-          700: "#4a2e20",
-          800: "#3b2318",
-          900: "#2C1810",
-        },
+        // `amber` repurposed as --ember (warning tone).
         amber: {
-          DEFAULT: "#C17B24",
-          50: "#fff8eb",
-          100: "#feecc7",
-          200: "#fdd88a",
-          300: "#fbc14d",
-          400: "#f9a826",
-          500: "#C17B24",
+          DEFAULT: "#B8793A",
+          50: "#F4E2C6",
+          100: "#EFCE9E",
+          200: "#DDAB6B",
+          300: "#C89449",
+          400: "#B8793A",
+          500: "#9A6030",
         },
+        // `brown` removed in spirit but shades repointed to muted ink for any
+        // straggler references.
+        brown: {
+          DEFAULT: "#2A2416",
+          50: "#6B5F48",
+          100: "#554A37",
+          200: "#403828",
+          300: "#2A2416",
+          400: "#1E1910",
+          500: "#14110A",
+        },
+        // New semantic colors introduced by DESIGN.md.
+        paper: "#F5EFDF",
+        surface: "#EEE5CE",
+        divider: "#D8CDA8",
+        ink: "#2A2416",
+        muted: "#6B5F48",
+        faint: "#9B8D6F",
+        brass: {
+          DEFAULT: "#9E7A3B",
+          dim: "#7C5F2E",
+        },
+        ruby: "#8C3B2E", // destructive (rust)
+        pine: "#2F5436", // success (forest)
+        ember: "#B8793A", // warning (glowing amber)
       },
       fontFamily: {
-        heading: ["Outfit", "system-ui", "sans-serif"],
-        body: ["Roboto", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        // Display/Hero — letterpress serif with opsz variable axis
+        heading: ["Fraunces", "Georgia", "serif"],
+        display: ["Fraunces", "Georgia", "serif"],
+        // Body — reading serif
+        body: ["Source Serif 4", "Georgia", "serif"],
+        serif: ["Source Serif 4", "Georgia", "serif"],
+        // UI — small sans for labels, buttons, nav
+        ui: ["Instrument Sans", "system-ui", "sans-serif"],
+        sans: ["Instrument Sans", "system-ui", "sans-serif"],
+        // Data — tabular numerals for tables and pricing
+        data: ["Geist", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Code — monospaced accents
+        mono: ["Geist Mono", "JetBrains Mono", "monospace"],
       },
       fontSize: {
-        "display": ["4.5rem", { lineHeight: "0.9", letterSpacing: "-0.03em", fontWeight: "900" }],
-        "display-sm": ["3rem", { lineHeight: "0.95", letterSpacing: "-0.025em", fontWeight: "900" }],
+        display: [
+          "4.5rem",
+          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "500" },
+        ],
+        "display-sm": [
+          "3rem",
+          { lineHeight: "1.05", letterSpacing: "-0.015em", fontWeight: "500" },
+        ],
       },
       animation: {
-        "fade-in": "fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "slide-up": "slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "slide-down": "slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "slide-in-right": "slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "scale-in": "scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "shimmer": "shimmer 1.5s ease-in-out infinite",
+        // Only loading state animation survives. All entrance animations removed
+        // per DESIGN.md motion rules (minimal-functional only).
         "pulse-slow": "pulseSlow 3s ease-in-out infinite",
-        "toast-in": "toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "toast-out": "toastOut 0.3s ease-in both",
-        "float": "float 6s ease-in-out infinite",
       },
       keyframes: {
-        fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        slideUp: {
-          "0%": { transform: "translateY(16px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
-        slideDown: {
-          "0%": { transform: "translateY(-8px)", opacity: "0" },
-          "100%": { transform: "translateY(0)", opacity: "1" },
-        },
-        slideInRight: {
-          "0%": { transform: "translateX(100%)", opacity: "0" },
-          "100%": { transform: "translateX(0)", opacity: "1" },
-        },
-        scaleIn: {
-          "0%": { transform: "scale(0.95)", opacity: "0" },
-          "100%": { transform: "scale(1)", opacity: "1" },
-        },
-        shimmer: {
-          "0%": { backgroundPosition: "-200% 0" },
-          "100%": { backgroundPosition: "200% 0" },
-        },
         pulseSlow: {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.6" },
-        },
-        toastIn: {
-          "0%": { transform: "translateY(100%) scale(0.95)", opacity: "0" },
-          "100%": { transform: "translateY(0) scale(1)", opacity: "1" },
-        },
-        toastOut: {
-          "0%": { transform: "translateY(0) scale(1)", opacity: "1" },
-          "100%": { transform: "translateY(100%) scale(0.95)", opacity: "0" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-6px)" },
+          "50%": { opacity: "0.5" },
         },
       },
       backgroundImage: {
-        "gold-gradient": "linear-gradient(135deg, #D4A017 0%, #E8B830 50%, #D4A017 100%)",
-        "dark-gradient": "linear-gradient(180deg, #0A0A0A 0%, #000000 100%)",
-        "hero-gradient": "linear-gradient(145deg, #0A0A0A 0%, #141414 50%, #0A0A0A 100%)",
-        "card-gradient": "linear-gradient(160deg, #181818 0%, #0E0E0E 100%)",
-        "noise": "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E\")",
+        // Paper-grain texture applied sparingly for tactile feel.
+        grain:
+          "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E\")",
       },
       boxShadow: {
-        "gold-sm": "0 1px 3px rgba(212, 160, 23, 0.15)",
-        "gold": "0 4px 14px rgba(212, 160, 23, 0.15)",
-        "gold-lg": "0 8px 30px rgba(212, 160, 23, 0.2)",
-        "dark": "0 4px 20px rgba(0, 0, 0, 0.5)",
-        "dark-lg": "0 10px 40px rgba(0, 0, 0, 0.7)",
-        "inner-light": "inset 0 1px 0 rgba(255, 255, 255, 0.05)",
-        "brutal": "4px 4px 0 0 #D4A017",
-        "brutal-sm": "2px 2px 0 0 #D4A017",
+        // No neon shadows, no glows. Just soft elevation for modals.
+        sm: "0 1px 2px rgba(42, 36, 22, 0.08)",
+        DEFAULT: "0 2px 4px rgba(42, 36, 22, 0.08)",
+        md: "0 4px 8px rgba(42, 36, 22, 0.08)",
+        lg: "0 8px 16px rgba(42, 36, 22, 0.10)",
       },
       borderRadius: {
-        "xl": "12px",
-        "2xl": "16px",
-        "3xl": "24px",
+        // Subtle radii only. No rounded-xl/2xl/3xl anywhere in DESIGN.md.
+        none: "0",
+        sm: "2px",
+        DEFAULT: "3px",
+        md: "4px",
+        lg: "6px",
+        xl: "6px", // kept as alias, clamped small
+        "2xl": "8px", // kept as alias, clamped small
+        "3xl": "8px",
+        full: "9999px", // avatars only
+      },
+      transitionDuration: {
+        fast: "120ms",
+        base: "180ms",
       },
     },
   },

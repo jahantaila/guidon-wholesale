@@ -2,242 +2,430 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap');
+/* Letterpress Trade Portal — see DESIGN.md for the full system.
+ * Fonts: Fraunces (display, variable opsz), Source Serif 4 (body),
+ * Instrument Sans (UI), Geist for tabular data (loaded via font-face in layout).
+ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
 :root {
-  --background: #0A0A0A;
-  --foreground: #F2EDE4;
-  --gold: #D4A017;
-  --charcoal: #0A0A0A;
+  /* Paper palette */
+  --paper: #F5EFDF;
+  --surface: #EEE5CE;
+  --divider: #D8CDA8;
+
+  /* Ink palette */
+  --ink: #2A2416;
+  --muted: #6B5F48;
+  --faint: #9B8D6F;
+
+  /* Accents */
+  --brass: #9E7A3B;
+  --brass-dim: #7C5F2E;
   --olive: #3D4F2F;
+  --olive-dim: #2C3921;
+
+  /* Semantic */
+  --ruby: #8C3B2E;
+  --pine: #2F5436;
+  --ember: #B8793A;
+
+  /* Legacy aliases (so existing class names still render) */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --gold: var(--brass);
+  --charcoal: var(--paper);
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Roboto', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-feature-settings: 'ss01' on, 'ss02' on;
+  font-size: 1rem;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Subtle paper grain — 3.5% opacity, only on close inspection */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
 }
 
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Outfit', system-ui, sans-serif;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    font-family: 'Fraunces', Georgia, serif;
+    /* Natural case by default — Fraunces has its own character without forced caps */
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.08;
+    color: var(--ink);
+  }
+
+  h1 { font-variation-settings: 'opsz' 96; }
+  h2 { font-variation-settings: 'opsz' 60; }
+  h3 { font-variation-settings: 'opsz' 36; }
+  h4, h5, h6 { font-variation-settings: 'opsz' 20; }
+
+  p { color: var(--ink); }
+
+  a {
+    color: var(--brass);
+    text-decoration-color: color-mix(in srgb, var(--brass) 35%, transparent);
+    text-underline-offset: 2px;
+    transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  a:hover {
+    color: var(--brass-dim);
+    text-decoration-color: var(--brass);
   }
 
   ::selection {
-    background: rgba(212, 160, 23, 0.3);
-    color: #FFFFFF;
+    background: color-mix(in srgb, var(--brass) 30%, transparent);
+    color: var(--ink);
   }
 
-  ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--paper); }
   ::-webkit-scrollbar-thumb {
-    background: #252525;
-    border-radius: 3px;
+    background: var(--divider);
+    border: 2px solid var(--paper);
+    border-radius: 5px;
   }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #D4A017;
-  }
-
-  /* Smooth page transitions */
-  * {
-    scroll-behavior: smooth;
-  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--brass); }
 }
 
 @layer components {
-  .skeleton {
-    @apply rounded-lg;
-    background: linear-gradient(90deg, #141414 25%, #1C1C1C 50%, #141414 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-
+  /* Buttons — no gradients, no glows, no rounded-pill. Small radius, crisp borders. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2
-      bg-gold text-charcoal px-6 py-2.5 rounded-xl font-heading font-bold text-sm
-      hover:bg-gold-300 active:scale-[0.98] transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-gold/50 focus:ring-offset-2 focus:ring-offset-charcoal
-      shadow-gold-sm hover:shadow-gold;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--brass);
+    color: var(--paper);
+    padding: 0.625rem 1.25rem;
+    border-radius: 3px;
+    border: 1px solid var(--brass-dim);
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-primary:hover { background: var(--brass-dim); }
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+  .btn-primary:disabled {
+    background: var(--faint);
+    border-color: var(--faint);
+    cursor: not-allowed;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2
-      bg-charcoal-200 text-cream px-6 py-2.5 rounded-xl font-heading font-bold text-sm
-      border border-white/[0.08]
-      hover:bg-charcoal-300 hover:border-white/15 active:scale-[0.98] transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-2 focus:ring-offset-charcoal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--ink);
+    padding: 0.625rem 1.25rem;
+    border-radius: 3px;
+    border: 1px solid var(--divider);
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-secondary:hover {
+    background: var(--surface);
+    border-color: var(--brass);
   }
 
   .btn-outline {
-    @apply inline-flex items-center justify-center gap-2
-      border-2 border-gold/40 text-gold px-6 py-2.5 rounded-xl font-heading font-bold text-sm
-      hover:bg-gold/10 hover:border-gold/70 active:scale-[0.98] transition-all duration-200
-      focus:outline-none focus:ring-2 focus:ring-gold/30 focus:ring-offset-2 focus:ring-offset-charcoal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--olive);
+    padding: 0.625rem 1.25rem;
+    border-radius: 3px;
+    border: 1.5px solid var(--olive);
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-outline:hover {
+    background: color-mix(in srgb, var(--olive) 8%, transparent);
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2
-      text-cream/50 px-4 py-2 rounded-xl font-medium text-sm
-      hover:text-cream hover:bg-white/[0.04] active:scale-[0.98] transition-all duration-200;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+    color: var(--muted);
+    padding: 0.5rem 0.75rem;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .btn-ghost:hover { color: var(--ink); }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2
-      bg-red-600 text-white px-6 py-2.5 rounded-xl font-heading font-bold text-sm
-      hover:bg-red-500 active:scale-[0.98] transition-all duration-200;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--ruby);
+    color: var(--paper);
+    padding: 0.625rem 1.25rem;
+    border-radius: 3px;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
   }
+  .btn-danger:hover { background: color-mix(in srgb, var(--ruby) 80%, black); }
 
+  /* Cards — hairline-bordered panels, not shadowed boxes. */
   .card {
-    @apply bg-charcoal-100 rounded-2xl border border-white/[0.06] p-6
-      transition-all duration-300;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 1.5rem;
   }
 
   .card-interactive {
-    @apply bg-charcoal-100 rounded-2xl border border-white/[0.06] p-6
-      transition-all duration-300 cursor-pointer
-      hover:border-white/[0.12] hover:bg-charcoal-200 hover:shadow-dark;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: border-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .card-interactive:hover { border-color: var(--brass); }
 
   .card-product {
-    @apply bg-charcoal-100 rounded-2xl border border-white/[0.06] p-0 overflow-hidden
-      transition-all duration-300
-      hover:border-gold/20 hover:shadow-gold hover:-translate-y-0.5;
+    background: var(--paper);
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .card-product:hover { border-color: var(--brass); }
 
+  /* Inputs — bordered, not filled. No rounded pills. */
   .input {
-    @apply w-full px-4 py-3 border border-white/[0.10] rounded-xl
-      bg-charcoal text-cream font-body text-sm
-      focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/40
-      placeholder:text-cream/20 transition-all duration-200;
+    display: block;
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--divider);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 0.9375rem;
+    transition: border-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .input::placeholder { color: var(--faint); }
+  .input:focus {
+    outline: none;
+    border-color: var(--brass);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 20%, transparent);
   }
 
+  /* Badges — inline status indicators. No pills, no glow. */
   .badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
-
   .badge-sm {
-    @apply inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
+  /* Tables — typographic, tabular, hairline rules. No card backgrounds on rows. */
   .table-header {
-    @apply px-4 py-3 text-left text-[10px] font-heading font-bold uppercase tracking-[0.12em] text-cream/30;
+    padding: 0.625rem 0.75rem;
+    text-align: left;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--divider);
   }
 
   .table-cell {
-    @apply px-4 py-3.5 text-sm text-cream/60;
+    padding: 0.75rem;
+    font-size: 0.9375rem;
+    color: var(--ink);
+    border-bottom: 1px solid var(--divider);
+    font-variant-numeric: tabular-nums;
   }
 
+  /* Section label — small caps overline, used before headings */
   .section-label {
-    @apply text-[10px] font-heading font-bold uppercase tracking-[0.15em] text-gold/60;
+    display: inline-block;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--brass);
   }
 
+  /* Hairline divider */
   .divider {
-    @apply border-t border-white/[0.05];
+    border-top: 1px solid var(--divider);
   }
 
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #E8B830 0%, #D4A017 50%, #C17B24 100%);
+  /* Ledger line — the risk move from DESIGN.md. Replaces stats-card grid
+   * on the admin dashboard with a single prose sentence using Fraunces
+   * + Source Serif. Inline data uses Geist tabular-nums. */
+  .ledger-line {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: var(--ink);
+    padding: 1.25rem 0;
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+  }
+  .ledger-num {
+    font-family: 'Geist', 'Source Serif 4', sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--brass);
   }
 
+  /* Skeleton loader — paper shimmer, not neon */
+  .skeleton {
+    background: var(--surface);
+    border-radius: 2px;
+    animation: pulseSlow 2.2s ease-in-out infinite;
+  }
+
+  /* Toast — paper tone, hairline border */
   .toast {
-    @apply fixed bottom-6 left-1/2 -translate-x-1/2 z-[100]
-      bg-charcoal-200 border border-white/[0.10] rounded-xl px-5 py-3
-      shadow-dark-lg animate-toast-in
-      flex items-center gap-3 text-sm font-medium text-cream;
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    background: var(--paper);
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 4px 12px rgba(42, 36, 22, 0.12);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.9375rem;
+    color: var(--ink);
   }
 
+  /* Stat display (legacy — used only where a card-style stat is unavoidable) */
   .stat-card {
-    @apply card relative overflow-hidden;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 1.25rem;
   }
 
-  .stat-card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: currentColor;
-    opacity: 0.03;
-    transform: translate(30%, -30%);
-    pointer-events: none;
-  }
-
-  .order-stepper {
-    @apply flex items-center gap-0;
-  }
-
+  /* Order stepper — minimal, no gradients */
+  .order-stepper { display: flex; align-items: center; }
   .order-stepper .step {
-    @apply flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
-
-  .order-stepper .step.active {
-    @apply text-gold;
-  }
-
-  .order-stepper .step.completed {
-    @apply text-emerald-400;
-  }
-
-  .order-stepper .step.inactive {
-    @apply text-cream/15;
-  }
-
-  .order-stepper .connector {
-    @apply w-6 h-px mx-1;
-  }
-
-  .order-stepper .connector.active {
-    @apply bg-gold/40;
-  }
-
-  .order-stepper .connector.completed {
-    @apply bg-emerald-400/40;
-  }
-
-  .order-stepper .connector.inactive {
-    @apply bg-white/[0.06];
-  }
+  .order-stepper .step.active { color: var(--brass); }
+  .order-stepper .step.completed { color: var(--pine); }
+  .order-stepper .step.inactive { color: var(--faint); }
+  .order-stepper .connector { width: 1.5rem; height: 1px; margin: 0 0.25rem; }
+  .order-stepper .connector.active { background: var(--brass); }
+  .order-stepper .connector.completed { background: var(--pine); }
+  .order-stepper .connector.inactive { background: var(--divider); }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
+  .font-variant-tabular { font-variant-numeric: tabular-nums; }
+
+  /* Semantic status tokens used by badges/text */
+  .text-brass { color: var(--brass); }
+  .text-olive { color: var(--olive); }
+  .text-ruby { color: var(--ruby); }
+  .text-pine { color: var(--pine); }
+  .text-ember { color: var(--ember); }
+  .bg-brass { background-color: var(--brass); }
+  .bg-olive { background-color: var(--olive); }
+  .bg-paper { background-color: var(--paper); }
+  .bg-surface { background-color: var(--surface); }
+  .border-divider { border-color: var(--divider); }
 }
 
-/* Print styles for invoices */
+/* Paper-backed print styles for invoices — already close to printed look by default */
 @media print {
-  .no-print {
-    display: none !important;
-  }
+  .no-print { display: none !important; }
   body {
     background: white !important;
-    color: #1A1A1A !important;
+    background-image: none !important;
+    color: #000 !important;
   }
-  .card, .card-interactive {
+  .card, .card-interactive, .stat-card {
     background: white !important;
-    border: 1px solid #ccc !important;
+    border: 1px solid #999 !important;
     box-shadow: none !important;
   }
 }
 
-/* Embed mode overrides */
-.embed-mode {
-  background: transparent;
+/* Embed mode — transparent so the hosting WordPress theme shows through */
+.embed-mode { background: transparent; }
+
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
