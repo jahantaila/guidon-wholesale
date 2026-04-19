@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Guidon Brewing Wholesale",
-  description: "Wholesale keg ordering and management for Guidon Brewing Company - Veteran-owned craft brewery in Louisville, KY",
+  description: "Wholesale keg ordering and management for Guidon Brewing Company in Louisville, KY",
   keywords: ["craft beer", "wholesale", "kegs", "Louisville", "Kentucky", "brewery"],
   openGraph: {
     title: "Guidon Brewing Wholesale",
@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="antialiased min-h-screen bg-charcoal text-cream">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className="antialiased min-h-screen bg-charcoal text-cream" suppressHydrationWarning>
         {children}
       </body>
     </html>

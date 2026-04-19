@@ -69,7 +69,7 @@ export default function InvoicesPage() {
                 <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-10 w-auto rounded-lg" />
                 <div>
                   <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Louisville Craft Brewery</p>
                 </div>
               </div>
               <div className="text-sm text-gray-500 space-y-0.5 mt-4">
