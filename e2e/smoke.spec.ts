@@ -15,8 +15,13 @@ test("embed order page loads product catalog anonymously", async ({ page }) => {
 });
 
 test("portal login page is reachable", async ({ page }) => {
+  // /portal first renders a checkingSession loader (just the logo),
+  // then transitions to the sign-in form after /api/portal/login returns.
+  // Wait for a stable post-transition element.
   await page.goto("/portal");
-  await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
+  await expect(page.getByPlaceholder(/you@example\.com|email/i)).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 test("admin login is reachable", async ({ page }) => {
