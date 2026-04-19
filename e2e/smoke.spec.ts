@@ -17,10 +17,10 @@ test("embed order page loads product catalog anonymously", async ({ page }) => {
 test("portal login page is reachable", async ({ page }) => {
   // /portal first renders a checkingSession loader (just the logo),
   // then transitions to the sign-in form after /api/portal/login returns.
-  // Wait for a stable post-transition element.
-  await page.goto("/portal");
+  // Cold dev-server compiles can be slow; give it 30s.
+  await page.goto("/portal", { waitUntil: "networkidle" });
   await expect(page.getByPlaceholder(/you@example\.com|email/i)).toBeVisible({
-    timeout: 15_000,
+    timeout: 30_000,
   });
 });
 
