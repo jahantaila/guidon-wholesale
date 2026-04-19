@@ -19,3 +19,17 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Testing
+
+- **Run:** `bun run test` (vitest) and `bun run test:e2e` (playwright).
+- **Test directory:** `test/` for unit + component, `e2e/` for playwright specs.
+- **Full guide:** see `TESTING.md`.
+
+Expectations:
+- 100% test coverage is the goal. Tests are what make vibe coding safe.
+- New function → write a corresponding test.
+- Bug fix → write a regression test.
+- Error handling → write a test that triggers the error.
+- New conditional (if/else, switch) → test BOTH paths.
+- Never commit code that makes existing tests fail.
