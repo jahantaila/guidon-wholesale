@@ -172,7 +172,7 @@ export default function InvoicesPage() {
 
           {/* Footer */}
           <div className="mt-10 pt-6 border-t border-gray-200 text-center text-xs text-gray-400">
-            <p>Guidon Brewing Company &bull; Veteran-Owned &bull; Louisville, Kentucky</p>
+            <p>Guidon Brewing Company &bull; Louisville, Kentucky</p>
           </div>
         </div>
       </div>
