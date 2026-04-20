@@ -64,30 +64,30 @@ export async function POST(request: NextRequest) {
     console.error('[invoice] draft creation failed (non-fatal):', err);
   }
 
-  // Fire-and-forget email notifications. Never block order creation on email
-  // delivery, and never surface email errors to the client.
-  (async () => {
-    try {
-      const customers = await getCustomers();
-      const customer = customers.find((c) => c.id === order.customerId);
-      if (customer) {
-        await notifyOrderPlaced({
-          orderId: order.id,
-          customerEmail: customer.email,
-          customerName: customer.contactName,
-          businessName: customer.businessName,
-          items: order.items,
-          subtotal: order.subtotal,
-          totalDeposit: order.totalDeposit,
-          total: order.total,
-          deliveryDate: order.deliveryDate,
-          notes: order.notes,
-        });
-      }
-    } catch (err) {
-      console.error('[email] notifyOrderPlaced failed (non-fatal):', err);
+  // Await email so Vercel's serverless runtime doesn't cut it off when the
+  // response is sent. Fire-and-forget promises don't reliably complete in
+  // prod. The notify function catches internal errors, so we can safely
+  // await without risking the order creation.
+  try {
+    const customers = await getCustomers();
+    const customer = customers.find((c) => c.id === order.customerId);
+    if (customer) {
+      await notifyOrderPlaced({
+        orderId: order.id,
+        customerEmail: customer.email,
+        customerName: customer.contactName,
+        businessName: customer.businessName,
+        items: order.items,
+        subtotal: order.subtotal,
+        totalDeposit: order.totalDeposit,
+        total: order.total,
+        deliveryDate: order.deliveryDate,
+        notes: order.notes,
+      });
     }
-  })();
+  } catch (err) {
+    console.error('[email] notifyOrderPlaced failed (non-fatal):', err);
+  }
 
   return NextResponse.json(order, { status: 201 });
   } catch (err) {
@@ -195,7 +195,7 @@ export async function PUT(request: NextRequest) {
         if (draftInv) {
           const sentAt = new Date().toISOString();
           await updateInvoice(draftInv.id, { status: 'unpaid', sentAt });
-          fireInvoiceEmail({ ...draftInv, status: 'unpaid', sentAt }, customerRec).catch((err) =>
+          await fireInvoiceEmail({ ...draftInv, status: 'unpaid', sentAt }, customerRec).catch((err) =>
             console.error('[email] auto-send invoice failed (non-fatal):', err),
           );
         }
@@ -240,23 +240,21 @@ export async function PUT(request: NextRequest) {
     significantStatus.includes(updates.status as 'confirmed' | 'delivered' | 'completed') &&
     updates.status !== existingOrder.status
   ) {
-    (async () => {
-      try {
-        const customers = await getCustomers();
-        const customer = customers.find((c) => c.id === order.customerId);
-        if (customer) {
-          await notifyOrderStatusChanged({
-            orderId: order.id,
-            customerEmail: customer.email,
-            customerName: customer.contactName,
-            newStatus: updates.status as 'confirmed' | 'delivered' | 'completed',
-            deliveryDate: order.deliveryDate,
-          });
-        }
-      } catch (err) {
-        console.error('[email] notifyOrderStatusChanged failed (non-fatal):', err);
+    try {
+      const customers = await getCustomers();
+      const customer = customers.find((c) => c.id === order.customerId);
+      if (customer) {
+        await notifyOrderStatusChanged({
+          orderId: order.id,
+          customerEmail: customer.email,
+          customerName: customer.contactName,
+          newStatus: updates.status as 'confirmed' | 'delivered' | 'completed',
+          deliveryDate: order.deliveryDate,
+        });
       }
-    })();
+    } catch (err) {
+      console.error('[email] notifyOrderStatusChanged failed (non-fatal):', err);
+    }
   }
 
   return NextResponse.json(order);

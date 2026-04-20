@@ -30,8 +30,22 @@ type SendArgs = {
 
 const FROM_FALLBACK = 'Guidon Brewing <onboarding@resend.dev>';
 
+/**
+ * Strip surrounding quotes that users commonly paste into Vercel env UI.
+ * `"Name <foo@bar>"` is a valid literal but Resend parses it as an email and
+ * rejects with 422. Defensive cleanup of the most common paste-mistake.
+ */
+function cleanEnvString(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 function fromAddress(): string {
-  return process.env.EMAIL_FROM || FROM_FALLBACK;
+  return cleanEnvString(process.env.EMAIL_FROM) || FROM_FALLBACK;
 }
 
 /**
@@ -41,7 +55,7 @@ function fromAddress(): string {
  * if not set.
  */
 function defaultReplyTo(): string | undefined {
-  return process.env.EMAIL_REPLY_TO || undefined;
+  return cleanEnvString(process.env.EMAIL_REPLY_TO) || undefined;
 }
 
 /**

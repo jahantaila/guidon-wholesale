@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   const created = await createInvoice(invoice);
 
   if (autoSend) {
-    fireInvoiceEmail(created).catch((err) =>
+    await fireInvoiceEmail(created).catch((err) =>
       console.error('[email] invoice send failed (non-fatal):', err)
     );
   }
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest) {
     }
     const stamped = await updateInvoice(id, { sentAt: new Date().toISOString() });
     if (stamped) {
-      fireInvoiceEmail(stamped).catch((err) =>
+      await fireInvoiceEmail(stamped).catch((err) =>
         console.error('[email] invoice resend failed (non-fatal):', err)
       );
     }
@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest) {
   }
 
   if (willSend) {
-    fireInvoiceEmail(invoice).catch((err) =>
+    await fireInvoiceEmail(invoice).catch((err) =>
       console.error('[email] invoice send failed (non-fatal):', err)
     );
   }

@@ -34,22 +34,24 @@ export async function POST(request: NextRequest) {
 
   await createApplication(application);
 
-  // Fire-and-forget email: thank the applicant + notify the brewery.
-  (async () => {
-    try {
-      await notifyApplicationSubmitted({
-        applicationId: application.id,
-        applicantEmail: application.email,
-        applicantName: application.contactName,
-        businessName: application.businessName,
-        phone: application.phone,
-        businessType: application.businessType,
-        expectedMonthlyVolume: application.expectedMonthlyVolume,
-      });
-    } catch (err) {
-      console.error('[email] notifyApplicationSubmitted failed (non-fatal):', err);
-    }
-  })();
+  // Await the email so Vercel's serverless runtime doesn't cut it off when
+  // the function returns. Fire-and-forget promises after a response get
+  // killed; awaiting here adds a ~1s latency but actually delivers the mail.
+  // notifyApplicationSubmitted itself catches Resend errors internally, so
+  // it never throws and blocking here is safe.
+  try {
+    await notifyApplicationSubmitted({
+      applicationId: application.id,
+      applicantEmail: application.email,
+      applicantName: application.contactName,
+      businessName: application.businessName,
+      phone: application.phone,
+      businessType: application.businessType,
+      expectedMonthlyVolume: application.expectedMonthlyVolume,
+    });
+  } catch (err) {
+    console.error('[email] notifyApplicationSubmitted failed (non-fatal):', err);
+  }
 
   return NextResponse.json(application, { status: 201 });
 }
@@ -142,23 +144,22 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Notify the applicant of the decision.
+  // Notify the applicant of the decision. Await so Vercel doesn't kill the
+  // promise after response. notifyApplicationDecision catches internally.
   if (body.status === 'approved' || body.status === 'rejected') {
-    (async () => {
-      try {
-        await notifyApplicationDecision({
-          applicationId: app.id,
-          applicantEmail: app.email,
-          applicantName: app.contactName,
-          businessName: app.businessName,
-          decision: body.status,
-          portalUrl: 'https://guidon-wholesale.vercel.app/portal',
-          tempPassword,
-        });
-      } catch (err) {
-        console.error('[email] notifyApplicationDecision failed (non-fatal):', err);
-      }
-    })();
+    try {
+      await notifyApplicationDecision({
+        applicationId: app.id,
+        applicantEmail: app.email,
+        applicantName: app.contactName,
+        businessName: app.businessName,
+        decision: body.status,
+        portalUrl: 'https://guidon-wholesale.vercel.app/portal',
+        tempPassword,
+      });
+    } catch (err) {
+      console.error('[email] notifyApplicationDecision failed (non-fatal):', err);
+    }
   }
 
   return NextResponse.json({ success: true, tempPassword });
