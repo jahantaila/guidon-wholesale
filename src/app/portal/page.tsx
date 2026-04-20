@@ -623,36 +623,44 @@ function ProductsTab({ customerId, onOrderPlaced }: { customerId: string; onOrde
       {/* Toast */}
       {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg('')} />}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
           <span className="section-label mb-1 block">Craft Beer Catalog</span>
-          <h2 className="font-heading text-2xl font-black text-cream">Browse Products</h2>
+          <h2 className="font-display text-4xl md:text-5xl" style={{ fontVariationSettings: "'opsz' 72", color: 'var(--ink)', fontWeight: 500 }}>
+            Browse Products
+          </h2>
         </div>
         {cartCount > 0 && (
-          <button onClick={() => setShowCheckout(true)}
-            className="btn-primary py-2.5 px-5">
+          <button onClick={() => setShowCheckout(true)} className="btn-primary">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
             </svg>
-            Cart ({cartCount}) &middot; {formatCurrency(total)}
+            Review Cart &middot; {cartCount} &middot; {formatCurrency(total)}
           </button>
         )}
       </div>
 
       {/* Filters */}
-      <div className="mb-6 space-y-3">
+      <div className="mb-8 space-y-3">
         <div className="relative max-w-md">
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/25" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--muted)' }}>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input type="text" placeholder="Search beers..." value={search}
-            onChange={(e) => setSearch(e.target.value)} className="input pl-11" />
+            onChange={(e) => setSearch(e.target.value)} className="input pl-10" />
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           {categories.length > 2 && categories.map((c) => (
             <button key={c} onClick={() => setCategoryFilter(c)}
-              className={cn('px-4 py-2 rounded-xl text-xs font-heading font-bold transition-all',
-                categoryFilter === c ? 'bg-gold text-charcoal' : 'bg-charcoal-200 text-cream/40 border border-white/[0.08] hover:text-cream/60')}>
+              className="px-4 py-1.5 text-xs font-semibold font-ui border transition-colors"
+              style={{
+                borderRadius: '3px',
+                borderColor: categoryFilter === c ? 'var(--brass-dim)' : 'var(--divider)',
+                background: categoryFilter === c ? 'var(--brass)' : 'transparent',
+                color: categoryFilter === c ? 'var(--paper)' : 'var(--ink)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}>
               {c}
             </button>
           ))}
@@ -667,58 +675,131 @@ function ProductsTab({ customerId, onOrderPlaced }: { customerId: string; onOrde
           ))}
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className="text-center py-16 text-cream/25">
-          <p className="text-base mb-4">No products found.</p>
-          <button onClick={() => { setSearch(''); setSizeFilter('All'); setCategoryFilter('All'); }} className="btn-ghost text-sm text-gold">Clear Filters</button>
+        <div className="text-center py-16" style={{ color: 'var(--muted)' }}>
+          <p className="text-base mb-4 italic">No products found.</p>
+          <button onClick={() => { setSearch(''); setSizeFilter('All'); setCategoryFilter('All'); }} className="btn-ghost text-sm">Clear Filters</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProducts.map((product, idx) => {
+          {filteredProducts.map((product) => {
             const sel = getSelection(product.id, product.sizes);
             const currentSizeInfo = product.sizes.find((s) => s.size === sel.size);
-            const colorGrad = BEER_COLORS[product.category] || 'from-gold/20 to-amber-800/15';
+            const stockForSize = currentSizeInfo?.inventoryCount ?? 0;
+            const isOutOfStock = stockForSize === 0;
+            const isLowStock = stockForSize > 0 && stockForSize < 3;
             return (
-              <div key={product.id} className="card-product flex flex-col animate-slide-up"
-                style={{ animationDelay: `${Math.min(idx * 40, 250)}ms` }}>
-                <div className={cn('h-24 bg-gradient-to-br relative', colorGrad)}>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-3xl font-heading font-black text-white/15">{product.abv}%</span>
+              <article key={product.id} className="card-product flex flex-col">
+                {/* Typographic label header — matches /order catalog */}
+                <header className="px-5 pt-5 pb-4 border-b border-divider">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <span className="section-label">{product.style}</span>
+                    <div className="flex gap-1.5 shrink-0">
+                      {product.newRelease && (
+                        <span className="badge-sm" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>
+                          New
+                        </span>
+                      )}
+                      {product.limitedRelease && (
+                        <span className="badge-sm" style={{ color: 'var(--ruby)', borderColor: 'var(--ruby)' }}>
+                          Limited
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="absolute top-2.5 left-2.5">
-                    <span className="badge-sm bg-black/40 text-white/80 backdrop-blur-sm">{product.category}</span>
+                  <h3
+                    className="font-display leading-tight"
+                    style={{
+                      fontSize: product.name.length > 20 ? '1.25rem' : '1.5rem',
+                      fontVariationSettings: "'opsz' 32",
+                      color: 'var(--ink)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {product.name}
+                  </h3>
+                  <div className="flex items-baseline gap-3 mt-2 text-sm">
+                    <span className="font-variant-tabular font-semibold" style={{ color: 'var(--brass)' }}>
+                      {product.abv}% ABV
+                    </span>
+                    {product.ibu != null && (
+                      <span className="font-variant-tabular" style={{ color: 'var(--muted)' }}>
+                        {product.ibu} IBU
+                      </span>
+                    )}
+                    {isOutOfStock ? (
+                      <span className="ml-auto section-label" style={{ color: 'var(--ruby)' }}>Out</span>
+                    ) : isLowStock ? (
+                      <span className="ml-auto section-label" style={{ color: 'var(--ember)' }}>{stockForSize} left</span>
+                    ) : (
+                      <span className="ml-auto section-label" style={{ color: 'var(--pine)' }}>In Stock</span>
+                    )}
                   </div>
-                </div>
-                <div className="p-4 flex flex-col flex-1">
-                  <h3 className="font-heading text-sm font-bold text-cream mb-0.5">{product.name}</h3>
-                  <p className="text-xs text-cream/30 mb-3">{product.style}</p>
+                  {product.awards && product.awards.length > 0 && (
+                    <ul className="mt-3 text-xs italic" style={{ color: 'var(--olive)', fontFamily: "'Source Serif 4', serif" }}>
+                      {product.awards.slice(0, 2).map((award) => (
+                        <li key={award}>&#9670; {award}</li>
+                      ))}
+                    </ul>
+                  )}
+                </header>
+                {/* Content */}
+                <div className="p-5 flex flex-col flex-1">
+                  <p className="text-sm mb-4 line-clamp-3 leading-relaxed flex-1" style={{ color: 'var(--muted)' }}>
+                    {product.description}
+                  </p>
                   {currentSizeInfo && (
-                    <div className="mb-3 flex items-baseline gap-1.5">
-                      <span className="text-lg font-heading font-black text-cream">{formatCurrency(currentSizeInfo.price)}</span>
-                      <span className="text-[10px] text-cream/20">/ keg</span>
+                    <div className="mb-4 pb-3 border-b border-divider flex items-baseline gap-2">
+                      <span className="font-display font-variant-tabular" style={{ fontSize: '1.375rem', color: 'var(--ink)', fontVariationSettings: "'opsz' 24", fontWeight: 500 }}>
+                        {formatCurrency(currentSizeInfo.price)}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>per keg</span>
+                      <span className="text-xs ml-auto font-variant-tabular" style={{ color: 'var(--muted)' }}>
+                        +{formatCurrency(currentSizeInfo.deposit)} dep.
+                      </span>
                     </div>
                   )}
-                  {/* Size pills */}
-                  <div className="flex gap-1 mb-3">
-                    {product.sizes.map((s) => (
-                      <button key={s.size} onClick={() => updateSelection(product.id, 'size', s.size)}
-                        className={cn('flex-1 py-1.5 rounded-lg text-[10px] font-heading font-bold transition-all',
-                          sel.size === s.size ? 'bg-gold text-charcoal' : 'bg-charcoal-300 text-cream/35 hover:text-cream/50')}>
-                        {SIZE_SHORT[s.size]}
-                      </button>
-                    ))}
+                  {/* Size selector — fixed 3-slot row, disabled for missing sizes */}
+                  <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
+                    {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
+                      const hasSize = product.sizes.find((s) => s.size === kegSize);
+                      return (
+                        <button
+                          key={kegSize}
+                          onClick={() => hasSize && updateSelection(product.id, 'size', kegSize)}
+                          disabled={!hasSize}
+                          className="flex-1 py-1.5 text-xs font-semibold font-ui transition-colors"
+                          style={{
+                            background: sel.size === kegSize && hasSize ? 'var(--brass)' : 'transparent',
+                            color: sel.size === kegSize && hasSize ? 'var(--paper)' : !hasSize ? 'var(--faint)' : 'var(--ink)',
+                            cursor: hasSize ? 'pointer' : 'not-allowed',
+                            opacity: hasSize ? 1 : 0.4,
+                          }}
+                        >
+                          {SIZE_SHORT[kegSize]}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                      <button onClick={() => updateSelection(product.id, 'quantity', Math.max(1, sel.quantity - 1))} className="px-2.5 py-1.5 text-cream/30 hover:text-cream text-xs">-</button>
-                      <span className="px-2.5 py-1.5 text-xs font-bold text-cream bg-charcoal-200 min-w-[2rem] text-center">{sel.quantity}</span>
-                      <button onClick={() => updateSelection(product.id, 'quantity', sel.quantity + 1)} className="px-2.5 py-1.5 text-cream/30 hover:text-cream text-xs">+</button>
+                  <div className="flex gap-2 items-stretch">
+                    <div className="flex items-center border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
+                      <button onClick={() => updateSelection(product.id, 'quantity', Math.max(1, sel.quantity - 1))}
+                        className="px-3 py-2" style={{ color: 'var(--muted)' }}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M20 12H4" /></svg>
+                      </button>
+                      <span className="px-3 py-2 text-sm font-semibold font-variant-tabular min-w-[2.5rem] text-center" style={{ color: 'var(--ink)' }}>
+                        {sel.quantity}
+                      </span>
+                      <button onClick={() => updateSelection(product.id, 'quantity', sel.quantity + 1)}
+                        className="px-3 py-2" style={{ color: 'var(--muted)' }}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      </button>
                     </div>
-                    <button onClick={() => addToCart(product)} className="btn-primary flex-1 py-2 text-xs">
-                      Add
+                    <button onClick={() => addToCart(product)} className="btn-primary flex-1" disabled={isOutOfStock}>
+                      {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
                     </button>
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
