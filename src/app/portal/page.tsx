@@ -234,10 +234,12 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
   const cancelOrder = useCallback(async (orderId: string) => {
     if (!window.confirm('Cancel this order? You can place a new one anytime.')) return;
     try {
+      // No authEmail in body — server reads portal_session cookie for auth,
+      // which is set by /api/portal/login and can't be spoofed by a client.
       const res = await fetch('/api/portal/cancel-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, authEmail: customer.email }),
+        body: JSON.stringify({ orderId }),
       });
       if (res.ok) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o)));
@@ -248,7 +250,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
     } catch {
       alert('Failed to cancel.');
     }
-  }, [customer.email]);
+  }, []);
 
   const toggleRecurringActive = useCallback(async (rec: RecurringOrder) => {
     try {
