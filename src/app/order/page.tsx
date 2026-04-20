@@ -700,36 +700,38 @@ export default function OrderPage() {
                 </div>
               ))}
 
-              {/* Keg Returns */}
+              {/* Keg Returns — always visible with 3 size rows at 0. */}
               <div className="pt-4">
-                <span className="section-label mb-3 block">Keg Returns</span>
-                <p className="text-xs text-cream/25 mb-3">Return empty kegs to reduce deposit charges.</p>
-                <div className="flex gap-2 mb-3">
-                  {KEG_SIZES.map((size) => (
-                    <button key={size} onClick={() => addKegReturn(size)}
-                      className="flex-1 text-[11px] font-heading font-bold py-2 rounded-lg bg-charcoal-300 border border-white/[0.06] text-cream/40 hover:text-olive-300 hover:border-olive/30 transition-all">
-                      + {SIZE_SHORT[size]}
-                    </button>
-                  ))}
+                <span className="section-label mb-2 block">Keg Returns</span>
+                <p className="text-xs text-cream/25 mb-3">How many empty kegs are you returning this delivery? (0 if none.)</p>
+                <div className="space-y-2">
+                  {KEG_SIZES.map((size) => {
+                    const existing = kegReturns.find((r) => r.size === size);
+                    const qty = existing?.quantity ?? 0;
+                    const setQty = (n: number) => {
+                      if (n <= 0) {
+                        setKegReturns((prev) => prev.filter((r) => r.size !== size));
+                      } else if (existing) {
+                        updateReturnQty(size, n);
+                      } else {
+                        setKegReturns((prev) => [...prev, { size, quantity: n }]);
+                      }
+                    };
+                    return (
+                      <div key={size} className="flex items-center gap-3">
+                        <span className="text-sm text-cream/60 flex-1">
+                          {SIZE_LABELS[size]}{' '}
+                          <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[size])}/ea)</span>
+                        </span>
+                        <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
+                          <button type="button" onClick={() => setQty(qty - 1)} disabled={qty === 0} className="px-2 py-1 text-cream/30 hover:text-cream text-xs disabled:opacity-30">-</button>
+                          <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{qty}</span>
+                          <button type="button" onClick={() => setQty(qty + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {kegReturns.map((ret) => (
-                  <div key={ret.size} className="flex items-center gap-3 mb-2">
-                    <span className="text-sm text-cream/60 flex-1">
-                      {SIZE_LABELS[ret.size]}{' '}
-                      <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[ret.size])}/ea)</span>
-                    </span>
-                    <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                      <button onClick={() => updateReturnQty(ret.size, ret.quantity - 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">-</button>
-                      <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{ret.quantity}</span>
-                      <button onClick={() => updateReturnQty(ret.size, ret.quantity + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
-                    </div>
-                    <button onClick={() => removeReturn(ret.size)} className="p-1 text-cream/15 hover:text-red-400 transition-colors" aria-label="Remove return">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
               </div>
             </>
           )}

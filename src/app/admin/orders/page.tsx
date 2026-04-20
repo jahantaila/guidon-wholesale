@@ -85,7 +85,14 @@ export default function OrdersPage() {
         // that silently does nothing. Most common causes: FK / keg_ledger
         // insert failure, or stale admin session.
         const data = await res.json().catch(() => ({}));
-        setReminderToast(data?.error || `Failed to mark ${newStatus} (HTTP ${res.status}).`);
+        const rawErr = data?.error;
+        // Ensure we never show "[object Object]" from a non-string error.
+        const msg = typeof rawErr === 'string' && rawErr
+          ? rawErr
+          : rawErr
+          ? JSON.stringify(rawErr)
+          : `Failed to mark ${newStatus} (HTTP ${res.status}).`;
+        setReminderToast(msg);
         window.setTimeout(() => setReminderToast(''), 6000);
       }
     } catch (err) {

@@ -8,6 +8,27 @@ import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, form
 
 const LOW_STOCK_THRESHOLD = 5;
 
+/**
+ * Pull a human-readable string out of whatever the server threw. Supabase
+ * PostgrestError isn't an Error instance, so `String(err)` on it returns
+ * "[object Object]" and that leaked into the admin UI. This checks the
+ * most common shapes and falls back to safe stringification.
+ */
+function extractError(err: unknown): string {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object') {
+    const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    if (typeof e.message === 'string') {
+      const detail = typeof e.details === 'string' && e.details ? ` (${e.details})` : '';
+      return e.message + detail;
+    }
+    try { return JSON.stringify(err); } catch { return '[unserializable error]'; }
+  }
+  return String(err);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -33,7 +54,7 @@ export async function GET(request: NextRequest) {
     // actually see what's wrong (usually schema drift or FK issue). Still
     // returns JSON so clients consuming .json() don't choke.
     console.error('[api/orders GET] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: `Orders query failed: ${message}` }, { status: 500 });
   }
 }
@@ -105,7 +126,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(order, { status: 201 });
   } catch (err) {
     console.error('[api/orders POST] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: `Order create failed: ${message}` }, { status: 500 });
   }
 }
@@ -124,15 +145,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
-  // If status is transitioning to 'confirmed' from 'pending', decrement
-  // inventory. We don't decrement on order creation (pending) because the
-  // brewery may not have committed to brewing yet; confirmation is the
-  // stock-reservation signal. Idempotent by design: only runs on the
-  // pending->confirmed transition.
+  // pending -> confirmed: decrement inventory AND post keg ledger deposits +
+  // returns. Confirmation is when the brewery commits to the order — kegs
+  // are earmarked for the customer, so that's when keg tracking kicks in.
   if (updates.status === 'confirmed' && existingOrder.status === 'pending') {
     // Track which sizes cross below the low-stock threshold so we can fire
-    // a single digest email instead of N per-order emails. A size only
-    // "crosses" if it was at or above the threshold before the decrement.
+    // a single digest email instead of N per-order emails.
     const crossed: Array<{ productName: string; size: string; remaining: number }> = [];
     for (const item of existingOrder.items) {
       const after = await adjustProductInventory(item.productId, item.size, -item.quantity);
@@ -147,6 +165,42 @@ export async function PUT(request: NextRequest) {
       notifyLowStock({ items: crossed }).catch((err) =>
         console.error('[email] notifyLowStock failed (non-fatal):', err),
       );
+    }
+
+    // Keg ledger deposits: one row per line item. These count against the
+    // customer's outstanding-keg balance until they return the empties.
+    const now = new Date().toISOString();
+    for (const item of existingOrder.items) {
+      const entry: KegLedgerEntry = {
+        id: generateId('kl'),
+        customerId: existingOrder.customerId,
+        orderId: existingOrder.id,
+        type: 'deposit',
+        size: item.size,
+        quantity: item.quantity,
+        depositAmount: item.deposit,
+        totalAmount: item.deposit * item.quantity,
+        date: now,
+        notes: `Order ${existingOrder.id} confirmed`,
+      };
+      await addKegLedgerEntry(entry);
+    }
+    // Returns the customer declared at checkout
+    for (const ret of existingOrder.kegReturns) {
+      const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
+      const entry: KegLedgerEntry = {
+        id: generateId('kl'),
+        customerId: existingOrder.customerId,
+        orderId: existingOrder.id,
+        type: 'return',
+        size: ret.size,
+        quantity: ret.quantity,
+        depositAmount: depositAmounts[ret.size] || 0,
+        totalAmount: -((depositAmounts[ret.size] || 0) * ret.quantity),
+        date: now,
+        notes: `Keg returns with order ${existingOrder.id}`,
+      };
+      await addKegLedgerEntry(entry);
     }
   }
 
@@ -172,47 +226,11 @@ export async function PUT(request: NextRequest) {
     // and let admin delete it manually if needed. Keeping this simple.
   }
 
-  // If status is changing to 'delivered', create keg ledger entries.
-  // Invoices are now auto-created at POST time as drafts; admin sends them
-  // explicitly via the Send Invoice action, so no invoice work happens here.
+  // pending/confirmed -> delivered: fire the auto-send-invoice path and
+  // invoice fallback. Keg ledger entries were already posted at the
+  // pending->confirmed transition; delivered just means the kegs physically
+  // shipped.
   if (updates.status === 'delivered' && existingOrder.status !== 'delivered') {
-    const now = new Date().toISOString();
-
-    // Add keg deposits for each item
-    for (const item of existingOrder.items) {
-      const entry: KegLedgerEntry = {
-        id: generateId('kl'),
-        customerId: existingOrder.customerId,
-        orderId: existingOrder.id,
-        type: 'deposit',
-        size: item.size,
-        quantity: item.quantity,
-        depositAmount: item.deposit,
-        totalAmount: item.deposit * item.quantity,
-        date: now,
-        notes: `Order ${existingOrder.id} delivery`,
-      };
-      await addKegLedgerEntry(entry);
-    }
-
-    // Add keg returns
-    for (const ret of existingOrder.kegReturns) {
-      const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
-      const entry: KegLedgerEntry = {
-        id: generateId('kl'),
-        customerId: existingOrder.customerId,
-        orderId: existingOrder.id,
-        type: 'return',
-        size: ret.size,
-        quantity: ret.quantity,
-        depositAmount: depositAmounts[ret.size],
-        totalAmount: -(depositAmounts[ret.size] * ret.quantity),
-        date: now,
-        notes: `Keg returns with order ${existingOrder.id}`,
-      };
-      await addKegLedgerEntry(entry);
-    }
-
     // Auto-send invoice on delivery if the customer has autoSendInvoices=true.
     // The draft invoice was created at order-placement time; here we promote
     // it to 'unpaid' and fire the customer email. For customers without the
@@ -249,7 +267,7 @@ export async function PUT(request: NextRequest) {
         subtotal: existingOrder.subtotal,
         totalDeposit: existingOrder.totalDeposit,
         total: existingOrder.total,
-        issuedAt: now,
+        issuedAt: new Date().toISOString(),
         paidAt: null,
       };
       await createInvoice(invoice);
@@ -291,7 +309,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json(order);
   } catch (err) {
     console.error('[api/orders PUT] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: `Order update failed: ${message}` }, { status: 500 });
   }
 }

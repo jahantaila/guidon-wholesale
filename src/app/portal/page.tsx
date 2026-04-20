@@ -825,11 +825,28 @@ function ProductsTab({
   minDate.setDate(minDate.getDate() + 1);
   const minDateStr = minDate.toISOString().split('T')[0];
 
+  // Next Thursday/Friday (in local time). Customer doesn't pick a date —
+  // we auto-schedule to the next delivery slot. If the cron job needs
+  // admin-configurable days later, this can read from /api/delivery-schedule;
+  // for now Guidon delivers Thu + Fri so we hardcode.
+  const nextDeliveryDate = (): string => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    // Start looking tomorrow (min 1 day lead time).
+    d.setDate(d.getDate() + 1);
+    for (let i = 0; i < 14; i++) {
+      const day = d.getDay();
+      if (day === 4 || day === 5) return d.toISOString().slice(0, 10);
+      d.setDate(d.getDate() + 1);
+    }
+    return d.toISOString().slice(0, 10); // fallback
+  };
+
   const handleSubmitOrder = async () => {
     setSubmitError('');
-    if (!deliveryDate) { setSubmitError('Please select a delivery date.'); return; }
     setSubmitting(true);
     try {
+      const autoDate = deliveryDate || nextDeliveryDate();
       const items = cart.map((item) => ({
         productId: item.productId, productName: item.productName, size: item.size,
         quantity: item.quantity, unitPrice: item.unitPrice, deposit: item.deposit,
@@ -837,9 +854,12 @@ function ProductsTab({
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, deliveryDate, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, deliveryDate: autoDate, notes }),
       });
-      if (!res.ok) throw new Error('Failed to place order');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
+      }
       setCart([]); setKegReturns([]); setShowCheckout(false); setDeliveryDate(''); setNotes('');
       onOrderPlaced();
     } catch (err) {
@@ -1165,41 +1185,57 @@ function ProductsTab({
                 ))}
               </div>
 
-              {/* Keg Returns */}
+              {/* Keg Returns — always visible with 3 size rows starting at 0,
+                  so customer can't miss the option. Enter 0 if no returns. */}
               <div>
-                <span className="section-label mb-2 block">Keg Returns (optional)</span>
-                <div className="flex gap-2 mb-2">
-                  {KEG_SIZES.map((size) => (
-                    <button key={size} onClick={() => addKegReturn(size)}
-                      className="flex-1 text-[10px] font-heading font-bold py-1.5 rounded-lg bg-charcoal-300 border border-white/[0.06] text-cream/35 hover:text-olive-300 hover:border-olive/30 transition-all">
-                      + {SIZE_SHORT[size]}
-                    </button>
-                  ))}
+                <span className="section-label mb-2 block">Keg Returns</span>
+                <p className="text-xs text-cream/35 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
+                <div className="space-y-2">
+                  {KEG_SIZES.map((size) => {
+                    const existing = kegReturns.find((r) => r.size === size);
+                    const qty = existing?.quantity ?? 0;
+                    const setQty = (n: number) => {
+                      if (n <= 0) {
+                        setKegReturns((prev) => prev.filter((r) => r.size !== size));
+                      } else if (existing) {
+                        updateReturnQty(size, n);
+                      } else {
+                        setKegReturns((prev) => [...prev, { size, quantity: n }]);
+                      }
+                    };
+                    return (
+                      <div key={size} className="flex items-center gap-3">
+                        <span className="text-sm text-cream/60 flex-1">
+                          {SIZE_SHORT[size]}{' '}
+                          <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[size])}/ea)</span>
+                        </span>
+                        <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
+                          <button type="button" onClick={() => setQty(qty - 1)} disabled={qty === 0} className="px-2 py-1 text-cream/30 hover:text-cream text-xs disabled:opacity-30">-</button>
+                          <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{qty}</span>
+                          <button type="button" onClick={() => setQty(qty + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {kegReturns.map((ret) => (
-                  <div key={ret.size} className="flex items-center gap-3 mb-1">
-                    <span className="text-sm text-cream/50 flex-1">{SIZE_SHORT[ret.size]} <span className="text-xs text-emerald-400/50">(-{formatCurrency(KEG_DEPOSITS[ret.size])}/ea)</span></span>
-                    <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                      <button onClick={() => updateReturnQty(ret.size, ret.quantity - 1)} className="px-2 py-1 text-cream/30 text-xs">-</button>
-                      <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.5rem] text-center">{ret.quantity}</span>
-                      <button onClick={() => updateReturnQty(ret.size, ret.quantity + 1)} className="px-2 py-1 text-cream/30 text-xs">+</button>
-                    </div>
-                    <button onClick={() => removeReturn(ret.size)} className="p-1 text-cream/15 hover:text-red-400">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                ))}
               </div>
 
-              {/* Delivery — slots derived from admin-configured weekdays +
-                  lead time. Customer picks from the next available dates. */}
+              {/* Delivery — auto-assigned to the next Thursday or Friday.
+                  Customer doesn't pick a date. They just see the info note. */}
               <div>
-                <span className="section-label mb-2 block">Delivery Date</span>
-                {deliverySlots.length === 0 ? (
-                  <p className="text-sm italic" style={{ color: 'var(--ruby)' }}>
-                    No delivery slots configured. Ask the brewery to set their delivery schedule.
+                <span className="section-label mb-2 block">Delivery</span>
+                <div
+                  className="text-sm p-3 rounded-lg border"
+                  style={{ borderColor: 'var(--divider)', background: 'color-mix(in srgb, var(--brass) 4%, transparent)' }}
+                >
+                  <p style={{ color: 'var(--ink)' }}>
+                    Guidon Brewing delivers on <strong>Thursdays and Fridays</strong>.
                   </p>
-                ) : (
+                  <p className="text-xs italic mt-1" style={{ color: 'var(--muted)' }}>
+                    We&rsquo;ll schedule your order for the next available delivery day and email you confirmation.
+                  </p>
+                </div>
+                {false && (
                   <div className="flex flex-wrap gap-2">
                     {deliverySlots.map((iso) => {
                       const on = deliveryDate === iso;
