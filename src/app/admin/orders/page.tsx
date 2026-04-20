@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
-import { Order, OrderStatus, Customer } from '@/lib/types';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import Link from 'next/link';
+import { Order, OrderStatus, Customer, Invoice } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
@@ -27,6 +28,7 @@ type ViewMode = 'table' | 'kanban';
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -38,14 +40,17 @@ export default function OrdersPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [ordersRes, customersRes] = await Promise.all([
+        const [ordersRes, customersRes, invoicesRes] = await Promise.all([
           adminFetch('/api/orders', { cache: 'no-store' }),
           adminFetch('/api/customers', { cache: 'no-store' }),
+          adminFetch('/api/invoices', { cache: 'no-store' }),
         ]);
         const ordersData = await ordersRes.json().catch(() => []);
         const customersData = await customersRes.json().catch(() => []);
+        const invoicesData = await invoicesRes.json().catch(() => []);
         setOrders(Array.isArray(ordersData) ? ordersData : []);
         setCustomers(Array.isArray(customersData) ? customersData : []);
+        setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
       } catch (err) {
         console.error('Failed to load orders', err);
       } finally {
@@ -56,6 +61,11 @@ export default function OrdersPage() {
   }, []);
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
+  const invoiceByOrderId = useMemo(() => {
+    const m = new Map<string, Invoice>();
+    invoices.forEach((i) => m.set(i.orderId, i));
+    return m;
+  }, [invoices]);
 
   const handleStatusChange = useCallback(async (order: Order, newStatus: OrderStatus) => {
     setUpdating(order.id);
@@ -221,6 +231,7 @@ export default function OrdersPage() {
         <TableView
           orders={sorted}
           customerMap={customerMap}
+          invoiceByOrderId={invoiceByOrderId}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
           onStatusChange={handleStatusChange}
@@ -235,6 +246,7 @@ export default function OrdersPage() {
 function TableView({
   orders,
   customerMap,
+  invoiceByOrderId,
   expandedId,
   setExpandedId,
   onStatusChange,
@@ -243,6 +255,7 @@ function TableView({
 }: {
   orders: Order[];
   customerMap: Map<string, Customer>;
+  invoiceByOrderId: Map<string, Invoice>;
   expandedId: string | null;
   setExpandedId: (id: string | null) => void;
   onStatusChange: (o: Order, next: OrderStatus) => void;
@@ -373,6 +386,33 @@ function TableView({
                           Notes: {order.notes}
                         </p>
                       )}
+                      {/* Invoice link — drops admin straight into billing context */}
+                      <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
+                        <span className="section-label" style={{ color: 'var(--muted)' }}>Invoice</span>
+                        {(() => {
+                          const inv = invoiceByOrderId.get(order.id);
+                          if (!inv) {
+                            return (
+                              <Link href="/admin/invoices" className="font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                                None yet — create on Invoices page &rarr;
+                              </Link>
+                            );
+                          }
+                          return (
+                            <>
+                              <Link href="/admin/invoices" className="font-semibold hover:underline" style={{ color: 'var(--ink)' }}>
+                                {inv.id}
+                              </Link>
+                              <span className={cn('badge-sm', getStatusColor(inv.status))}>{inv.status}</span>
+                              {inv.sentAt && (
+                                <span style={{ color: 'var(--muted)' }} className="text-xs italic">
+                                  sent {formatDate(inv.sentAt)}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
                       {(order.status === 'delivered' || order.status === 'completed') && (
                         <div className="flex items-center gap-3 pt-2 border-t border-divider">
                           <button
