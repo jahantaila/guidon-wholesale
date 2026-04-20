@@ -633,6 +633,36 @@ function ProductsTab({
   const [submitError, setSubmitError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
 
+  // Delivery schedule from admin settings. Used to build the list of valid
+  // delivery slots instead of a free-form date input. Falls back to Tue/Thu
+  // with a 2-day lead time if the fetch fails so checkout never locks up.
+  const [deliveryDays, setDeliveryDays] = useState<number[]>([2, 4]);
+  const [deliveryLeadDays, setDeliveryLeadDays] = useState<number>(2);
+  useEffect(() => {
+    fetch('/api/delivery-schedule', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.deliveryDays) && data.deliveryDays.length > 0) setDeliveryDays(data.deliveryDays);
+        if (typeof data?.deliveryLeadDays === 'number') setDeliveryLeadDays(data.deliveryLeadDays);
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
+  // Compute up to the next 6 valid delivery dates based on schedule.
+  const deliverySlots = useMemo(() => {
+    const slots: string[] = [];
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + Math.max(0, deliveryLeadDays));
+    for (let i = 0; i < 60 && slots.length < 6; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      if (deliveryDays.includes(d.getDay())) {
+        slots.push(d.toISOString().slice(0, 10));
+      }
+    }
+    return slots;
+  }, [deliveryDays, deliveryLeadDays]);
+
   // Consume reorder seed: merge the seeded items into the cart.
   // Keyed by nonce so repeated reorders trigger even if the items array
   // is reference-identical.
@@ -1111,11 +1141,41 @@ function ProductsTab({
                 ))}
               </div>
 
-              {/* Delivery */}
+              {/* Delivery — slots derived from admin-configured weekdays +
+                  lead time. Customer picks from the next available dates. */}
               <div>
                 <span className="section-label mb-2 block">Delivery Date</span>
-                <input type="date" value={deliveryDate} min={minDateStr}
-                  onChange={(e) => setDeliveryDate(e.target.value)} className="input" />
+                {deliverySlots.length === 0 ? (
+                  <p className="text-sm italic" style={{ color: 'var(--ruby)' }}>
+                    No delivery slots configured. Ask the brewery to set their delivery schedule.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {deliverySlots.map((iso) => {
+                      const on = deliveryDate === iso;
+                      const d = new Date(iso);
+                      const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                      return (
+                        <button
+                          key={iso}
+                          type="button"
+                          onClick={() => setDeliveryDate(iso)}
+                          className="px-3 py-2 text-xs font-semibold font-ui border transition-colors"
+                          style={{
+                            borderRadius: '3px',
+                            borderColor: on ? 'var(--brass-dim)' : 'var(--divider)',
+                            background: on ? 'var(--brass)' : 'transparent',
+                            color: on ? 'var(--paper)' : 'var(--ink)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>
