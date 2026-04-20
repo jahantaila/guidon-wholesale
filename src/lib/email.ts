@@ -402,6 +402,43 @@ export async function notifyKegReminder(args: {
 }
 
 /**
+ * Low-stock alert. Fired when a product size's inventory crosses below the
+ * threshold as a result of an order confirmation. Only goes to brewery
+ * admin recipients — customers never see this. Keep it compact: subject
+ * line has everything Mike needs to act.
+ */
+export async function notifyLowStock(args: {
+  items: Array<{ productName: string; size: string; remaining: number }>;
+}): Promise<void> {
+  if (args.items.length === 0) return;
+  const adminTo = await adminRecipients();
+  if (adminTo.length === 0) return;
+
+  const first = args.items[0];
+  const subject = args.items.length === 1
+    ? `Low stock: ${first.productName} ${first.size} (${first.remaining} left)`
+    : `Low stock: ${args.items.length} sizes below threshold`;
+
+  const rows = args.items.map(
+    (i) => `<li style="margin:6px 0;"><strong style="color:#2A2416;">${escapeHtml(i.productName)}</strong> &middot; <span style="font-family:monospace;color:#6B5F48;">${escapeHtml(i.size)}</span> &middot; <span style="font-family:monospace;color:#C0392B;font-weight:600;">${i.remaining} remaining</span></li>`,
+  ).join('');
+
+  await send({
+    to: adminTo,
+    subject,
+    html: emailShell({
+      title: 'Low stock alert',
+      preheader: `${args.items.length} product size${args.items.length === 1 ? '' : 's'} below threshold after the last order confirmation.`,
+      body: `
+        <p>These products are running low after the last order was confirmed. Brew or restock:</p>
+        <ul style="margin:12px 0 16px 18px;font-size:14px;">${rows}</ul>
+        <p style="font-size:13px;color:#6B5F48;font-style:italic;">This alert fires once when inventory crosses below 5. No further emails until you restock + it crosses back down.</p>
+      `,
+    }),
+  });
+}
+
+/**
  * Application decision. Called when an admin approves or rejects an
  * application. Includes portal login info on approval.
  */

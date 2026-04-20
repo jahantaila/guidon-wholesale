@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
-import { notifyOrderPlaced, notifyOrderStatusChanged, send, formatCurrencyForEmail } from '@/lib/email';
+import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
+
+const LOW_STOCK_THRESHOLD = 5;
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,8 +113,23 @@ export async function PUT(request: NextRequest) {
   // stock-reservation signal. Idempotent by design: only runs on the
   // pending->confirmed transition.
   if (updates.status === 'confirmed' && existingOrder.status === 'pending') {
+    // Track which sizes cross below the low-stock threshold so we can fire
+    // a single digest email instead of N per-order emails. A size only
+    // "crosses" if it was at or above the threshold before the decrement.
+    const crossed: Array<{ productName: string; size: string; remaining: number }> = [];
     for (const item of existingOrder.items) {
-      await adjustProductInventory(item.productId, item.size, -item.quantity);
+      const after = await adjustProductInventory(item.productId, item.size, -item.quantity);
+      if (after !== null && after < LOW_STOCK_THRESHOLD) {
+        const before = after + item.quantity;
+        if (before >= LOW_STOCK_THRESHOLD) {
+          crossed.push({ productName: item.productName, size: item.size, remaining: after });
+        }
+      }
+    }
+    if (crossed.length > 0) {
+      notifyLowStock({ items: crossed }).catch((err) =>
+        console.error('[email] notifyLowStock failed (non-fatal):', err),
+      );
     }
   }
 
