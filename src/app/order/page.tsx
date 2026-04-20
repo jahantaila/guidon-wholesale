@@ -365,119 +365,193 @@ export default function OrderPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredProducts.map((product, idx) => {
+            {filteredProducts.map((product) => {
               const sel = getSelection(product.id, product.sizes);
               const currentSizeInfo = product.sizes.find((s) => s.size === sel.size);
               const isExpanded = expandedProduct === product.id;
-              const colorGrad = BEER_COLORS[product.category] || 'from-gold/20 to-amber-800/15';
+              const stockForSize = currentSizeInfo?.inventoryCount ?? 0;
+              const isOutOfStock = stockForSize === 0;
+              const isLowStock = stockForSize > 0 && stockForSize < 3;
 
               return (
-                <div
+                <article
                   key={product.id}
-                  className="card-product flex flex-col animate-slide-up"
-                  style={{ animationDelay: `${Math.min(idx * 40, 250)}ms` }}
+                  className="card-product flex flex-col"
                 >
-                  {/* Beer color header */}
-                  <div className={cn('h-28 bg-gradient-to-br relative', colorGrad)}>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <span className="text-4xl font-heading font-black text-white/20">{product.abv}%</span>
+                  {/* Typographic label header — replaces the SaaS gradient.
+                      Beer name in Fraunces display. Style + ABV/IBU in editorial meta row.
+                      Awards rendered as small-caps accolade. */}
+                  <header className="px-5 pt-5 pb-4 border-b border-divider">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <span className="section-label">{product.style}</span>
+                      <div className="flex gap-1.5 shrink-0">
+                        {product.newRelease && (
+                          <span className="badge-sm" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>
+                            New
+                          </span>
+                        )}
+                        {product.limitedRelease && (
+                          <span className="badge-sm" style={{ color: 'var(--ruby)', borderColor: 'var(--ruby)' }}>
+                            Limited
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="absolute top-3 left-3">
-                      <span className="badge-sm bg-black/40 text-white/80 backdrop-blur-sm">{product.category}</span>
+                    <button
+                      onClick={() => setExpandedProduct(isExpanded ? null : product.id)}
+                      className="text-left w-full"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <h3
+                        className="font-display leading-tight"
+                        style={{
+                          fontSize: product.name.length > 20 ? '1.375rem' : '1.625rem',
+                          fontVariationSettings: "'opsz' 36",
+                          color: 'var(--ink)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {product.name}
+                      </h3>
+                    </button>
+                    <div className="flex items-baseline gap-3 mt-2 text-sm">
+                      <span className="font-variant-tabular font-semibold" style={{ color: 'var(--brass)' }}>
+                        {product.abv}% ABV
+                      </span>
+                      {product.ibu != null && (
+                        <span className="font-variant-tabular text-[var(--muted)]">
+                          {product.ibu} IBU
+                        </span>
+                      )}
+                      {isOutOfStock ? (
+                        <span className="ml-auto section-label" style={{ color: 'var(--ruby)' }}>
+                          Out of Stock
+                        </span>
+                      ) : isLowStock ? (
+                        <span className="ml-auto section-label" style={{ color: 'var(--ember)' }}>
+                          Low &middot; {stockForSize} left
+                        </span>
+                      ) : (
+                        <span className="ml-auto section-label" style={{ color: 'var(--pine)' }}>
+                          In Stock
+                        </span>
+                      )}
                     </div>
-                    {product.available && (
-                      <div className="absolute top-3 right-3">
-                        <span className="badge-sm bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">In Stock</span>
-                      </div>
+                    {product.awards && product.awards.length > 0 && (
+                      <ul className="mt-3 text-xs italic" style={{ color: 'var(--olive)', fontFamily: "'Source Serif 4', serif" }}>
+                        {product.awards.slice(0, 2).map((award) => (
+                          <li key={award}>&#9670; {award}</li>
+                        ))}
+                      </ul>
                     )}
-                  </div>
+                  </header>
 
                   {/* Content */}
                   <div className="p-5 flex flex-col flex-1">
-                    <button
-                      onClick={() => setExpandedProduct(isExpanded ? null : product.id)}
-                      className="text-left mb-3"
-                    >
-                      <h3 className="font-heading text-base font-bold text-cream leading-tight hover:text-gold transition-colors">
-                        {product.name}
-                      </h3>
-                      <p className="text-xs text-cream/35 mt-1">{product.style}</p>
-                    </button>
-
-                    {/* Expandable description */}
-                    {isExpanded && (
-                      <p className="text-sm text-cream/50 mb-4 leading-relaxed animate-fade-in">
+                    {/* Description */}
+                    {isExpanded ? (
+                      <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--ink)', fontFamily: "'Source Serif 4', serif" }}>
+                        {product.description}
+                      </p>
+                    ) : (
+                      <p className="text-sm mb-4 line-clamp-3 leading-relaxed flex-1" style={{ color: 'var(--muted)' }}>
                         {product.description}
                       </p>
                     )}
 
-                    {!isExpanded && (
-                      <p className="text-xs text-cream/30 mb-4 line-clamp-2 leading-relaxed flex-1">
-                        {product.description}
-                      </p>
+                    {isExpanded ? (
+                      <button
+                        onClick={() => setExpandedProduct(null)}
+                        className="btn-ghost text-xs mb-3 self-start"
+                      >
+                        &minus; Collapse
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setExpandedProduct(product.id)}
+                        className="btn-ghost text-xs mb-3 self-start"
+                      >
+                        &rarr; Read more
+                      </button>
                     )}
 
-                    {/* Price */}
+                    {/* Price ledger */}
                     {currentSizeInfo && (
-                      <div className="mb-4 flex items-baseline gap-2">
-                        <span className="text-xl font-heading font-black text-cream">
+                      <div className="mb-4 pb-3 border-b border-divider flex items-baseline gap-2">
+                        <span className="font-display font-variant-tabular" style={{ fontSize: '1.5rem', color: 'var(--ink)', fontVariationSettings: "'opsz' 24", fontWeight: 500 }}>
                           {formatCurrency(currentSizeInfo.price)}
                         </span>
-                        <span className="text-xs text-cream/25">/ keg</span>
-                        <span className="text-xs text-gold/50 ml-auto">
-                          +{formatCurrency(currentSizeInfo.deposit)} dep.
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>per keg</span>
+                        <span className="text-xs ml-auto font-variant-tabular" style={{ color: 'var(--muted)' }}>
+                          +{formatCurrency(currentSizeInfo.deposit)} deposit
                         </span>
                       </div>
                     )}
 
-                    {/* Size pills */}
-                    <div className="flex gap-1.5 mb-3">
-                      {product.sizes.map((s) => (
-                        <button
-                          key={s.size}
-                          onClick={() => updateSelection(product.id, 'size', s.size)}
-                          className={cn(
-                            'flex-1 py-1.5 rounded-lg text-[11px] font-heading font-bold transition-all duration-150',
-                            sel.size === s.size
-                              ? 'bg-gold text-charcoal'
-                              : 'bg-charcoal-300 text-cream/40 hover:text-cream/60 hover:bg-charcoal-400'
-                          )}
-                        >
-                          {SIZE_SHORT[s.size]}
-                        </button>
-                      ))}
+                    {/* Size selector — radio-style row, not pills */}
+                    <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
+                      {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
+                        const hasSize = product.sizes.find((s) => s.size === kegSize);
+                        return (
+                          <button
+                            key={kegSize}
+                            onClick={() => hasSize && updateSelection(product.id, 'size', kegSize)}
+                            disabled={!hasSize}
+                            className="flex-1 py-2 text-xs font-semibold font-ui transition-colors"
+                            style={{
+                              background:
+                                sel.size === kegSize && hasSize
+                                  ? 'var(--brass)'
+                                  : !hasSize
+                                  ? 'transparent'
+                                  : 'var(--paper)',
+                              color:
+                                sel.size === kegSize && hasSize
+                                  ? 'var(--paper)'
+                                  : !hasSize
+                                  ? 'var(--faint)'
+                                  : 'var(--ink)',
+                              cursor: hasSize ? 'pointer' : 'not-allowed',
+                              opacity: hasSize ? 1 : 0.4,
+                            }}
+                          >
+                            {SIZE_SHORT[kegSize]}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {/* Qty + Add */}
-                    <div className="flex gap-2 items-center">
-                      <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
+                    <div className="flex gap-2 items-stretch">
+                      <div className="flex items-center border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
                         <button
                           onClick={() => updateSelection(product.id, 'quantity', Math.max(1, sel.quantity - 1))}
-                          className="px-3 py-2 text-cream/40 hover:text-cream hover:bg-white/5 transition-colors"
+                          className="px-3 py-2 transition-colors"
+                          style={{ color: 'var(--muted)' }}
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M20 12H4" /></svg>
                         </button>
-                        <span className="px-3 py-2 text-sm font-bold text-cream min-w-[2.5rem] text-center bg-charcoal-200">
+                        <span className="px-3 py-2 text-sm font-semibold font-variant-tabular min-w-[2.5rem] text-center" style={{ color: 'var(--ink)' }}>
                           {sel.quantity}
                         </span>
                         <button
                           onClick={() => updateSelection(product.id, 'quantity', sel.quantity + 1)}
-                          className="px-3 py-2 text-cream/40 hover:text-cream hover:bg-white/5 transition-colors"
+                          className="px-3 py-2 transition-colors"
+                          style={{ color: 'var(--muted)' }}
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         </button>
                       </div>
                       <button
                         onClick={() => addToCart(product)}
-                        className="btn-primary flex-1 py-2.5 text-xs"
+                        className="btn-primary flex-1"
+                        disabled={isOutOfStock}
                       >
-                        Add to Cart
+                        {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
                       </button>
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
