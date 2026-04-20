@@ -115,6 +115,27 @@ export default function AdminDashboard() {
       .map((s) => ({ name: p.name, size: s.size, count: s.inventoryCount })),
   );
 
+  // Rolling 14-day revenue bucketed by day (delivered + completed orders only).
+  // Used as a sparkline so Mike sees the trend without opening a report.
+  const revenue14d = (() => {
+    const days: { date: string; total: number }[] = [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      days.push({ date: d.toISOString().slice(0, 10), total: 0 });
+    }
+    const byDate = new Map(days.map((d, idx) => [d.date, idx] as const));
+    for (const o of orders) {
+      if (o.status !== 'delivered' && o.status !== 'completed') continue;
+      const day = new Date(o.createdAt).toISOString().slice(0, 10);
+      const idx = byDate.get(day);
+      if (idx !== undefined) days[idx].total += o.total;
+    }
+    return days;
+  })();
+  const revenue14dMax = Math.max(1, ...revenue14d.map((d) => d.total));
+  const revenue14dSum = revenue14d.reduce((s, d) => s + d.total, 0);
+
   return (
     <div className="space-y-10">
       {/* Masthead */}
@@ -179,6 +200,48 @@ export default function AdminDashboard() {
             reload
           </button>{' '}
           to re-authenticate.
+        </div>
+      )}
+
+      {/* Rolling 14-day revenue sparkline. Tiny SVG, no chart library. Hover
+          to see per-day detail. Only shown when there's revenue data. */}
+      {!loading && revenue14dSum > 0 && (
+        <div className="card p-5">
+          <div className="flex items-baseline justify-between mb-3">
+            <div>
+              <span className="section-label">Last 14 Days</span>
+              <p className="font-display mt-1" style={{ fontSize: '1.75rem', fontVariationSettings: "'opsz' 36", color: 'var(--ink)', fontWeight: 500 }}>
+                {formatCurrency(revenue14dSum)} <span className="text-sm italic font-body" style={{ color: 'var(--muted)' }}>in revenue</span>
+              </p>
+            </div>
+            <div className="text-right text-xs" style={{ color: 'var(--muted)' }}>
+              <div>Delivered + completed orders</div>
+              <div className="italic mt-0.5">By order placement date</div>
+            </div>
+          </div>
+          <div className="flex items-end gap-1 h-16">
+            {revenue14d.map((d) => {
+              const pct = Math.max(2, (d.total / revenue14dMax) * 100);
+              const label = new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${label}: ${formatCurrency(d.total)}`}>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: `${pct}%`,
+                      background: d.total > 0 ? 'var(--brass)' : 'var(--divider)',
+                      borderRadius: '2px',
+                      minHeight: '2px',
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between text-[10px] mt-1" style={{ color: 'var(--faint)' }}>
+            <span>{new Date(revenue14d[0].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            <span>{new Date(revenue14d[revenue14d.length - 1].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+          </div>
         </div>
       )}
 
