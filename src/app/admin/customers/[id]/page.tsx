@@ -20,6 +20,7 @@ export default function CustomerDetailPage() {
   const [toast, setToast] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
+  const [autoSendDraft, setAutoSendDraft] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function CustomerDetailPage() {
         if (c) {
           setNotesDraft(c.notes || '');
           setTagsDraft((c.tags || []).join(', '));
+          setAutoSendDraft(c.autoSendInvoices === true);
         }
         setOrders(await ordersRes.json());
         setInvoices(await invoicesRes.json());
@@ -76,7 +78,7 @@ export default function CustomerDetailPage() {
       const res = await adminFetch('/api/customers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: customer.id, notes: notesDraft, tags }),
+        body: JSON.stringify({ id: customer.id, notes: notesDraft, tags, autoSendInvoices: autoSendDraft }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -266,6 +268,21 @@ export default function CustomerDetailPage() {
           >
             {savingNotes ? 'Saving...' : 'Save Notes'}
           </button>
+        </div>
+        <div className="flex items-center gap-3 mt-4 pt-4 border-t border-divider">
+          <input
+            type="checkbox"
+            id="autoSend"
+            checked={autoSendDraft}
+            onChange={(e) => setAutoSendDraft(e.target.checked)}
+            className="w-4 h-4 accent-gold cursor-pointer"
+          />
+          <label htmlFor="autoSend" className="text-sm cursor-pointer select-none" style={{ color: 'var(--ink)' }}>
+            Auto-send invoices on delivery
+          </label>
+          <span className="text-xs italic flex-1" style={{ color: 'var(--muted)' }}>
+            When on, this customer gets their invoice emailed the moment their order is marked delivered. When off, admin reviews + clicks Send from the Invoices tab first.
+          </span>
         </div>
         {customer.tags && customer.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-divider">

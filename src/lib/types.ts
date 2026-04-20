@@ -10,6 +10,8 @@ export interface Customer {
   notes?: string;
   /** Free-form tags like "priority", "net-30", "tasting-room". */
   tags?: string[];
+  /** When true, invoice auto-sends on order-delivered transition. */
+  autoSendInvoices?: boolean;
   createdAt: string;
 }
 

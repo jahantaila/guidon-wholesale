@@ -159,6 +159,10 @@ alter table invoices add column if not exists sent_at timestamptz;
 alter table customers add column if not exists notes text not null default '';
 -- Customer tags for filtering/grouping (e.g. ["priority", "net-30", "tasting-room"]).
 alter table customers add column if not exists tags jsonb not null default '[]'::jsonb;
+-- When true, invoice automatically transitions draft -> unpaid (and emails
+-- the customer) the moment an order is marked delivered. Default false so
+-- admin reviews before billing.
+alter table customers add column if not exists auto_send_invoices boolean not null default false;
 
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;

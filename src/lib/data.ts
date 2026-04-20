@@ -39,6 +39,7 @@ function rowToCustomer(row: any): Customer {
     address: row.address,
     notes: row.notes ?? '',
     tags: Array.isArray(row.tags) ? row.tags : [],
+    autoSendInvoices: row.auto_send_invoices === true,
     createdAt: row.created_at,
   };
 }
@@ -181,6 +182,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.address !== undefined) row.address = updates.address;
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.tags !== undefined) row.tags = updates.tags;
+    if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;
     const { data, error } = await sb.from('customers').update(row).eq('id', id).select().single();
     if (error) return undefined;
     return rowToCustomer(data);
