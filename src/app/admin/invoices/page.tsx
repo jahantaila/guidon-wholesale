@@ -312,6 +312,13 @@ export default function InvoicesPage() {
               Cards
             </button>
           </div>
+          <a
+            href="/api/invoices/export"
+            className="btn-ghost text-xs px-3 py-1.5 border border-white/[0.06] rounded-lg"
+            title="Download all invoices as CSV"
+          >
+            Export CSV
+          </a>
         </div>
       </div>
 

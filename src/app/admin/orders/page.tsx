@@ -208,6 +208,14 @@ export default function OrdersPage() {
               Kanban
             </button>
           </div>
+          <a
+            href="/api/orders/export"
+            className="btn-ghost text-xs px-3 py-1.5 border border-divider"
+            title="Download all orders as CSV"
+            style={{ borderRadius: '3px' }}
+          >
+            Export CSV
+          </a>
         </div>
       </div>
 
