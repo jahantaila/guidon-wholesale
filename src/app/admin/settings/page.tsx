@@ -147,8 +147,7 @@ export default function SettingsPage() {
 
           <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
             Changes take effect immediately for any notification event fired
-            after save. If <code>RESEND_API_KEY</code> is not set, emails log to
-            the server console instead of being sent.
+            after save.
           </p>
         </>
       )}

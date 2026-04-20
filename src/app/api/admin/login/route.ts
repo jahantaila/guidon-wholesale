@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, recordFailure, clearKey, keyForRequest } from '@/lib/rate-limit';
 
 /**
  * GET /api/admin/login — session check. Returns 200 if the admin_session
@@ -16,10 +17,30 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit FIRST so a brute-force attempt can't even check passwords.
+  const key = keyForRequest(request);
+  const limit = checkRateLimit(key);
+  if (!limit.allowed) {
+    const mins = Math.ceil(limit.retryAfterMs / 60000);
+    return NextResponse.json(
+      {
+        error:
+          limit.reason === 'locked'
+            ? `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`
+            : `Too many attempts. Wait ${mins} minute${mins === 1 ? '' : 's'} before trying again.`,
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   const body = await request.json();
   const adminPassword = process.env.ADMIN_PASSWORD || 'guidon2026';
 
   if (body.password === adminPassword) {
+    clearKey(key);
     const response = NextResponse.json({ success: true });
     response.cookies.set('admin_session', 'authenticated', {
       httpOnly: true,
@@ -31,6 +52,7 @@ export async function POST(request: NextRequest) {
     return response;
   }
 
+  recordFailure(key);
   return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
 }
 

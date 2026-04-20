@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Customer } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
@@ -106,13 +107,20 @@ export default function CustomersPage() {
                   return c.businessName.toLowerCase().includes(q) || c.contactName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
                 }).map((c) => (
                   <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="table-cell font-semibold text-cream">{c.businessName}</td>
+                    <td className="table-cell font-semibold text-cream">
+                      <Link href={`/admin/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--brass)' }}>
+                        {c.businessName}
+                      </Link>
+                    </td>
                     <td className="table-cell">{c.contactName}</td>
                     <td className="table-cell text-cream/50">{c.email}</td>
                     <td className="table-cell text-cream/50">{c.phone}</td>
                     <td className="table-cell text-cream/40">{formatDate(c.createdAt)}</td>
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-3">
+                        <Link href={`/admin/customers/${c.id}`} className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
+                          Details
+                        </Link>
                         <button onClick={() => openEdit(c)} className="text-gold/70 hover:text-gold text-sm font-semibold transition-colors">
                           Edit
                         </button>

@@ -425,6 +425,16 @@ body {
 /* Embed mode — transparent so the hosting WordPress theme shows through */
 .embed-mode { background: transparent; }
 
+/* Warm scrim for dialogs / slide-outs. The codebase has a lot of
+ * `bg-black/60 backdrop-blur-sm` and `bg-black/70 backdrop-blur-sm`
+ * usages for modal backdrops; on paper-mode pages a pure-black scrim
+ * looks jarring. This overrides those combos to warm ink tint
+ * (40-55% --ink) with a lighter blur, matching the letterpress feel
+ * without churning every modal call site. */
+.bg-black\/60 { background-color: color-mix(in srgb, var(--ink) 45%, transparent) !important; }
+.bg-black\/70 { background-color: color-mix(in srgb, var(--ink) 55%, transparent) !important; }
+.backdrop-blur-sm { backdrop-filter: blur(3px) !important; -webkit-backdrop-filter: blur(3px) !important; }
+
 @keyframes pulseSlow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
