@@ -69,7 +69,7 @@ export interface Product {
 
 export type KegSize = '1/2bbl' | '1/4bbl' | '1/6bbl';
 
-export type OrderStatus = 'pending' | 'confirmed' | 'delivered' | 'completed';
+export type OrderStatus = 'pending' | 'confirmed' | 'delivered' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   productId: string;

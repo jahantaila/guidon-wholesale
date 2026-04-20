@@ -13,6 +13,7 @@ const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
   confirmed: 'Admin has committed to delivering this order. Inventory is now reserved (kegs subtract from stock).',
   delivered: 'Kegs left the brewery and reached the customer. Keg deposits post to the customer\u2019s ledger; invoice becomes sendable.',
   completed: 'Order fully paid + kegs either returned or written off. Closed out.',
+  cancelled: 'Order voided before delivery. Inventory was restored if it had been reserved. Invoice is left in draft for the admin to clean up.',
 };
 
 // What the next status action looks like on a button
@@ -21,6 +22,7 @@ const STATUS_ACTION: Record<OrderStatus, { next?: OrderStatus; label: string; co
   confirmed: { next: 'delivered', label: 'Mark delivered', color: 'var(--pine)' },
   delivered: { next: 'completed', label: 'Mark completed', color: 'var(--olive)' },
   completed: { label: 'Completed', color: 'var(--muted)' },
+  cancelled: { label: 'Cancelled', color: 'var(--muted)' },
 };
 
 type ViewMode = 'table' | 'kanban';
@@ -484,6 +486,25 @@ function TableView({
                           );
                         })()}
                       </div>
+                      {(order.status === 'pending' || order.status === 'confirmed') && (
+                        <div className="flex items-center gap-3 pt-2 border-t border-divider">
+                          <button
+                            onClick={() => {
+                              if (confirm(`Cancel order ${order.id}? This restores reserved inventory.`)) {
+                                onStatusChange(order, 'cancelled');
+                              }
+                            }}
+                            className="btn-ghost text-xs"
+                            style={{ color: 'var(--ruby)' }}
+                            title="Void this order. Restores inventory if it was confirmed."
+                          >
+                            Cancel order
+                          </button>
+                          <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
+                            Inventory will be restored; draft invoice will stay in the Invoices tab for cleanup.
+                          </span>
+                        </div>
+                      )}
                       {(order.status === 'delivered' || order.status === 'completed') && (
                         <div className="flex items-center gap-3 pt-2 border-t border-divider">
                           <button

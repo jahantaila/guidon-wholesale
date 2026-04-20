@@ -152,6 +152,10 @@ create table if not exists invoices (
 -- and add the sent_at column for pre-existing installs.
 alter table invoices drop constraint if exists invoices_status_check;
 alter table invoices add constraint invoices_status_check check (status in ('draft', 'unpaid', 'paid', 'overdue'));
+
+-- Orders now support a 'cancelled' status for orders voided before delivery.
+alter table orders drop constraint if exists orders_status_check;
+alter table orders add constraint orders_status_check check (status in ('pending', 'confirmed', 'delivered', 'completed', 'cancelled'));
 alter table invoices add column if not exists sent_at timestamptz;
 
 -- Customer-level notes for brewery staff context ("prefers Thursday

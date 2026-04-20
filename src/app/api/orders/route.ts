@@ -152,6 +152,20 @@ export async function PUT(request: NextRequest) {
     }
   }
 
+  // Cancellation: restore inventory if it was confirmed, and void any draft
+  // invoice so it doesn't sit around forever. Keg ledger entries shouldn't
+  // exist yet (those only fire on delivered), so nothing to roll back there.
+  if (updates.status === 'cancelled' && existingOrder.status !== 'cancelled') {
+    if (existingOrder.status === 'confirmed') {
+      for (const item of existingOrder.items) {
+        await adjustProductInventory(item.productId, item.size, item.quantity);
+      }
+    }
+    // Any existing invoice for this order becomes informationally useless
+    // if still draft. Mark paid as-is would be lying; we'll leave it draft
+    // and let admin delete it manually if needed. Keeping this simple.
+  }
+
   // If status is changing to 'delivered', create keg ledger entries.
   // Invoices are now auto-created at POST time as drafts; admin sends them
   // explicitly via the Send Invoice action, so no invoice work happens here.
