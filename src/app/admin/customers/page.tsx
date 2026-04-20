@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { Customer } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
+import { Customer, Order, Invoice } from '@/lib/types';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 interface CustomerForm {
@@ -19,6 +19,8 @@ const emptyForm: CustomerForm = { businessName: '', contactName: '', email: '', 
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,14 +31,41 @@ export default function CustomersPage() {
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await adminFetch('/api/customers');
-      const data = await res.json();
-      setCustomers(Array.isArray(data) ? data : []);
+      const [custRes, ordRes, invRes] = await Promise.all([
+        adminFetch('/api/customers'),
+        adminFetch('/api/orders'),
+        adminFetch('/api/invoices'),
+      ]);
+      const [custData, ordData, invData] = await Promise.all([custRes.json(), ordRes.json(), invRes.json()]);
+      setCustomers(Array.isArray(custData) ? custData : []);
+      setOrders(Array.isArray(ordData) ? ordData : []);
+      setInvoices(Array.isArray(invData) ? invData : []);
     } catch (err) { console.error('Failed to load customers', err); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
+
+  // Per-customer metrics: LTV (sum of all order totals), last order date, outstanding invoice count + $
+  const metricsByCustomer = useMemo(() => {
+    const m = new Map<string, { ltv: number; orderCount: number; lastOrder: string | null; outstanding: number; outstandingCount: number }>();
+    customers.forEach((c) => m.set(c.id, { ltv: 0, orderCount: 0, lastOrder: null, outstanding: 0, outstandingCount: 0 }));
+    orders.forEach((o) => {
+      const entry = m.get(o.customerId);
+      if (!entry) return;
+      entry.ltv += o.total;
+      entry.orderCount += 1;
+      if (!entry.lastOrder || o.createdAt > entry.lastOrder) entry.lastOrder = o.createdAt;
+    });
+    invoices.forEach((i) => {
+      if (i.status !== 'unpaid' && i.status !== 'overdue') return;
+      const entry = m.get(i.customerId);
+      if (!entry) return;
+      entry.outstanding += i.total;
+      entry.outstandingCount += 1;
+    });
+    return m;
+  }, [customers, orders, invoices]);
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setModalOpen(true); };
   const openEdit = (customer: Customer) => {
@@ -116,11 +145,12 @@ export default function CustomersPage() {
             <table className="w-full">
               <thead className="bg-charcoal-200">
                 <tr>
-                  <th className="table-header">Business Name</th>
+                  <th className="table-header">Business</th>
                   <th className="table-header">Contact</th>
-                  <th className="table-header">Email</th>
-                  <th className="table-header">Phone</th>
-                  <th className="table-header">Joined</th>
+                  <th className="table-header text-right">Orders</th>
+                  <th className="table-header text-right">LTV</th>
+                  <th className="table-header text-right">Outstanding</th>
+                  <th className="table-header">Last Order</th>
                   <th className="table-header text-right">Actions</th>
                 </tr>
               </thead>
@@ -129,17 +159,34 @@ export default function CustomersPage() {
                   if (!search) return true;
                   const q = search.toLowerCase();
                   return c.businessName.toLowerCase().includes(q) || c.contactName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
-                }).map((c) => (
+                }).map((c) => {
+                  const m = metricsByCustomer.get(c.id);
+                  return (
                   <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="table-cell font-semibold text-cream">
                       <Link href={`/admin/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--brass)' }}>
                         {c.businessName}
                       </Link>
+                      <div className="text-[10px] text-cream/30">{c.email}</div>
                     </td>
-                    <td className="table-cell">{c.contactName}</td>
-                    <td className="table-cell text-cream/50">{c.email}</td>
-                    <td className="table-cell text-cream/50">{c.phone}</td>
-                    <td className="table-cell text-cream/40">{formatDate(c.createdAt)}</td>
+                    <td className="table-cell">
+                      <div>{c.contactName}</div>
+                      <div className="text-[10px] text-cream/30">{c.phone}</div>
+                    </td>
+                    <td className="table-cell text-right text-cream/60 font-variant-tabular">{m?.orderCount ?? 0}</td>
+                    <td className="table-cell text-right font-semibold text-cream font-variant-tabular">{formatCurrency(m?.ltv ?? 0)}</td>
+                    <td className="table-cell text-right font-variant-tabular">
+                      {m && m.outstanding > 0 ? (
+                        <span style={{ color: 'var(--ruby)' }}>
+                          {formatCurrency(m.outstanding)} <span className="text-[10px] text-cream/30">({m.outstandingCount})</span>
+                        </span>
+                      ) : (
+                        <span className="text-cream/25">—</span>
+                      )}
+                    </td>
+                    <td className="table-cell text-cream/50 font-variant-tabular text-xs">
+                      {m?.lastOrder ? formatDate(m.lastOrder) : <span className="text-cream/25 italic">never</span>}
+                    </td>
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-3">
                         <Link href={`/admin/customers/${c.id}`} className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
@@ -161,7 +208,8 @@ export default function CustomersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
