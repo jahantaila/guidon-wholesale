@@ -126,6 +126,73 @@ export default function ProductsPage() {
     }));
   };
 
+  const [adjustingInventory, setAdjustingInventory] = useState<string | null>(null);
+
+  const adjustInventory = async (productId: string, size: KegSize, delta: number) => {
+    const key = `${productId}-${size}`;
+    setAdjustingInventory(key);
+    try {
+      const res = await fetch('/api/admin/inventory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, size, delta }),
+      });
+      if (res.ok) {
+        const { inventoryCount } = await res.json();
+        setProducts(prev =>
+          prev.map(p =>
+            p.id !== productId
+              ? p
+              : {
+                  ...p,
+                  sizes: p.sizes.map(s =>
+                    s.size === size ? { ...s, inventoryCount } : s,
+                  ),
+                },
+          ),
+        );
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Inventory update failed.');
+      }
+    } catch (err) {
+      console.error('Failed to adjust inventory', err);
+    } finally {
+      setAdjustingInventory(null);
+    }
+  };
+
+  const setInventoryAbsolute = async (productId: string, size: KegSize, count: number) => {
+    const key = `${productId}-${size}`;
+    setAdjustingInventory(key);
+    try {
+      const res = await fetch('/api/admin/inventory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, size, count }),
+      });
+      if (res.ok) {
+        const { inventoryCount } = await res.json();
+        setProducts(prev =>
+          prev.map(p =>
+            p.id !== productId
+              ? p
+              : {
+                  ...p,
+                  sizes: p.sizes.map(s =>
+                    s.size === size ? { ...s, inventoryCount } : s,
+                  ),
+                },
+          ),
+        );
+      }
+    } catch (err) {
+      console.error('Failed to set inventory', err);
+    } finally {
+      setAdjustingInventory(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -159,7 +226,7 @@ export default function ProductsPage() {
                   <th className="table-header">Style</th>
                   <th className="table-header">ABV</th>
                   <th className="table-header">Category</th>
-                  <th className="table-header">Sizes</th>
+                  <th className="table-header">Pricing + Inventory</th>
                   <th className="table-header">Status</th>
                   <th className="table-header text-right">Actions</th>
                 </tr>
@@ -178,12 +245,80 @@ export default function ProductsPage() {
                       <span className="badge-sm bg-olive/20 text-olive-300 border border-olive/30">{product.category}</span>
                     </td>
                     <td className="table-cell">
-                      <div className="flex gap-1">
-                        {product.sizes.map(s => (
-                          <span key={s.size} className="text-[10px] font-heading font-bold text-cream/30 bg-charcoal-300 px-1.5 py-0.5 rounded">
-                            {s.size}: {formatCurrency(s.price)}
-                          </span>
-                        ))}
+                      <div className="space-y-1">
+                        {product.sizes.map(s => {
+                          const key = `${product.id}-${s.size}`;
+                          const busy = adjustingInventory === key;
+                          const count = s.inventoryCount ?? 0;
+                          const lowStock = count > 0 && count < 3;
+                          const outOfStock = count === 0;
+                          const countColor = outOfStock
+                            ? 'var(--ruby)'
+                            : lowStock
+                            ? 'var(--ember)'
+                            : 'var(--pine)';
+                          return (
+                            <div
+                              key={s.size}
+                              className="flex items-center gap-2 text-xs font-variant-tabular"
+                            >
+                              <span className="section-label w-12 shrink-0">{s.size}</span>
+                              <span style={{ color: 'var(--muted)' }} className="w-14 shrink-0">
+                                {formatCurrency(s.price)}
+                              </span>
+                              <button
+                                onClick={() => adjustInventory(product.id, s.size, -1)}
+                                disabled={busy || count === 0}
+                                className="w-5 h-5 flex items-center justify-center border border-divider hover:bg-surface transition-colors disabled:opacity-30"
+                                style={{ borderRadius: '2px', color: 'var(--muted)' }}
+                                title="Remove 1 keg from inventory"
+                              >
+                                &minus;
+                              </button>
+                              <input
+                                type="number"
+                                min={0}
+                                value={count}
+                                onBlur={(e) => {
+                                  const n = parseInt(e.target.value, 10);
+                                  if (!isNaN(n) && n !== count) setInventoryAbsolute(product.id, s.size, n);
+                                }}
+                                onChange={(e) => {
+                                  const n = parseInt(e.target.value, 10);
+                                  if (!isNaN(n)) {
+                                    setProducts(prev =>
+                                      prev.map(p =>
+                                        p.id !== product.id
+                                          ? p
+                                          : {
+                                              ...p,
+                                              sizes: p.sizes.map(sz =>
+                                                sz.size === s.size ? { ...sz, inventoryCount: n } : sz,
+                                              ),
+                                            },
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="w-12 text-center font-semibold font-variant-tabular bg-transparent border-b"
+                                style={{ borderColor: 'var(--divider)', color: countColor }}
+                                disabled={busy}
+                              />
+                              <button
+                                onClick={() => adjustInventory(product.id, s.size, 1)}
+                                disabled={busy}
+                                className="w-5 h-5 flex items-center justify-center border border-divider hover:bg-surface transition-colors disabled:opacity-30"
+                                style={{ borderRadius: '2px', color: 'var(--muted)' }}
+                                title="Add 1 keg to inventory"
+                              >
+                                +
+                              </button>
+                              <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
+                                {outOfStock ? 'out' : lowStock ? 'low' : 'in stock'}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="table-cell">

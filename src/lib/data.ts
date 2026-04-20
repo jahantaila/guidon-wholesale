@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, Invoice, KegLedgerEntry, WholesaleApplication } from './types';
+import type { Customer, Product, Order, Invoice, KegLedgerEntry, WholesaleApplication, KegSize } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ export async function getAllProducts(): Promise<Product[]> {
 export async function createProduct(product: Product): Promise<Product> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
-    const { error } = await sb.from('products').insert({
+    const productRow: Record<string, unknown> = {
       id: product.id,
       name: product.name,
       style: product.style,
@@ -254,15 +254,23 @@ export async function createProduct(product: Product): Promise<Product> {
       description: product.description,
       category: product.category,
       available: product.available,
-    });
+    };
+    if (product.ibu !== undefined) productRow.ibu = product.ibu;
+    if (product.imageUrl !== undefined) productRow.image_url = product.imageUrl;
+    if (product.awards !== undefined) productRow.awards = product.awards;
+    if (product.newRelease !== undefined) productRow.new_release = product.newRelease;
+    if (product.limitedRelease !== undefined) productRow.limited_release = product.limitedRelease;
+    const { error } = await sb.from('products').insert(productRow);
     if (error) throw error;
     for (const size of product.sizes) {
-      const { error: sizeError } = await sb.from('product_sizes').insert({
+      const sizeRow: Record<string, unknown> = {
         product_id: product.id,
         size: size.size,
         price: size.price,
         deposit: size.deposit,
-      });
+      };
+      if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
+      const { error: sizeError } = await sb.from('product_sizes').insert(sizeRow);
       if (sizeError) throw sizeError;
     }
     return product;
@@ -280,9 +288,14 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
     if (fields.name !== undefined) updateFields.name = fields.name;
     if (fields.style !== undefined) updateFields.style = fields.style;
     if (fields.abv !== undefined) updateFields.abv = fields.abv;
+    if (fields.ibu !== undefined) updateFields.ibu = fields.ibu;
     if (fields.description !== undefined) updateFields.description = fields.description;
     if (fields.category !== undefined) updateFields.category = fields.category;
     if (fields.available !== undefined) updateFields.available = fields.available;
+    if (fields.imageUrl !== undefined) updateFields.image_url = fields.imageUrl;
+    if (fields.awards !== undefined) updateFields.awards = fields.awards;
+    if (fields.newRelease !== undefined) updateFields.new_release = fields.newRelease;
+    if (fields.limitedRelease !== undefined) updateFields.limited_release = fields.limitedRelease;
     if (Object.keys(updateFields).length > 0) {
       const { error } = await sb.from('products').update(updateFields).eq('id', id);
       if (error) throw error;
@@ -290,12 +303,14 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
     if (fields.sizes) {
       await sb.from('product_sizes').delete().eq('product_id', id);
       for (const size of fields.sizes) {
-        const { error: sizeError } = await sb.from('product_sizes').insert({
+        const sizeRow: Record<string, unknown> = {
           product_id: id,
           size: size.size,
           price: size.price,
           deposit: size.deposit,
-        });
+        };
+        if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
+        const { error: sizeError } = await sb.from('product_sizes').insert(sizeRow);
         if (sizeError) throw sizeError;
       }
     }
@@ -308,6 +323,88 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
   products[idx] = { ...products[idx], ...fields };
   writeJSON('products.json', products);
   return products[idx];
+}
+
+/**
+ * Adjust inventory for a specific product+size. Accepts a delta (positive to
+ * restock, negative to consume). Returns the new inventory count, or null if
+ * the product/size doesn't exist. Used by the order confirmation flow to
+ * decrement kegs when an order is confirmed and the inventory_count column
+ * exists in the DB.
+ */
+export async function adjustProductInventory(
+  productId: string,
+  size: KegSize,
+  delta: number,
+): Promise<number | null> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('product_sizes')
+      .select('id, inventory_count')
+      .eq('product_id', productId)
+      .eq('size', size)
+      .maybeSingle();
+    if (error) {
+      // If the column doesn't exist yet (pre-migration), skip silently.
+      if (/inventory_count/.test(error.message)) return null;
+      throw error;
+    }
+    if (!data) return null;
+    const current = (data as { inventory_count?: number }).inventory_count ?? 0;
+    const next = Math.max(0, current + delta);
+    const { error: updErr } = await sb
+      .from('product_sizes')
+      .update({ inventory_count: next })
+      .eq('id', (data as { id: string }).id);
+    if (updErr) {
+      if (/inventory_count/.test(updErr.message)) return null;
+      throw updErr;
+    }
+    return next;
+  }
+  // File-based fallback
+  const products = readJSON<Product[]>('products.json');
+  const prod = products.find((p) => p.id === productId);
+  if (!prod) return null;
+  const sizeEntry = prod.sizes.find((s) => s.size === size);
+  if (!sizeEntry) return null;
+  sizeEntry.inventoryCount = Math.max(0, (sizeEntry.inventoryCount ?? 0) + delta);
+  writeJSON('products.json', products);
+  return sizeEntry.inventoryCount;
+}
+
+/**
+ * Set absolute inventory count for a product+size. Used by admin manual
+ * adjustments. Returns the saved count, or null if product/size missing.
+ */
+export async function setProductInventory(
+  productId: string,
+  size: KegSize,
+  count: number,
+): Promise<number | null> {
+  const safeCount = Math.max(0, Math.floor(count));
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb
+      .from('product_sizes')
+      .update({ inventory_count: safeCount })
+      .eq('product_id', productId)
+      .eq('size', size);
+    if (error) {
+      if (/inventory_count/.test(error.message)) return null;
+      throw error;
+    }
+    return safeCount;
+  }
+  const products = readJSON<Product[]>('products.json');
+  const prod = products.find((p) => p.id === productId);
+  if (!prod) return null;
+  const sizeEntry = prod.sizes.find((s) => s.size === size);
+  if (!sizeEntry) return null;
+  sizeEntry.inventoryCount = safeCount;
+  writeJSON('products.json', products);
+  return safeCount;
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {

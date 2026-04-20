@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, addKegLedgerEntry } from '@/lib/data';
+import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, addKegLedgerEntry, adjustProductInventory } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry } from '@/lib/types';
 
@@ -39,6 +39,25 @@ export async function PUT(request: NextRequest) {
   const existingOrder = await getOrder(id);
   if (!existingOrder) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+  }
+
+  // If status is transitioning to 'confirmed' from 'pending', decrement
+  // inventory. We don't decrement on order creation (pending) because the
+  // brewery may not have committed to brewing yet; confirmation is the
+  // stock-reservation signal. Idempotent by design: only runs on the
+  // pending->confirmed transition.
+  if (updates.status === 'confirmed' && existingOrder.status === 'pending') {
+    for (const item of existingOrder.items) {
+      await adjustProductInventory(item.productId, item.size, -item.quantity);
+    }
+  }
+
+  // Conversely, if an order is cancelled back to pending after confirmation,
+  // restore the inventory. This is symmetric and prevents double-decrements.
+  if (updates.status === 'pending' && existingOrder.status === 'confirmed') {
+    for (const item of existingOrder.items) {
+      await adjustProductInventory(item.productId, item.size, item.quantity);
+    }
   }
 
   // If status is changing to 'delivered', create keg ledger entries and invoice
