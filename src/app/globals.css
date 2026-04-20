@@ -184,9 +184,16 @@ body {
     font-weight: 500;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1),
+                background 120ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .btn-ghost:hover { color: var(--ink); }
+  /* Hover: slight background tint so there's always visible feedback even
+   * when consuming code overrides text color via inline style (inline
+   * style wins over :hover color; background tint still shows through). */
+  .btn-ghost:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
 
   .btn-danger {
     display: inline-flex;

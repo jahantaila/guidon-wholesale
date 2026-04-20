@@ -7,16 +7,24 @@ import { getNotificationEmails, getSetting, setSetting } from '@/lib/data';
  * (which weekdays the brewery delivers on + minimum lead time in days).
  */
 export async function GET() {
-  const [notificationEmails, deliveryDays, deliveryLeadDays] = await Promise.all([
-    getNotificationEmails(),
-    getSetting<number[]>('delivery_days', [2, 4]), // Tue + Thu default
-    getSetting<number>('delivery_lead_days', 2),
-  ]);
-  return NextResponse.json({
-    notificationEmails,
-    deliveryDays,
-    deliveryLeadDays,
-  });
+  try {
+    const [notificationEmails, deliveryDays, deliveryLeadDays] = await Promise.all([
+      getNotificationEmails(),
+      getSetting<number[]>('delivery_days', [2, 4]), // Tue + Thu default
+      getSetting<number>('delivery_lead_days', 2),
+    ]);
+    return NextResponse.json({
+      notificationEmails,
+      deliveryDays,
+      deliveryLeadDays,
+    });
+  } catch (err) {
+    console.error('[api/admin/settings GET] failed:', err);
+    return NextResponse.json(
+      { notificationEmails: ['sales@guidonbrewing.com'], deliveryDays: [2, 4], deliveryLeadDays: 2 },
+      { status: 200 },
+    );
+  }
 }
 
 /**
@@ -27,6 +35,7 @@ export async function GET() {
  * disappear). Basic email shape validation per address.
  */
 export async function PUT(request: NextRequest) {
+  try {
   const body = await request.json();
 
   // Notification emails (preserve existing behavior; optional now).
@@ -71,4 +80,9 @@ export async function PUT(request: NextRequest) {
     getSetting<number>('delivery_lead_days', 2),
   ]);
   return NextResponse.json({ notificationEmails, deliveryDays, deliveryLeadDays });
+  } catch (err) {
+    console.error('[api/admin/settings PUT] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

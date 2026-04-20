@@ -72,49 +72,65 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
-  const { id, action, ...updates } = body;
+  try {
+    const body = await request.json();
+    const { id, action } = body as { id?: string; action?: string };
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
 
-  // "resend" = just fire the email again without status change. Useful if a
-  // customer says "never got the invoice" — one click instead of digging
-  // through Resend's dashboard.
-  if (action === 'resend') {
-    const invoices = await getInvoices();
-    const existing = invoices.find((i) => i.id === id);
-    if (!existing) {
+    // Whitelist the fields admin is allowed to mutate. Protects created_at,
+    // totals, items, etc. from being overwritten via a crafted PUT.
+    const updates: { status?: string; paidAt?: string | null; sentAt?: string | null } = {};
+    if (typeof body.status === 'string') updates.status = body.status;
+    if (body.paidAt === null || typeof body.paidAt === 'string') updates.paidAt = body.paidAt;
+    if (body.sentAt === null || typeof body.sentAt === 'string') updates.sentAt = body.sentAt;
+
+    // "resend" = just fire the email again without status change. Useful if a
+    // customer says "never got the invoice" — one click instead of digging
+    // through Resend's dashboard.
+    if (action === 'resend') {
+      const invoices = await getInvoices();
+      const existing = invoices.find((i) => i.id === id);
+      if (!existing) {
+        return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+      }
+      const stamped = await updateInvoice(id, { sentAt: new Date().toISOString() });
+      if (stamped) {
+        await fireInvoiceEmail(stamped).catch((err) =>
+          console.error('[email] invoice resend failed (non-fatal):', err)
+        );
+      }
+      return NextResponse.json(stamped);
+    }
+
+    if (updates.status === 'paid' && !updates.paidAt) {
+      updates.paidAt = new Date().toISOString();
+    }
+    // Transitioning from draft -> unpaid means the admin clicked Send Invoice.
+    // Stamp sent_at and fire the invoice email.
+    const willSend = updates.status === 'unpaid' && !updates.sentAt;
+    if (willSend) {
+      updates.sentAt = new Date().toISOString();
+    }
+
+    const invoice = await updateInvoice(id, updates as Parameters<typeof updateInvoice>[1]);
+    if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
-    const stamped = await updateInvoice(id, { sentAt: new Date().toISOString() });
-    if (stamped) {
-      await fireInvoiceEmail(stamped).catch((err) =>
-        console.error('[email] invoice resend failed (non-fatal):', err)
+
+    if (willSend) {
+      await fireInvoiceEmail(invoice).catch((err) =>
+        console.error('[email] invoice send failed (non-fatal):', err)
       );
     }
-    return NextResponse.json(stamped);
-  }
 
-  if (updates.status === 'paid' && !updates.paidAt) {
-    updates.paidAt = new Date().toISOString();
+    return NextResponse.json(invoice);
+  } catch (err) {
+    console.error('[api/invoices PUT] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  // Transitioning from draft -> unpaid means the admin clicked Send Invoice.
-  // Stamp sent_at and fire the invoice email.
-  const willSend = updates.status === 'unpaid' && !updates.sentAt;
-  if (willSend) {
-    updates.sentAt = new Date().toISOString();
-  }
-
-  const invoice = await updateInvoice(id, updates);
-  if (!invoice) {
-    return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
-  }
-
-  if (willSend) {
-    await fireInvoiceEmail(invoice).catch((err) =>
-      console.error('[email] invoice send failed (non-fatal):', err)
-    );
-  }
-
-  return NextResponse.json(invoice);
 }
 
 async function fireInvoiceEmail(invoice: Invoice) {

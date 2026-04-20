@@ -75,6 +75,16 @@ async function adminRecipients(): Promise<string[]> {
   }
 }
 
+/**
+ * Canonical portal URL for email CTAs. Reads NEXT_PUBLIC_APP_URL which we
+ * set in Vercel; falls back to the known prod URL so emails still link
+ * somewhere reasonable if the env var is missing. Strips trailing slash.
+ */
+export function portalUrl(): string {
+  const base = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app';
+  return `${base.replace(/\/$/, '')}/portal`;
+}
+
 let _client: Resend | null | undefined;
 
 function getClient(): Resend | null {
@@ -235,9 +245,7 @@ export async function notifyOrderPlaced(args: {
       <strong style="color:#2A2416;">Total due on delivery: <span style="font-family:monospace;color:#9E7A3B;">${formatCurrencyForEmail(args.total)}</span></strong>
     </div>`;
 
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/portal`
-    : 'https://guidon-wholesale.vercel.app/portal';
+  const portalCta = portalUrl();
   const customerHtml = emailShell({
     title: `Order ${args.orderId} received`,
     preheader: `We received your wholesale order. Delivery scheduled ${args.deliveryDate}.`,
@@ -247,7 +255,7 @@ export async function notifyOrderPlaced(args: {
       ${itemsTable}
       ${args.notes ? `<p style="margin-top:12px;font-size:13px;color:#6B5F48;font-style:italic;">Your note: ${escapeHtml(args.notes)}</p>` : ''}
       <p style="margin:16px 0;">
-        <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View in portal &rarr;</a>
+        <a href="${portalCta}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View in portal &rarr;</a>
       </p>
       <p style="margin-top:20px;font-size:13px;color:#6B5F48;">Questions? Reply to this email or call the brewery.</p>
     `,
@@ -309,9 +317,7 @@ export async function notifyOrderStatusChanged(args: {
     },
   };
   const { title, lead } = copyByStatus[args.newStatus];
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/portal`
-    : 'https://guidon-wholesale.vercel.app/portal';
+  const portalCta = portalUrl();
 
   await send({
     to: args.customerEmail,
@@ -321,7 +327,7 @@ export async function notifyOrderStatusChanged(args: {
       body: `<p>${escapeHtml(args.customerName)} &mdash;</p>
         <p style="margin:12px 0;">${lead}</p>
         <p style="margin:16px 0;">
-          <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View order in portal &rarr;</a>
+          <a href="${portalCta}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View order in portal &rarr;</a>
         </p>
         <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;font-style:italic;">Reply to this email if you have questions — it goes straight to the brewery.</p>`,
     }),
@@ -363,7 +369,7 @@ export async function notifyApplicationSubmitted(args: {
         ${args.businessType ? `<div><strong>Type:</strong> ${escapeHtml(args.businessType)}</div>` : ''}
         ${args.expectedMonthlyVolume ? `<div><strong>Expected volume:</strong> ${escapeHtml(args.expectedMonthlyVolume)}</div>` : ''}
       </div>
-      <p style="margin-top:16px;"><a href="https://guidon-wholesale.vercel.app/admin/applications" style="color:#9E7A3B;">Review in admin &rarr;</a></p>
+      <p style="margin-top:16px;"><a href="${(cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app')}/admin/applications" style="color:#9E7A3B;">Review in admin &rarr;</a></p>
     `,
   });
 
@@ -478,9 +484,7 @@ export async function notifyRecurringHeadsUp(args: {
   items: Array<{ productName: string; size: string; quantity: number }>;
   willFireAt: string;
 }): Promise<void> {
-  const portalUrl = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL)
-    ? `${cleanEnvString(process.env.NEXT_PUBLIC_APP_URL)!.replace(/\/$/, '')}/portal`
-    : 'https://guidon-wholesale.vercel.app/portal';
+  const portalCta = portalUrl();
   const rows = args.items.map(
     (i) => `<li style="margin:4px 0;"><strong>${i.quantity}</strong> &middot; <em>${escapeHtml(i.size)}</em> ${escapeHtml(i.productName)}</li>`,
   ).join('');
@@ -499,7 +503,7 @@ export async function notifyRecurringHeadsUp(args: {
         <ul style="margin:8px 0 16px 18px;font-size:14px;">${rows}</ul>
         <p style="margin:16px 0;">No action needed if this still looks right. Want to pause or change it?</p>
         <p style="margin:16px 0;">
-          <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open the portal &rarr;</a>
+          <a href="${portalCta}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open the portal &rarr;</a>
         </p>
         <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;font-style:italic;">Or reply to this email — it goes to the brewery.</p>
       `,

@@ -336,7 +336,7 @@ function TableView({
               <tr
                 onClick={() => setExpandedId(isExpanded ? null : order.id)}
                 style={{ cursor: 'pointer' }}
-                className="hover:opacity-80 transition-opacity"
+                className="transition-colors"
               >
                 <td className="table-cell font-semibold">{order.id}</td>
                 <td className="table-cell">

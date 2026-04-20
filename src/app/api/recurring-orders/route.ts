@@ -57,9 +57,22 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, ...updates } = body;
+    const { id } = body as { id?: string };
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    // Whitelist mutable fields so a crafted PUT can't overwrite created_at,
+    // customer_id, etc.
+    const updates: Parameters<typeof updateRecurringOrder>[1] = {};
+    if (typeof body.name === 'string') updates.name = body.name;
+    if (Array.isArray(body.items) && body.items.length > 0) updates.items = body.items;
+    if (Number.isInteger(body.intervalDays) && body.intervalDays >= 1 && body.intervalDays <= 365) {
+      updates.intervalDays = body.intervalDays;
+    }
+    if (typeof body.nextRunAt === 'string') updates.nextRunAt = body.nextRunAt;
+    if (typeof body.active === 'boolean') updates.active = body.active;
+    if (body.headsUpSentAt === null || typeof body.headsUpSentAt === 'string') {
+      updates.headsUpSentAt = body.headsUpSentAt;
     }
     const updated = await updateRecurringOrder(id, updates);
     if (!updated) {
