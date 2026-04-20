@@ -14,6 +14,26 @@ export default function AdminDashboard() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [healthIssues, setHealthIssues] = useState<string[]>([]);
+
+  // Poll /api/health once on load. If anything is red (e.g. RESEND_API_KEY
+  // missing on Vercel), surface a banner so Mike knows email won't send
+  // without hunting through health JSON.
+  useEffect(() => {
+    fetch('/api/health', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        const issues: string[] = [];
+        const checks = data?.checks || {};
+        Object.entries(checks).forEach(([key, val]) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const v = val as any;
+          if (v && v.ok === false) issues.push(`${key}: ${v.detail || 'failing'}`);
+        });
+        setHealthIssues(issues);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
 
   useEffect(() => {
     let stop = false;
@@ -208,6 +228,30 @@ export default function AdminDashboard() {
             reload
           </button>{' '}
           to re-authenticate.
+        </div>
+      )}
+
+      {/* Health issues banner — surfaces env / integration problems so
+          they don't silently degrade core flows. Common: Vercel env vars
+          not set (RESEND_API_KEY etc.) breaking outbound email. */}
+      {healthIssues.length > 0 && (
+        <div
+          className="card p-4 border-l-4"
+          style={{ borderLeftColor: 'var(--ruby)', background: 'color-mix(in srgb, var(--ruby) 8%, transparent)' }}
+        >
+          <span className="section-label mb-1 block" style={{ color: 'var(--ruby)' }}>
+            Service Health
+          </span>
+          <p className="text-sm" style={{ color: 'var(--ink)' }}>
+            One or more integrations are degraded. This usually means a Vercel
+            environment variable isn&rsquo;t set.
+          </p>
+          <ul className="mt-2 text-xs font-variant-tabular space-y-0.5" style={{ color: 'var(--muted)' }}>
+            {healthIssues.map((msg) => <li key={msg}>&bull; {msg}</li>)}
+          </ul>
+          <p className="text-xs italic mt-2" style={{ color: 'var(--muted)' }}>
+            Fix: Vercel dashboard → Settings → Environment Variables → add the missing keys → redeploy.
+          </p>
         </div>
       )}
 
