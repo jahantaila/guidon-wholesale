@@ -9,7 +9,9 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "migrate": "node scripts/supabase-migrate.js",
+    "migrate:seed": "node scripts/supabase-migrate.js && node scripts/setup-supabase.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

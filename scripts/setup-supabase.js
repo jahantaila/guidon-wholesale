@@ -54,9 +54,10 @@ async function seedCustomers() {
     { id: 'cust-005', business_name: 'Flat Rock Cinema Grill', contact_name: 'David Chen', email: 'david@flatrockcinema.com', phone: '(828) 555-0505', address: '2700 Greenville Hwy, Flat Rock, NC 28731', created_at: '2025-10-18T16:45:00Z' },
     { id: 'cust-006', business_name: 'Derby Digital', contact_name: 'Jahan', email: 'jahan@derbydigital.us', phone: '(828) 555-0606', address: 'Hendersonville, NC 28792', created_at: '2026-04-12T00:00:00Z' },
   ];
-  // Wipe any stale Louisville customers before seeding the real Hendersonville list.
-  await supabase.from('customers').delete().neq('id', '__sentinel__');
-  const { error } = await supabase.from('customers').insert(customers);
+  // Upsert to refresh both new customers and overwrite any stale fields on
+  // existing rows. Foreign keys from orders/invoices prevent a clean delete,
+  // so overwrite in place.
+  const { error } = await supabase.from('customers').upsert(customers, { onConflict: 'id' });
   if (error) throw new Error(`Customers seed failed: ${error.message}`);
   console.log(`  ✓ ${customers.length} customers`);
 }
@@ -73,10 +74,23 @@ async function seedProducts() {
     { id: 'prod-007', name: 'Ciao Matteo Italian Pilsner', style: 'Italian Pilsner', abv: 5.0, ibu: null, description: "New release. Dry-hopped with noble hops for intense floral, herbal, and spicy aromas, resulting in a crisp, complex, yet softly malty beer with a refreshing, earthy finish. Offered only in 1/6 BBL kegs for limited availability.", category: 'Lager', available: true, awards: [], new_release: true, limited_release: true, image_url: null },
   ];
 
-  // Wipe stale products + sizes, then insert fresh.
-  await supabase.from('product_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabase.from('products').delete().neq('id', '__sentinel__');
-  const { error } = await supabase.from('products').insert(products);
+  // Wipe stale product_sizes (orders may reference products, but product_sizes
+  // only references products — so we can delete sizes freely and let foreign
+  // key cascades handle dependent rows). Products themselves upsert to avoid
+  // breaking foreign keys from historical orders.
+  await supabase
+    .from('product_sizes')
+    .delete()
+    .gte('id', '00000000-0000-0000-0000-000000000000');
+  // Upsert products so existing rows get the new fields without breaking
+  // referential integrity from historical orders.
+  let { error } = await supabase.from('products').upsert(products, { onConflict: 'id' });
+  if (error && /column .* does not exist|Could not find the '.*' column/.test(error.message)) {
+    console.warn('  ⚠ Supabase schema missing new columns (ibu, awards, new_release, limited_release, image_url).');
+    console.warn('    Run `npm run migrate` (or apply supabase/schema.sql in the Dashboard) first.');
+    const legacyProducts = products.map(({ ibu, awards, new_release, limited_release, image_url, ...rest }) => rest);
+    ({ error } = await supabase.from('products').upsert(legacyProducts, { onConflict: 'id' }));
+  }
   if (error) throw new Error(`Products seed failed: ${error.message}`);
 
   // Per-beer size + inventory. Baseline triple-size grid for 5 beers;
@@ -107,7 +121,13 @@ async function seedProducts() {
   // Ciao Matteo: 1/6 BBL only (new release, limited).
   sizes.push({ product_id: 'prod-007', size: '1/6bbl', price: 79, deposit: 30, inventory_count: 8, available: true });
 
-  const { error: sizesError } = await supabase.from('product_sizes').insert(sizes);
+  let { error: sizesError } = await supabase.from('product_sizes').insert(sizes);
+  if (sizesError && /column .* does not exist|Could not find the '.*' column/.test(sizesError.message)) {
+    console.warn('  ⚠ product_sizes missing inventory_count column — inserting without inventory.');
+    console.warn('    Re-run supabase/schema.sql + this script to populate inventory.');
+    const legacySizes = sizes.map(({ inventory_count, ...rest }) => rest);
+    ({ error: sizesError } = await supabase.from('product_sizes').insert(legacySizes));
+  }
   if (sizesError) throw new Error(`Product sizes seed failed: ${sizesError.message}`);
   console.log(`  ✓ ${products.length} products + ${sizes.length} size-tiers with inventory`);
 }

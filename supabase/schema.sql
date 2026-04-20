@@ -23,10 +23,12 @@ create table if not exists customers (
 -- Row Level Security
 alter table customers enable row level security;
 -- Service role (admin client) can do everything
+drop policy if exists "Service role full access" on customers;
 create policy "Service role full access" on customers
   using (true)
   with check (true);
 -- Authenticated users can read their own customer row (by email match)
+drop policy if exists "Customer self read" on customers;
 create policy "Customer self read" on customers
   for select
   using (email = lower(auth.jwt() ->> 'email'));
@@ -69,12 +71,16 @@ alter table products add column if not exists limited_release boolean not null d
 alter table product_sizes add column if not exists inventory_count int not null default 0;
 
 alter table products enable row level security;
+drop policy if exists "Public read access" on products;
 create policy "Public read access" on products for select using (true);
+drop policy if exists "Service role write access" on products;
 create policy "Service role write access" on products
   for all using (true) with check (true);
 
 alter table product_sizes enable row level security;
+drop policy if exists "Public read access" on product_sizes;
 create policy "Public read access" on product_sizes for select using (true);
+drop policy if exists "Service role write access" on product_sizes;
 create policy "Service role write access" on product_sizes
   for all using (true) with check (true);
 
@@ -113,12 +119,16 @@ create table if not exists keg_returns (
 );
 
 alter table orders enable row level security;
+drop policy if exists "Service role full access" on orders;
 create policy "Service role full access" on orders using (true) with check (true);
+drop policy if exists "Customer self read" on orders;
 create policy "Customer self read" on orders for select
   using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 alter table order_items enable row level security;
+drop policy if exists "Service role full access" on order_items;
 create policy "Service role full access" on order_items using (true) with check (true);
 alter table keg_returns enable row level security;
+drop policy if exists "Service role full access" on keg_returns;
 create policy "Service role full access" on keg_returns using (true) with check (true);
 
 -- ============================================================
@@ -138,7 +148,9 @@ create table if not exists invoices (
 );
 
 alter table invoices enable row level security;
+drop policy if exists "Service role full access" on invoices;
 create policy "Service role full access" on invoices using (true) with check (true);
+drop policy if exists "Customer self read" on invoices;
 create policy "Customer self read" on invoices for select
   using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 
@@ -159,7 +171,9 @@ create table if not exists keg_ledger (
 );
 
 alter table keg_ledger enable row level security;
+drop policy if exists "Service role full access" on keg_ledger;
 create policy "Service role full access" on keg_ledger using (true) with check (true);
+drop policy if exists "Customer self read" on keg_ledger;
 create policy "Customer self read" on keg_ledger for select
   using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 
@@ -182,6 +196,7 @@ create table if not exists applications (
 );
 
 alter table applications enable row level security;
+drop policy if exists "Service role full access" on applications;
 create policy "Service role full access" on applications using (true) with check (true);
 
 -- ============================================================
