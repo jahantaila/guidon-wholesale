@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, Invoice, KegLedgerEntry, WholesaleApplication, KegSize } from './types';
+import type { Customer, Product, Order, Invoice, KegLedgerEntry, OrderTemplate, WholesaleApplication, KegSize } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
@@ -801,5 +801,58 @@ export async function updateApplication(id: string, status: string): Promise<boo
   if (idx === -1) return false;
   apps[idx] = { ...apps[idx], status: status as WholesaleApplication['status'] };
   writeJSON('applications.json', apps);
+  return true;
+}
+
+// ─── Order Templates ───────────────────────────────────────────────────────────
+
+export async function getOrderTemplates(customerId: string): Promise<OrderTemplate[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('order_templates')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      customerId: row.customer_id,
+      name: row.name,
+      items: row.items || [],
+      createdAt: row.created_at,
+    }));
+  }
+  return readJSON<OrderTemplate[]>('order-templates.json').filter((t) => t.customerId === customerId);
+}
+
+export async function createOrderTemplate(template: OrderTemplate): Promise<OrderTemplate> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('order_templates').insert({
+      id: template.id,
+      customer_id: template.customerId,
+      name: template.name,
+      items: template.items,
+    });
+    if (error) throw error;
+    return template;
+  }
+  const all = readJSON<OrderTemplate[]>('order-templates.json');
+  all.push(template);
+  writeJSON('order-templates.json', all);
+  return template;
+}
+
+export async function deleteOrderTemplate(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('order_templates').delete().eq('id', id);
+    return !error;
+  }
+  const all = readJSON<OrderTemplate[]>('order-templates.json');
+  const next = all.filter((t) => t.id !== id);
+  if (next.length === all.length) return false;
+  writeJSON('order-templates.json', next);
   return true;
 }

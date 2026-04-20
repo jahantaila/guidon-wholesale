@@ -97,6 +97,14 @@ export interface Order {
   createdAt: string;
 }
 
+export interface OrderTemplate {
+  id: string;
+  customerId: string;
+  name: string;
+  items: OrderItem[];
+  createdAt: string;
+}
+
 export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue';
 
 export interface Invoice {

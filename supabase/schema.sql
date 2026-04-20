@@ -164,6 +164,24 @@ alter table customers add column if not exists tags jsonb not null default '[]':
 -- admin reviews before billing.
 alter table customers add column if not exists auto_send_invoices boolean not null default false;
 
+-- Order templates: customers save a cart as a reusable template (e.g.
+-- "Tuesday Regular"). One-click reload populates their cart next time.
+-- Items is jsonb mirroring OrderItem shape.
+create table if not exists order_templates (
+  id text primary key,
+  customer_id text not null references customers(id) on delete cascade,
+  name text not null,
+  items jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table order_templates enable row level security;
+drop policy if exists "Service role full access" on order_templates;
+create policy "Service role full access" on order_templates using (true) with check (true);
+drop policy if exists "Customer self read" on order_templates;
+create policy "Customer self read" on order_templates for select
+  using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
+create index if not exists idx_order_templates_customer_id on order_templates(customer_id);
+
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;
 create policy "Service role full access" on invoices using (true) with check (true);

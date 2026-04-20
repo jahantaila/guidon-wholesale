@@ -563,6 +563,70 @@ function ProductsTab({
   const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; items: OrderItem[]; createdAt: string }>>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const refreshTemplates = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/order-templates?customerId=${customerId}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (Array.isArray(data)) setTemplates(data);
+    } catch { /* non-fatal */ }
+    finally { setTemplatesLoading(false); }
+  }, [customerId]);
+  useEffect(() => { refreshTemplates(); }, [refreshTemplates]);
+
+  const saveTemplate = useCallback(async () => {
+    const name = templateName.trim();
+    if (!name || cart.length === 0) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch('/api/order-templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId,
+          name,
+          items: cart.map((c) => ({ productId: c.productId, productName: c.productName, size: c.size, quantity: c.quantity, unitPrice: c.unitPrice, deposit: c.deposit })),
+        }),
+      });
+      if (res.ok) {
+        setShowSaveTemplate(false);
+        setTemplateName('');
+        setToastMsg(`Saved template "${name}". Load it next time from the Templates section.`);
+        await refreshTemplates();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToastMsg(data?.error || 'Failed to save template.');
+      }
+    } catch { setToastMsg('Failed to save template.'); }
+    finally { setSavingTemplate(false); }
+  }, [cart, customerId, templateName, refreshTemplates]);
+
+  const loadTemplate = useCallback((t: { name: string; items: OrderItem[] }) => {
+    setCart((prev) => {
+      const next = [...prev];
+      for (const item of t.items) {
+        const existing = next.find((c) => c.productId === item.productId && c.size === item.size);
+        if (existing) existing.quantity += item.quantity;
+        else next.push({ productId: item.productId, productName: item.productName, size: item.size, quantity: item.quantity, unitPrice: item.unitPrice, deposit: item.deposit });
+      }
+      return next;
+    });
+    setToastMsg(`Added items from "${t.name}" to your cart.`);
+  }, []);
+
+  const deleteTemplate = useCallback(async (id: string) => {
+    try {
+      const res = await fetch('/api/order-templates', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) await refreshTemplates();
+    } catch { /* ignore */ }
+  }, [refreshTemplates]);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -717,15 +781,58 @@ function ProductsTab({
             Browse Products
           </h2>
         </div>
-        {cartCount > 0 && (
-          <button onClick={() => setShowCheckout(true)} className="btn-primary">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
-            </svg>
-            Review Cart &middot; {cartCount} &middot; {formatCurrency(total)}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {cartCount > 0 && (
+            <button onClick={() => setShowSaveTemplate(true)} className="btn-secondary text-sm" title="Save current cart as a reusable template">
+              Save as Template
+            </button>
+          )}
+          {cartCount > 0 && (
+            <button onClick={() => setShowCheckout(true)} className="btn-primary">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
+              </svg>
+              Review Cart &middot; {cartCount} &middot; {formatCurrency(total)}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Templates shelf — one-click reload of saved carts. Hidden when
+          the customer has never saved one (so first-time users don't see
+          an empty shelf). */}
+      {!templatesLoading && templates.length > 0 && (
+        <div className="mb-8 card p-4">
+          <div className="flex items-baseline justify-between mb-3">
+            <span className="section-label">Your Templates</span>
+            <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
+              Click to add all items to cart
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {templates.map((t) => (
+              <div key={t.id} className="flex items-center gap-1 bg-charcoal-200 border border-white/[0.06] rounded-full pl-3 pr-1 py-1 text-sm">
+                <button
+                  onClick={() => loadTemplate(t)}
+                  className="font-semibold hover:underline"
+                  style={{ color: 'var(--brass)' }}
+                  title={`${t.items.length} items, saved ${formatDate(t.createdAt)}`}
+                >
+                  {t.name}
+                  <span className="ml-2 text-xs text-cream/40 font-normal">({t.items.length})</span>
+                </button>
+                <button
+                  onClick={() => deleteTemplate(t.id)}
+                  className="ml-1 w-5 h-5 rounded-full text-cream/30 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center text-xs leading-none"
+                  title="Delete template"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mb-8 space-y-3">
@@ -904,6 +1011,32 @@ function ProductsTab({
       )}
 
       {/* Checkout Modal */}
+      {showSaveTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => setShowSaveTemplate(false)} />
+          <div className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
+            <h3 className="text-lg font-heading font-bold text-cream">Save cart as template</h3>
+            <p className="text-xs text-cream/40 italic">
+              Give this a name you&rsquo;ll recognize. Next time, one click adds these {cartCount} item{cartCount === 1 ? '' : 's'} to your cart &mdash; delivery date + notes still fresh each time.
+            </p>
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              placeholder="e.g. Tuesday Regular, Weekly Kegs"
+              className="input w-full"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setShowSaveTemplate(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button onClick={saveTemplate} disabled={savingTemplate || !templateName.trim()} className="btn-primary">
+                {savingTemplate ? 'Saving...' : 'Save Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCheckout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => setShowCheckout(false)} />
