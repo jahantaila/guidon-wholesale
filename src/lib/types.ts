@@ -117,6 +117,8 @@ export interface RecurringOrder {
   /** When the cron should next create an order (ISO). */
   nextRunAt: string;
   active: boolean;
+  /** Set when the 24h heads-up email was fired. Cleared on order creation. */
+  headsUpSentAt?: string | null;
   createdAt: string;
 }
 

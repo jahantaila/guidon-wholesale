@@ -878,6 +878,7 @@ function rowToRecurring(row: Record<string, unknown>): RecurringOrder {
     intervalDays: row.interval_days as number,
     nextRunAt: row.next_run_at as string,
     active: row.active as boolean,
+    headsUpSentAt: (row.heads_up_sent_at as string | null) ?? null,
     createdAt: row.created_at as string,
   };
 }
@@ -893,6 +894,31 @@ export async function getRecurringOrders(customerId?: string): Promise<Recurring
   }
   const all = readJSON<RecurringOrder[]>('recurring-orders.json');
   return customerId ? all.filter((r) => r.customerId === customerId) : all;
+}
+
+/**
+ * Recurring orders whose next_run_at is within the next `hours` AND
+ * heads_up_sent_at is null. Used by the daily cron to send 24h heads-up
+ * emails once per cycle.
+ */
+export async function getUpcomingRecurringOrders(hours: number): Promise<RecurringOrder[]> {
+  const cutoff = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const now = new Date().toISOString();
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('recurring_orders')
+      .select('*')
+      .eq('active', true)
+      .is('heads_up_sent_at', null)
+      .gt('next_run_at', now)
+      .lte('next_run_at', cutoff);
+    if (error) throw error;
+    return (data || []).map(rowToRecurring);
+  }
+  return readJSON<RecurringOrder[]>('recurring-orders.json').filter(
+    (r) => r.active && !r.headsUpSentAt && r.nextRunAt > now && r.nextRunAt <= cutoff,
+  );
 }
 
 export async function getDueRecurringOrders(): Promise<RecurringOrder[]> {
@@ -941,6 +967,7 @@ export async function updateRecurringOrder(id: string, updates: Partial<Recurrin
     if (updates.intervalDays !== undefined) row.interval_days = updates.intervalDays;
     if (updates.name !== undefined) row.name = updates.name;
     if (updates.items !== undefined) row.items = updates.items;
+    if (updates.headsUpSentAt !== undefined) row.heads_up_sent_at = updates.headsUpSentAt;
     const { data, error } = await sb.from('recurring_orders').update(row).eq('id', id).select().single();
     if (error) return undefined;
     return rowToRecurring(data);

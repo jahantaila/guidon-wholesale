@@ -467,6 +467,47 @@ export async function notifyLowStock(args: {
 }
 
 /**
+ * Heads-up email 24h before a recurring order auto-creates. Gives the
+ * customer a window to pause or reach out with changes. Awaits nothing
+ * beyond the send call — no admin CC (admin already sees it in portal).
+ */
+export async function notifyRecurringHeadsUp(args: {
+  customerEmail: string;
+  customerName: string;
+  templateName: string;
+  items: Array<{ productName: string; size: string; quantity: number }>;
+  willFireAt: string;
+}): Promise<void> {
+  const portalUrl = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL)
+    ? `${cleanEnvString(process.env.NEXT_PUBLIC_APP_URL)!.replace(/\/$/, '')}/portal`
+    : 'https://guidon-wholesale.vercel.app/portal';
+  const rows = args.items.map(
+    (i) => `<li style="margin:4px 0;"><strong>${i.quantity}</strong> &middot; <em>${escapeHtml(i.size)}</em> ${escapeHtml(i.productName)}</li>`,
+  ).join('');
+  const when = new Date(args.willFireAt).toLocaleString(undefined, {
+    weekday: 'long', month: 'short', day: 'numeric',
+  });
+  await send({
+    to: args.customerEmail,
+    subject: `Heads up: your "${args.templateName}" order will be placed tomorrow`,
+    html: emailShell({
+      title: 'Your recurring order is coming up',
+      preheader: `"${args.templateName}" auto-places tomorrow. Pause or reach out if you need to change it.`,
+      body: `
+        <p>${escapeHtml(args.customerName)} &mdash;</p>
+        <p style="margin:12px 0;">A heads-up that your recurring order <strong>"${escapeHtml(args.templateName)}"</strong> will auto-place on <strong style="color:#9E7A3B;">${escapeHtml(when)}</strong>:</p>
+        <ul style="margin:8px 0 16px 18px;font-size:14px;">${rows}</ul>
+        <p style="margin:16px 0;">No action needed if this still looks right. Want to pause or change it?</p>
+        <p style="margin:16px 0;">
+          <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open the portal &rarr;</a>
+        </p>
+        <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;font-style:italic;">Or reply to this email — it goes to the brewery.</p>
+      `,
+    }),
+  });
+}
+
+/**
  * Application decision. Called when an admin approves or rejects an
  * application. Includes portal login info on approval.
  */

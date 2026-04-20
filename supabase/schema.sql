@@ -210,6 +210,7 @@ create policy "Customer self read" on recurring_orders for select
   using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 create index if not exists idx_recurring_customer on recurring_orders(customer_id);
 create index if not exists idx_recurring_next_run on recurring_orders(next_run_at) where active = true;
+alter table recurring_orders add column if not exists heads_up_sent_at timestamptz;
 
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;

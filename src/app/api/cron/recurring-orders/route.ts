@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getDueRecurringOrders,
+  getUpcomingRecurringOrders,
   updateRecurringOrder,
   createOrder,
   createInvoice,
   getCustomers,
 } from '@/lib/data';
 import { generateId } from '@/lib/utils';
-import { notifyOrderPlaced } from '@/lib/email';
+import { notifyOrderPlaced, notifyRecurringHeadsUp } from '@/lib/email';
 import type { Order, Invoice } from '@/lib/types';
 
 /**
@@ -34,10 +35,34 @@ function authorized(request: NextRequest): boolean {
 }
 
 async function runCron() {
-  const due = await getDueRecurringOrders();
-  const customers = await getCustomers();
+  const [due, upcoming, customers] = await Promise.all([
+    getDueRecurringOrders(),
+    getUpcomingRecurringOrders(25), // next 25h window, + heads-up not yet sent
+    getCustomers(),
+  ]);
   const created: string[] = [];
   const skipped: string[] = [];
+  const headsUp: string[] = [];
+
+  // Fire heads-up emails before the create loop so heads-up is 24h early,
+  // not simultaneous with the actual order.
+  for (const rec of upcoming) {
+    try {
+      const customer = customers.find((c) => c.id === rec.customerId);
+      if (!customer) continue;
+      await notifyRecurringHeadsUp({
+        customerEmail: customer.email,
+        customerName: customer.contactName,
+        templateName: rec.name,
+        items: rec.items.map((i) => ({ productName: i.productName, size: i.size, quantity: i.quantity })),
+        willFireAt: rec.nextRunAt,
+      });
+      await updateRecurringOrder(rec.id, { headsUpSentAt: new Date().toISOString() });
+      headsUp.push(rec.id);
+    } catch (err) {
+      console.error('[cron] heads-up failed for', rec.id, err);
+    }
+  }
 
   for (const rec of due) {
     try {
@@ -104,9 +129,10 @@ async function runCron() {
         notes: order.notes,
       }).catch((err) => console.error('[cron] email failed (non-fatal):', err));
 
-      // Advance schedule.
+      // Advance schedule + reset heads-up flag so next cycle's 24h nudge
+      // fires again.
       const nextRunAt = new Date(Date.now() + rec.intervalDays * 24 * 60 * 60 * 1000).toISOString();
-      await updateRecurringOrder(rec.id, { nextRunAt });
+      await updateRecurringOrder(rec.id, { nextRunAt, headsUpSentAt: null });
 
       created.push(`${rec.id} -> ${order.id}`);
     } catch (err) {
@@ -115,7 +141,7 @@ async function runCron() {
     }
   }
 
-  return { created, skipped, due: due.length };
+  return { created, skipped, headsUp, due: due.length, upcoming: upcoming.length };
 }
 
 export async function GET(request: NextRequest) {
