@@ -40,14 +40,26 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
-  const id = body.id;
-  if (!id) {
-    return NextResponse.json({ error: 'ID required' }, { status: 400 });
+  try {
+    const body = await request.json();
+    const id = body.id;
+    if (!id) {
+      return NextResponse.json({ error: 'ID required' }, { status: 400 });
+    }
+    const deleted = await deleteCustomer(id);
+    if (!deleted) {
+      // Most common reason: foreign-key constraint. The customer has orders,
+      // invoices, or keg ledger entries on record. Surface that explicitly so
+      // the UI can show a friendly message instead of a bare 404.
+      return NextResponse.json(
+        { error: 'Could not delete. This customer has orders, invoices, or keg ledger entries on record (foreign key constraint). Remove those first, or keep the account and edit instead.' },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[api/customers DELETE] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Customer delete failed: ${message}` }, { status: 500 });
   }
-  const deleted = await deleteCustomer(id);
-  if (!deleted) {
-    return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
-  }
-  return NextResponse.json({ success: true });
 }

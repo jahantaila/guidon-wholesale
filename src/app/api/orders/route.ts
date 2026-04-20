@@ -5,16 +5,26 @@ import type { Order, Invoice, KegLedgerEntry } from '@/lib/types';
 import { notifyOrderPlaced, notifyOrderStatusChanged } from '@/lib/email';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const customerId = searchParams.get('customerId');
-  let orders = await getOrders();
-  if (customerId) {
-    orders = orders.filter(o => o.customerId === customerId);
+  try {
+    const { searchParams } = new URL(request.url);
+    const customerId = searchParams.get('customerId');
+    let orders = await getOrders();
+    if (customerId) {
+      orders = orders.filter(o => o.customerId === customerId);
+    }
+    return NextResponse.json(orders);
+  } catch (err) {
+    // Surface the Supabase error instead of a blanket 500 so the admin can
+    // actually see what's wrong (usually schema drift or FK issue). Still
+    // returns JSON so clients consuming .json() don't choke.
+    console.error('[api/orders GET] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Orders query failed: ${message}` }, { status: 500 });
   }
-  return NextResponse.json(orders);
 }
 
 export async function POST(request: NextRequest) {
+  try {
   const body = await request.json();
   const order: Order = {
     id: generateId('ord'),
@@ -78,9 +88,15 @@ export async function POST(request: NextRequest) {
   })();
 
   return NextResponse.json(order, { status: 201 });
+  } catch (err) {
+    console.error('[api/orders POST] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Order create failed: ${message}` }, { status: 500 });
+  }
 }
 
 export async function PUT(request: NextRequest) {
+  try {
   const body = await request.json();
   const { id, ...updates } = body;
 
@@ -204,4 +220,9 @@ export async function PUT(request: NextRequest) {
   }
 
   return NextResponse.json(order);
+  } catch (err) {
+    console.error('[api/orders PUT] failed:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Order update failed: ${message}` }, { status: 500 });
+  }
 }

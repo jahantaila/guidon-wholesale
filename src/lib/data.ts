@@ -193,7 +193,13 @@ export async function deleteCustomer(id: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const { error } = await sb.from('customers').delete().eq('id', id);
-    return !error;
+    if (error) {
+      // Log the actual reason so server logs show whether it was FK, RLS,
+      // missing row, etc. Return false so the route can return a 409.
+      console.error('[deleteCustomer] supabase error:', error.message, error.details);
+      return false;
+    }
+    return true;
   }
   const customers = readJSON<Customer[]>('customers.json');
   const filtered = customers.filter(c => c.id !== id);

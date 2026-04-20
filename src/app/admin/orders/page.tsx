@@ -75,10 +75,21 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: order.id, status: newStatus }),
       });
-      if (res.ok)
-        setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: newStatus } : o)));
+      if (res.ok) {
+        const updated = await res.json().catch(() => null);
+        setOrders((prev) => prev.map((o) => (o.id === order.id ? (updated ?? { ...o, status: newStatus }) : o)));
+      } else {
+        // Surface the server's error so the user doesn't stare at a button
+        // that silently does nothing. Most common causes: FK / keg_ledger
+        // insert failure, or stale admin session.
+        const data = await res.json().catch(() => ({}));
+        setReminderToast(data?.error || `Failed to mark ${newStatus} (HTTP ${res.status}).`);
+        window.setTimeout(() => setReminderToast(''), 6000);
+      }
     } catch (err) {
       console.error('Failed to update order status', err);
+      setReminderToast('Network error updating order.');
+      window.setTimeout(() => setReminderToast(''), 6000);
     } finally {
       setUpdating(null);
     }
