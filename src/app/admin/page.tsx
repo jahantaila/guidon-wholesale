@@ -203,6 +203,64 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* First-run guidance: when the db is genuinely empty (no customers,
+          no orders) show a setup card. Disappears once any customer or
+          order exists. */}
+      {!loading && customers.length === 0 && orders.length === 0 && (
+        <div
+          className="card p-5"
+          style={{ borderColor: 'var(--brass)', background: 'color-mix(in srgb, var(--brass) 5%, transparent)' }}
+        >
+          <span className="section-label mb-1 block" style={{ color: 'var(--brass)' }}>
+            Getting Started
+          </span>
+          <h3 className="font-display text-2xl mb-2" style={{ fontVariationSettings: "'opsz' 36", color: 'var(--ink)', fontWeight: 500 }}>
+            Welcome — let&rsquo;s get you live
+          </h3>
+          <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+            No wholesale accounts yet. Pick whichever of these matches where your first customer is coming from:
+          </p>
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-baseline gap-2">
+              <span style={{ color: 'var(--brass)' }}>→</span>
+              <span style={{ color: 'var(--ink)' }}>
+                <Link href="/admin/applications" className="font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                  Review applications
+                </Link>{' '}
+                <span style={{ color: 'var(--muted)' }}>— customers who filled out /apply. Approving creates their account and emails them a login.</span>
+              </span>
+            </li>
+            <li className="flex items-baseline gap-2">
+              <span style={{ color: 'var(--brass)' }}>→</span>
+              <span style={{ color: 'var(--ink)' }}>
+                <Link href="/admin/customers" className="font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                  Add a customer directly
+                </Link>{' '}
+                <span style={{ color: 'var(--muted)' }}>— the brewery&rsquo;s existing wholesale accounts. Set a password and share it over the phone.</span>
+              </span>
+            </li>
+            <li className="flex items-baseline gap-2">
+              <span style={{ color: 'var(--brass)' }}>→</span>
+              <span style={{ color: 'var(--ink)' }}>
+                <Link href="/admin/settings" className="font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                  Set delivery schedule
+                </Link>{' '}
+                <span style={{ color: 'var(--muted)' }}>— which weekdays the brewery delivers, + lead time. Customers only see those dates at checkout.</span>
+              </span>
+            </li>
+            <li className="flex items-baseline gap-2">
+              <span style={{ color: 'var(--brass)' }}>→</span>
+              <span style={{ color: 'var(--ink)' }}>
+                <Link href="/embed" className="font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                  Grab the embed code
+                </Link>{' '}
+                <span style={{ color: 'var(--muted)' }}>— paste the wholesale portal into the main Guidon website as an iframe.</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+      )}
+
       {/* Rolling 14-day revenue sparkline. Tiny SVG, no chart library. Hover
           to see per-day detail. Only shown when there's revenue data. */}
       {!loading && revenue14dSum > 0 && (
