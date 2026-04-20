@@ -132,7 +132,7 @@ export default function ApplyPage() {
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-cream/50 mb-1.5">Phone</label>
-                <input id="phone" type="tel" className="input" placeholder="(502) 555-0000"
+                <input id="phone" type="tel" className="input" placeholder="(828) 555-0000"
                   value={form.phone} onChange={(e) => update('phone', e.target.value)} />
               </div>
             </div>

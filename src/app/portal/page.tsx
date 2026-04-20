@@ -187,10 +187,50 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 
   useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); }, [fetchOrders, fetchBalances, fetchInvoices]);
 
-  // Quick reorder
-  const handleReorder = useCallback(() => {
-    setTab('products');
-  }, []);
+  // Quick reorder — places an identical order to the most recent one.
+  // Delivery date defaults to 7 days out; notes carry a reorder marker.
+  const [reorderToast, setReorderToast] = useState<string>('');
+  const [reordering, setReordering] = useState(false);
+  const handleReorder = useCallback(async () => {
+    if (orders.length === 0) return;
+    const lastOrder = [...orders].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+    setReordering(true);
+    try {
+      const deliveryDate = new Date();
+      deliveryDate.setDate(deliveryDate.getDate() + 7);
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customer.id,
+          items: lastOrder.items,
+          kegReturns: [],
+          subtotal: lastOrder.subtotal,
+          totalDeposit: lastOrder.totalDeposit,
+          total: lastOrder.subtotal + lastOrder.totalDeposit,
+          deliveryDate: deliveryDate.toISOString().slice(0, 10),
+          notes: `Reorder of ${lastOrder.id}`,
+        }),
+      });
+      if (res.ok) {
+        const newOrder = await res.json();
+        setReorderToast(`Placed new order ${newOrder.id} — delivery ${deliveryDate.toLocaleDateString()}.`);
+        fetchOrders();
+        window.setTimeout(() => setReorderToast(''), 4000);
+      } else {
+        setReorderToast('Reorder failed. Try again or browse the catalog.');
+        window.setTimeout(() => setReorderToast(''), 4000);
+      }
+    } catch (err) {
+      console.error('Reorder failed', err);
+      setReorderToast('Reorder failed. Try again or browse the catalog.');
+      window.setTimeout(() => setReorderToast(''), 4000);
+    } finally {
+      setReordering(false);
+    }
+  }, [orders, customer.id, fetchOrders]);
 
   const totalSpent = useMemo(() => orders.reduce((sum, o) => sum + o.total, 0), [orders]);
   const totalKegsOut = useMemo(() => {
@@ -241,6 +281,13 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
           ))}
         </div>
       </div>
+
+      {/* Reorder toast */}
+      {reorderToast && (
+        <div className="toast">
+          <span>{reorderToast}</span>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {tab === 'overview' && (
