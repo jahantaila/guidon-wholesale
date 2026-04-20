@@ -221,6 +221,9 @@ export async function notifyOrderPlaced(args: {
       <strong style="color:#2A2416;">Total due on delivery: <span style="font-family:monospace;color:#9E7A3B;">${formatCurrencyForEmail(args.total)}</span></strong>
     </div>`;
 
+  const portalUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/portal`
+    : 'https://guidon-wholesale.vercel.app/portal';
   const customerHtml = emailShell({
     title: `Order ${args.orderId} received`,
     preheader: `We received your wholesale order. Delivery scheduled ${args.deliveryDate}.`,
@@ -229,6 +232,9 @@ export async function notifyOrderPlaced(args: {
       <p style="margin:12px 0;">We've scheduled delivery for <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>. You'll get another email when it leaves the brewery.</p>
       ${itemsTable}
       ${args.notes ? `<p style="margin-top:12px;font-size:13px;color:#6B5F48;font-style:italic;">Your note: ${escapeHtml(args.notes)}</p>` : ''}
+      <p style="margin:16px 0;">
+        <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View in portal &rarr;</a>
+      </p>
       <p style="margin-top:20px;font-size:13px;color:#6B5F48;">Questions? Reply to this email or call the brewery.</p>
     `,
   });
@@ -289,13 +295,21 @@ export async function notifyOrderStatusChanged(args: {
     },
   };
   const { title, lead } = copyByStatus[args.newStatus];
+  const portalUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')}/portal`
+    : 'https://guidon-wholesale.vercel.app/portal';
 
   await send({
     to: args.customerEmail,
     subject: title,
     html: emailShell({
       title,
-      body: `<p>${escapeHtml(args.customerName)} &mdash;</p><p style="margin:12px 0;">${lead}</p>`,
+      body: `<p>${escapeHtml(args.customerName)} &mdash;</p>
+        <p style="margin:12px 0;">${lead}</p>
+        <p style="margin:16px 0;">
+          <a href="${portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">View order in portal &rarr;</a>
+        </p>
+        <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;font-style:italic;">Reply to this email if you have questions — it goes straight to the brewery.</p>`,
     }),
   });
 }
