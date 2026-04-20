@@ -96,7 +96,7 @@ export default function ApplyPage() {
             <div className="space-y-3">
               <div>
                 <label htmlFor="businessName" className="block text-sm font-medium text-cream/50 mb-1.5">Business Name *</label>
-                <input id="businessName" type="text" className="input" placeholder="Your business name"
+                <input id="businessName" type="text" required autoComplete="organization" className="input" placeholder="Your business name"
                   value={form.businessName} onChange={(e) => update('businessName', e.target.value)} />
               </div>
               <div>
@@ -111,7 +111,7 @@ export default function ApplyPage() {
               </div>
               <div>
                 <label htmlFor="address" className="block text-sm font-medium text-cream/50 mb-1.5">Address</label>
-                <input id="address" type="text" className="input" placeholder="Street address, city, state, zip"
+                <input id="address" type="text" autoComplete="street-address" className="input" placeholder="Street address, city, state, zip"
                   value={form.address} onChange={(e) => update('address', e.target.value)} />
               </div>
             </div>
@@ -122,17 +122,17 @@ export default function ApplyPage() {
             <div className="space-y-3">
               <div>
                 <label htmlFor="contactName" className="block text-sm font-medium text-cream/50 mb-1.5">Contact Name *</label>
-                <input id="contactName" type="text" className="input" placeholder="Your full name"
+                <input id="contactName" type="text" required autoComplete="name" className="input" placeholder="Your full name"
                   value={form.contactName} onChange={(e) => update('contactName', e.target.value)} />
               </div>
               <div>
                 <label htmlFor="applyEmail" className="block text-sm font-medium text-cream/50 mb-1.5">Email *</label>
-                <input id="applyEmail" type="email" className="input" placeholder="you@example.com"
+                <input id="applyEmail" type="email" required autoComplete="email" className="input" placeholder="you@example.com"
                   value={form.email} onChange={(e) => update('email', e.target.value)} />
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-cream/50 mb-1.5">Phone</label>
-                <input id="phone" type="tel" className="input" placeholder="(828) 555-0000"
+                <input id="phone" type="tel" autoComplete="tel" className="input" placeholder="(828) 555-0000"
                   value={form.phone} onChange={(e) => update('phone', e.target.value)} />
               </div>
             </div>

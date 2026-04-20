@@ -94,13 +94,23 @@ export default function OrderPage() {
 
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
-  // Auth check — redirect to portal if not logged in
-  // Skipped under /embed/* so anonymous WordPress visitors can browse the catalog
+  // Auth check — redirect to portal if not logged in. Accept EITHER portal
+  // (customer) session OR admin session, because admin uses this page via
+  // the "Create order for this customer" deep-link from /admin. Skipped
+  // under /embed/* so anonymous WordPress visitors can browse the catalog.
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/embed')) return;
-    fetch('/api/portal/login')
-      .then((r) => { if (!r.ok) router.replace('/portal'); })
-      .catch(() => router.replace('/portal'));
+    let cancelled = false;
+    Promise.all([
+      fetch('/api/portal/login'),
+      fetch('/api/admin/login'),
+    ]).then(([portal, admin]) => {
+      if (cancelled) return;
+      if (!portal.ok && !admin.ok) router.replace('/portal');
+    }).catch(() => {
+      if (!cancelled) router.replace('/portal');
+    });
+    return () => { cancelled = true; };
   }, [router]);
 
   useEffect(() => {
