@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Product, KegSize } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
 const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
@@ -128,11 +129,14 @@ export default function ProductsPage() {
 
   const [adjustingInventory, setAdjustingInventory] = useState<string | null>(null);
 
+  const [invError, setInvError] = useState('');
+
   const adjustInventory = async (productId: string, size: KegSize, delta: number) => {
     const key = `${productId}-${size}`;
     setAdjustingInventory(key);
+    setInvError('');
     try {
-      const res = await fetch('/api/admin/inventory', {
+      const res = await adminFetch('/api/admin/inventory', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, size, delta }),
@@ -152,8 +156,9 @@ export default function ProductsPage() {
           ),
         );
       } else {
-        const err = await res.json();
-        alert(err.error || 'Inventory update failed.');
+        const err = await res.json().catch(() => ({}));
+        setInvError(err.error || 'Inventory update failed.');
+        window.setTimeout(() => setInvError(''), 4000);
       }
     } catch (err) {
       console.error('Failed to adjust inventory', err);
@@ -165,8 +170,9 @@ export default function ProductsPage() {
   const setInventoryAbsolute = async (productId: string, size: KegSize, count: number) => {
     const key = `${productId}-${size}`;
     setAdjustingInventory(key);
+    setInvError('');
     try {
-      const res = await fetch('/api/admin/inventory', {
+      const res = await adminFetch('/api/admin/inventory', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, size, count }),
@@ -185,6 +191,10 @@ export default function ProductsPage() {
                 },
           ),
         );
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setInvError(err.error || 'Inventory update failed.');
+        window.setTimeout(() => setInvError(''), 4000);
       }
     } catch (err) {
       console.error('Failed to set inventory', err);
@@ -195,6 +205,7 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
+      {invError && <div className="toast" style={{ color: 'var(--ruby)' }}>{invError}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="section-label mb-1 block">Inventory</span>

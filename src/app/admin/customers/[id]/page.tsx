@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
@@ -64,7 +65,7 @@ export default function CustomerDetailPage() {
       const target = deliveredOrders.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )[0];
-      const res = await fetch('/api/admin/remind-kegs', {
+      const res = await adminFetch('/api/admin/remind-kegs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: target.id }),

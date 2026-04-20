@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { Order, OrderStatus, Customer } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 const STATUS_FLOW: OrderStatus[] = ['pending', 'confirmed', 'delivered', 'completed'];
 
@@ -184,7 +185,7 @@ export default function OrdersPage() {
                                   <button
                                     onClick={async () => {
                                       try {
-                                        const res = await fetch('/api/admin/remind-kegs', {
+                                        const res = await adminFetch('/api/admin/remind-kegs', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ orderId: order.id }),

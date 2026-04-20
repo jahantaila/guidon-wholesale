@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { adminFetch } from '@/lib/admin-fetch';
 
 export default function SettingsPage() {
   const [emails, setEmails] = useState<string[]>([]);
@@ -11,7 +12,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/settings', { cache: 'no-store' })
+    adminFetch('/api/admin/settings', { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => setEmails(Array.isArray(data.notificationEmails) ? data.notificationEmails : []))
       .catch(() => setError('Failed to load settings.'))
@@ -23,7 +24,7 @@ export default function SettingsPage() {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch('/api/admin/settings', {
+      const res = await adminFetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationEmails: next }),

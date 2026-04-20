@@ -18,23 +18,39 @@ export default function AdminDashboard() {
     async function load() {
       try {
         const [statsRes, ordersRes, customersRes, appsRes, invoicesRes, productsRes] = await Promise.all([
-          fetch('/api/admin/stats'),
-          fetch('/api/orders'),
-          fetch('/api/customers'),
-          fetch('/api/applications'),
-          fetch('/api/invoices'),
-          fetch('/api/products'),
+          fetch('/api/admin/stats', { cache: 'no-store' }),
+          fetch('/api/orders', { cache: 'no-store' }),
+          fetch('/api/customers', { cache: 'no-store' }),
+          fetch('/api/applications', { cache: 'no-store' }),
+          fetch('/api/invoices', { cache: 'no-store' }),
+          fetch('/api/products', { cache: 'no-store' }),
         ]);
-        setStats(await statsRes.json());
-        const ordersData = await ordersRes.json();
+        // Only accept the response as stats if the request succeeded AND the
+        // body has the expected shape. Otherwise leave stats null so the
+        // ledger line falls back to the 'couldn't load' message instead of
+        // rendering NaN / empty numerals.
+        if (statsRes.ok) {
+          const raw = await statsRes.json().catch(() => null);
+          if (raw && typeof raw === 'object' && 'kegsOut' in raw) {
+            setStats(raw as AdminStats);
+          } else {
+            setStats(null);
+          }
+        } else {
+          setStats(null);
+        }
+        const safeArr = async (r: Response) => (r.ok ? r.json().catch(() => []) : []);
+        const [ordersData, customersData, appsData, invoicesData, productsData] = await Promise.all([
+          safeArr(ordersRes),
+          safeArr(customersRes),
+          safeArr(appsRes),
+          safeArr(invoicesRes),
+          safeArr(productsRes),
+        ]);
         setOrders(Array.isArray(ordersData) ? ordersData : []);
-        const customersData = await customersRes.json();
         setCustomers(Array.isArray(customersData) ? customersData : []);
-        const appsData = await appsRes.json();
         setApplications(Array.isArray(appsData) ? appsData : []);
-        const invoicesData = await invoicesRes.json();
         setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
-        const productsData = await productsRes.json();
         setProducts(Array.isArray(productsData) ? productsData : []);
       } catch (err) {
         console.error('Failed to load dashboard data', err);
@@ -119,8 +135,8 @@ export default function AdminDashboard() {
           <span className="font-display italic text-[var(--muted)] mr-2" style={{ fontVariationSettings: "'opsz' 24" }}>
             Today,
           </span>
-          <span className="ledger-num">{stats.kegsOut}</span> kegs outstanding with wholesale accounts.{' '}
-          <span className="ledger-num">{stats.pendingOrders}</span> order{stats.pendingOrders === 1 ? '' : 's'} pending delivery.{' '}
+          <span className="ledger-num">{stats.kegsOut ?? 0}</span> kegs outstanding with wholesale accounts.{' '}
+          <span className="ledger-num">{stats.pendingOrders ?? 0}</span> order{stats.pendingOrders === 1 ? '' : 's'} pending delivery.{' '}
           {overdueInvoices > 0 ? (
             <>
               <span className="ledger-num" style={{ color: 'var(--ruby)' }}>
@@ -138,16 +154,32 @@ export default function AdminDashboard() {
           <span className="font-display italic text-[var(--muted)]" style={{ fontVariationSettings: "'opsz' 24" }}>
             This month:
           </span>{' '}
-          <span className="ledger-num">{formatCurrency(stats.totalRevenue)}</span> in revenue across{' '}
-          <span className="ledger-num">{stats.totalCustomers}</span> wholesale account{stats.totalCustomers === 1 ? '' : 's'}
-          {stats.pendingApplications > 0 && (
+          <span className="ledger-num">{formatCurrency(stats.totalRevenue ?? 0)}</span> in revenue across{' '}
+          <span className="ledger-num">{stats.totalCustomers ?? 0}</span> wholesale account{stats.totalCustomers === 1 ? '' : 's'}
+          {(stats.pendingApplications ?? 0) > 0 && (
             <>
               , plus <span className="ledger-num">{stats.pendingApplications}</span> application{stats.pendingApplications === 1 ? '' : 's'} awaiting review
             </>
           )}
           .
         </div>
-      ) : null}
+      ) : (
+        <div className="ledger-line" style={{ color: 'var(--muted)' }}>
+          <span className="font-display italic mr-2" style={{ fontVariationSettings: "'opsz' 24" }}>
+            Couldn&rsquo;t load today&rsquo;s numbers.
+          </span>
+          Refresh the page. If it persists, your admin session may have expired — click{' '}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="underline"
+            style={{ color: 'var(--brass)' }}
+          >
+            reload
+          </button>{' '}
+          to re-authenticate.
+        </div>
+      )}
 
       {/* Low inventory warning — only shown when there's something to flag */}
       {!loading && lowInventory.length > 0 && (

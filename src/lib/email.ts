@@ -35,6 +35,16 @@ function fromAddress(): string {
 }
 
 /**
+ * Reply-To address. We send FROM emails.derbyrestaurants.us (Derby Digital
+ * shared transactional domain) but replies should land at the brewery's
+ * real mailbox. Defaults to EMAIL_REPLY_TO env var; falls back to EMAIL_FROM
+ * if not set.
+ */
+function defaultReplyTo(): string | undefined {
+  return process.env.EMAIL_REPLY_TO || undefined;
+}
+
+/**
  * Admin notification recipients, pulled from the admin-editable settings
  * table first, falling back to EMAIL_ADMIN env, then to a sensible default.
  * Called on every send, so changes in the settings UI take effect
@@ -91,7 +101,7 @@ export async function send(args: SendArgs): Promise<{ ok: boolean; id?: string; 
       subject: args.subject,
       html: args.html,
       text: args.text,
-      replyTo: args.replyTo,
+      replyTo: args.replyTo || defaultReplyTo(),
     });
     if (result.error) {
       console.error('[email:error]', result.error);
