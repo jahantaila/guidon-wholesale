@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let stop = false;
     async function load() {
       try {
         const [statsRes, ordersRes, customersRes, appsRes, invoicesRes, productsRes] = await Promise.all([
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
         // body has the expected shape. Otherwise leave stats null so the
         // ledger line falls back to the 'couldn't load' message instead of
         // rendering NaN / empty numerals.
+        if (stop) return;
         if (statsRes.ok) {
           const raw = await statsRes.json().catch(() => null);
           if (raw && typeof raw === 'object' && 'kegsOut' in raw) {
@@ -48,6 +50,7 @@ export default function AdminDashboard() {
           safeArr(invoicesRes),
           safeArr(productsRes),
         ]);
+        if (stop) return;
         setOrders(Array.isArray(ordersData) ? ordersData : []);
         setCustomers(Array.isArray(customersData) ? customersData : []);
         setApplications(Array.isArray(appsData) ? appsData : []);
@@ -56,10 +59,15 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error('Failed to load dashboard data', err);
       } finally {
-        setLoading(false);
+        if (!stop) setLoading(false);
       }
     }
     load();
+    // Refresh every 60s so Mike's dashboard shows new orders / applications
+    // without a manual refresh. Background tabs pause JS setTimeout in most
+    // browsers, so this is a reasonable battery compromise.
+    const timer = setInterval(load, 60_000);
+    return () => { stop = true; clearInterval(timer); };
   }, []);
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
