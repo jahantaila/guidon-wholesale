@@ -109,7 +109,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
-            <input id="email" type="email" className="input" placeholder="you@example.com"
+            <input id="email" type="email" autoComplete="username" autoFocus className="input" placeholder="you@example.com"
               value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
 
@@ -143,7 +143,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
                 Forgot password?
               </button>
             </div>
-            <input id="password" type="password" className="input" placeholder="Enter your password"
+            <input id="password" type="password" autoComplete="current-password" className="input" placeholder="Enter your password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
