@@ -138,14 +138,21 @@ create table if not exists invoices (
   id text primary key,
   order_id text not null references orders(id),
   customer_id text not null references customers(id),
-  status text not null default 'unpaid'
-    check (status in ('unpaid', 'paid', 'overdue')),
+  status text not null default 'draft'
+    check (status in ('draft', 'unpaid', 'paid', 'overdue')),
   subtotal numeric(10,2) not null default 0,
   total_deposit numeric(10,2) not null default 0,
   total numeric(10,2) not null default 0,
   issued_at timestamptz not null default now(),
+  sent_at timestamptz,
   paid_at timestamptz
 );
+
+-- Idempotent migration to expand the check constraint to include 'draft'
+-- and add the sent_at column for pre-existing installs.
+alter table invoices drop constraint if exists invoices_status_check;
+alter table invoices add constraint invoices_status_check check (status in ('draft', 'unpaid', 'paid', 'overdue'));
+alter table invoices add column if not exists sent_at timestamptz;
 
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;

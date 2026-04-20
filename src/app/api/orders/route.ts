@@ -31,6 +31,27 @@ export async function POST(request: NextRequest) {
   };
   await createOrder(order);
 
+  // Auto-create a draft invoice at order-placement time. Admin reviews and
+  // sends it later via the Send Invoice action (transitions draft -> unpaid
+  // and fires the invoice email).
+  try {
+    const draftInvoice: Invoice = {
+      id: generateId('inv'),
+      orderId: order.id,
+      customerId: order.customerId,
+      status: 'draft',
+      items: order.items,
+      subtotal: order.subtotal,
+      totalDeposit: order.totalDeposit,
+      total: order.total,
+      issuedAt: new Date().toISOString(),
+      paidAt: null,
+    };
+    await createInvoice(draftInvoice);
+  } catch (err) {
+    console.error('[invoice] draft creation failed (non-fatal):', err);
+  }
+
   // Fire-and-forget email notifications. Never block order creation on email
   // delivery, and never surface email errors to the client.
   (async () => {
@@ -87,7 +108,9 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // If status is changing to 'delivered', create keg ledger entries and invoice
+  // If status is changing to 'delivered', create keg ledger entries.
+  // Invoices are now auto-created at POST time as drafts; admin sends them
+  // explicitly via the Send Invoice action, so no invoice work happens here.
   if (updates.status === 'delivered' && existingOrder.status !== 'delivered') {
     const now = new Date().toISOString();
 

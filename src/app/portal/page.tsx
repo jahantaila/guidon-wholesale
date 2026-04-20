@@ -240,21 +240,29 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 
   return (
     <div className="min-h-screen bg-charcoal font-body">
-      {/* Header */}
-      <header className="border-b border-white/[0.06]">
+      {/* Header — brewery branding first, customer context second */}
+      <header className="border-b border-divider">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/">
-              <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
+            <Link href="/" className="flex items-center gap-3">
+              <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-10 w-auto" />
+              <div>
+                <h1 className="font-display text-lg sm:text-xl" style={{ fontVariationSettings: "'opsz' 24", color: 'var(--ink)', fontWeight: 500, letterSpacing: '-0.01em' }}>
+                  Guidon Brewing
+                </h1>
+                <p className="section-label">Wholesale Portal</p>
+              </div>
             </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl font-heading font-black text-cream">{customer.businessName}</h1>
-              <p className="text-cream/25 text-xs">Welcome back, {customer.contactName}</p>
-            </div>
           </div>
-          <button onClick={onLogout} className="btn-ghost text-xs border border-white/[0.08] px-4 py-2 rounded-xl">
-            Log Out
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{customer.businessName}</p>
+              <p className="text-xs italic" style={{ color: 'var(--muted)' }}>Welcome back, {customer.contactName}</p>
+            </div>
+            <button onClick={onLogout} className="btn-ghost text-xs">
+              Log Out
+            </button>
+          </div>
         </div>
       </header>
 

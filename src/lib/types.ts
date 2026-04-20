@@ -86,7 +86,7 @@ export interface Order {
   createdAt: string;
 }
 
-export type InvoiceStatus = 'unpaid' | 'paid' | 'overdue';
+export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue';
 
 export interface Invoice {
   id: string;

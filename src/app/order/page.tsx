@@ -95,26 +95,50 @@ export default function OrderPage() {
   }, [router]);
 
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+    async function fetchData(isInitial: boolean) {
       try {
         const [prodRes, custRes] = await Promise.all([
-          fetch('/api/products'),
-          fetch('/api/customers'),
+          fetch('/api/products', { cache: 'no-store' }),
+          fetch('/api/customers', { cache: 'no-store' }),
         ]);
         if (!prodRes.ok) throw new Error(`products ${prodRes.status}`);
         if (!custRes.ok) throw new Error(`customers ${custRes.status}`);
         const prods: Product[] = await prodRes.json();
         const custs: Customer[] = await custRes.json();
+        if (cancelled) return;
         setProducts(prods.filter((p) => p.available));
         setCustomers(custs);
+        setLoadError('');
       } catch (err) {
         console.error('Failed to load catalog data:', err);
-        setLoadError("We couldn't load the catalog. Please refresh the page or try again shortly.");
+        // Only surface the error UI on initial load. Silent-fail on background
+        // refetches (the user still sees the last good data).
+        if (isInitial) {
+          setLoadError("We couldn't load the catalog. Please refresh the page or try again shortly.");
+        }
       } finally {
-        setLoading(false);
+        if (isInitial) setLoading(false);
       }
     }
-    fetchData();
+    fetchData(true);
+
+    // Keep the catalog live. Refetch when the tab regains focus (cheap,
+    // covers the common case of 'admin updates inventory, customer tabs
+    // back to their open browser') and on a 30s poll as a backstop.
+    const onFocus = () => fetchData(false);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchData(false);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    const poll = window.setInterval(() => fetchData(false), 30_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(poll);
+    };
   }, []);
 
   const categories = useMemo(() => {
