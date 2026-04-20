@@ -183,16 +183,19 @@ export default function AdminDashboard() {
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
         <Link href="/admin/orders" className="btn-primary">
-          View Pending Orders
+          Pending Orders
+        </Link>
+        <Link href="/admin/deliveries" className="btn-secondary">
+          Delivery Route
+        </Link>
+        <Link href="/admin/production" className="btn-secondary">
+          What to Brew
         </Link>
         <Link href="/admin/applications" className="btn-outline">
           Review Applications
         </Link>
         <Link href="/admin/products" className="btn-secondary">
-          Manage Products
-        </Link>
-        <Link href="/admin/kegs" className="btn-secondary">
-          Keg Tracker
+          Inventory
         </Link>
       </div>
 
