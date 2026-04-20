@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApplications, createApplication, updateApplication, createCustomer, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { WholesaleApplication, Customer } from '@/lib/types';
-import { notifyApplicationSubmitted, notifyApplicationDecision } from '@/lib/email';
+import { notifyApplicationSubmitted, notifyApplicationDecision, portalUrl } from '@/lib/email';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
@@ -159,7 +159,7 @@ export async function PUT(request: NextRequest) {
         applicantName: app.contactName,
         businessName: app.businessName,
         decision: body.status,
-        portalUrl: 'https://guidon-wholesale.vercel.app/portal',
+        portalUrl: portalUrl(),
         tempPassword,
       });
     } catch (err) {

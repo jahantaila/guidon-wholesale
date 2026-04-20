@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrder, getOrders, getCustomers } from '@/lib/data';
-import { notifyKegReminder } from '@/lib/email';
+import { notifyKegReminder, portalUrl } from '@/lib/email';
 
 /**
  * POST /api/admin/remind-kegs
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       businessName: customer.businessName,
       items: order.items,
       deliveryDate: order.deliveryDate,
-      portalUrl: 'https://guidon-wholesale.vercel.app/portal',
+      portalUrl: portalUrl(),
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
