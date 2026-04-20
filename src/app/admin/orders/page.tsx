@@ -333,7 +333,19 @@ function TableView({
                   {customerMap.get(order.customerId)?.businessName || order.customerId}
                 </td>
                 <td className="table-cell font-variant-tabular">{formatDate(order.createdAt)}</td>
-                <td className="table-cell font-variant-tabular">{formatDate(order.deliveryDate)}</td>
+                <td className="table-cell font-variant-tabular">
+                  {(() => {
+                    const now = new Date(); now.setHours(0, 0, 0, 0);
+                    const dd = new Date(order.deliveryDate);
+                    const overdue = (order.status === 'pending' || order.status === 'confirmed') && dd < now;
+                    return (
+                      <span style={{ color: overdue ? 'var(--ruby)' : undefined }} title={overdue ? 'Past delivery date without being marked delivered' : undefined}>
+                        {formatDate(order.deliveryDate)}
+                        {overdue && <span className="ml-1 text-[9px] uppercase tracking-wider">· late</span>}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td className="table-cell text-right font-variant-tabular">{order.items.length}</td>
                 <td className="table-cell">
                   <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
