@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from '@/lib/data';
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getOrders, getInvoices, getKegLedger } from '@/lib/data';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 import { generateId } from '@/lib/utils';
 import type { Customer } from '@/lib/types';
@@ -142,16 +142,55 @@ export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
     const id = body.id;
+    const force: boolean = body.force === true; // future-proofing for a real hard-delete path
     if (!id) {
       return NextResponse.json({ error: 'ID required' }, { status: 400 });
     }
+
+    // Check if the customer has any history. If so, we soft-delete (archive)
+    // instead of hard-deleting, so reports + historical invoices stay valid.
+    const [orders, invoices, ledger] = await Promise.all([
+      getOrders(),
+      getInvoices(),
+      getKegLedger(),
+    ]);
+    const hasHistory =
+      orders.some((o) => o.customerId === id) ||
+      invoices.some((i) => i.customerId === id) ||
+      ledger.some((l) => l.customerId === id);
+
+    if (hasHistory && !force) {
+      // Archive path: set archived_at so the customer disappears from
+      // dropdowns / default lists but history remains queryable.
+      const archived = await updateCustomer(id, { archivedAt: new Date().toISOString() });
+      if (!archived) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      }
+      // Clean up Supabase Auth so they can't log into a zombie account.
+      if (isSupabaseConfigured()) {
+        try {
+          const sb = createAdminClient();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const adminApi = (sb.auth as any).admin;
+          if (adminApi?.listUsers && adminApi?.deleteUser) {
+            const listRes = await adminApi.listUsers();
+            const authUser = listRes?.data?.users?.find((u: { email?: string }) =>
+              u.email?.toLowerCase() === archived.email.toLowerCase(),
+            );
+            if (authUser) await adminApi.deleteUser(authUser.id);
+          }
+        } catch (err) {
+          console.error('[customers DELETE] auth cleanup failed (non-fatal):', err);
+        }
+      }
+      return NextResponse.json({ success: true, archived: true });
+    }
+
+    // No history → safe to hard-delete.
     const deleted = await deleteCustomer(id);
     if (!deleted) {
-      // Most common reason: foreign-key constraint. The customer has orders,
-      // invoices, or keg ledger entries on record. Surface that explicitly so
-      // the UI can show a friendly message instead of a bare 404.
       return NextResponse.json(
-        { error: 'Could not delete. This customer has orders, invoices, or keg ledger entries on record (foreign key constraint). Remove those first, or keep the account and edit instead.' },
+        { error: 'Could not delete. Customer not found, or delete blocked by database constraint.' },
         { status: 409 },
       );
     }

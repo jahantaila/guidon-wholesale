@@ -12,6 +12,8 @@ export interface Customer {
   tags?: string[];
   /** When true, invoice auto-sends on order-delivered transition. */
   autoSendInvoices?: boolean;
+  /** Soft-delete timestamp; archived customers are hidden from default lists. */
+  archivedAt?: string | null;
   createdAt: string;
 }
 

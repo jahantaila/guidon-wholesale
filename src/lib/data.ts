@@ -40,6 +40,7 @@ function rowToCustomer(row: any): Customer {
     notes: row.notes ?? '',
     tags: Array.isArray(row.tags) ? row.tags : [],
     autoSendInvoices: row.auto_send_invoices === true,
+    archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
   };
 }
@@ -131,14 +132,22 @@ function rowToKegEntry(row: any): KegLedgerEntry {
 
 // ─── Customers ─────────────────────────────────────────────────────────────────
 
-export async function getCustomers(): Promise<Customer[]> {
+/**
+ * @param includeArchived defaults to false. Archived customers are soft-
+ * deleted; they stay in the DB so historical orders/invoices are intact,
+ * but admin dropdowns and default listings exclude them.
+ */
+export async function getCustomers(includeArchived: boolean = false): Promise<Customer[]> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
-    const { data, error } = await sb.from('customers').select('*').order('created_at');
+    const query = sb.from('customers').select('*').order('created_at');
+    if (!includeArchived) query.is('archived_at', null);
+    const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(rowToCustomer);
   }
-  return readJSON<Customer[]>('customers.json');
+  const all = readJSON<Customer[]>('customers.json');
+  return includeArchived ? all : all.filter((c) => !c.archivedAt);
 }
 
 export async function getCustomer(id: string): Promise<Customer | undefined> {
@@ -183,6 +192,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.tags !== undefined) row.tags = updates.tags;
     if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;
+    if (updates.archivedAt !== undefined) row.archived_at = updates.archivedAt;
     const { data, error } = await sb.from('customers').update(row).eq('id', id).select().single();
     if (error) return undefined;
     return rowToCustomer(data);

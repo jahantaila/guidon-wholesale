@@ -163,6 +163,11 @@ alter table customers add column if not exists tags jsonb not null default '[]':
 -- the customer) the moment an order is marked delivered. Default false so
 -- admin reviews before billing.
 alter table customers add column if not exists auto_send_invoices boolean not null default false;
+-- Soft-delete for customers with order history. Hard delete fails on FK
+-- constraints (orders, invoices, keg_ledger reference the customer).
+-- Archived customers are hidden from dropdowns + listings by default but
+-- their history stays intact for reporting.
+alter table customers add column if not exists archived_at timestamptz;
 
 -- Order templates: customers save a cart as a reusable template (e.g.
 -- "Tuesday Regular"). One-click reload populates their cart next time.
