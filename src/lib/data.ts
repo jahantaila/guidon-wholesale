@@ -561,6 +561,7 @@ export async function createInvoice(invoice: Invoice): Promise<Invoice> {
       total_deposit: invoice.totalDeposit,
       total: invoice.total,
       issued_at: invoice.issuedAt,
+      sent_at: invoice.sentAt ?? null,
       paid_at: invoice.paidAt,
     });
     if (error) throw error;

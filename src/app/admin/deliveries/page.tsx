@@ -278,6 +278,14 @@ export default function DeliveriesPage() {
               </section>
             );
           })}
+
+          {/* Derby Digital print footer — only visible in print */}
+          <div className="hidden print:block mt-8 pt-4 border-t border-gray-300 text-center text-[10px] text-gray-500">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+              <span>Powered by</span>
+              <span style={{ fontWeight: 700, letterSpacing: '0.1em', color: '#333' }}>DERBY DIGITAL</span>
+            </div>
+          </div>
         </>
       )}
     </div>
