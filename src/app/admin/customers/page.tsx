@@ -136,13 +136,13 @@ export default function CustomersPage() {
           <span className="section-label mb-1 block">Management</span>
           <h2 className="font-heading text-2xl font-black text-cream">Customers</h2>
         </div>
-        <div className="flex items-center gap-3 self-start">
+        <div className="flex items-center gap-2 sm:gap-3 self-start flex-wrap">
           <label className="flex items-center gap-1.5 text-xs text-cream/50 cursor-pointer select-none">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-gold cursor-pointer" />
             Show archived
           </label>
           <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="input max-w-[200px] text-sm" />
+            className="input max-w-[140px] sm:max-w-[200px] text-sm" />
           <a
             href={showArchived ? '/api/customers/export?includeArchived=true' : '/api/customers/export'}
             className="btn-ghost text-xs px-3 py-1.5 border border-white/[0.06] rounded-xl"

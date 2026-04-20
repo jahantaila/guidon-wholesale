@@ -290,9 +290,9 @@ export default function ProductsPage() {
           <span className="section-label mb-1 block">Inventory</span>
           <h2 className="font-heading text-2xl font-black text-cream">Products</h2>
         </div>
-        <div className="flex items-center gap-3 self-start">
+        <div className="flex items-center gap-2 sm:gap-3 self-start flex-wrap">
           <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="input max-w-[200px] text-sm" />
+            className="input max-w-[140px] sm:max-w-[200px] text-sm" />
           <button onClick={openAdd} className="btn-primary">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -465,7 +465,7 @@ export default function ProductsPage() {
               {editingId ? 'Edit Product' : 'Add Product'}
             </h3>
             <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-cream/40 mb-1.5">Beer Name</label>
                   <input className="input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
@@ -476,7 +476,7 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-cream/40 mb-1.5">ABV (%)</label>
                   <input type="number" step="0.1" min="0" max="20" className="input" value={form.abv}
@@ -523,7 +523,7 @@ export default function ProductsPage() {
               </div>
 
               {/* Release flags + image URL */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="flex items-center gap-2 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04] cursor-pointer hover:border-gold/30 transition-colors">
                   <input type="checkbox" checked={form.newRelease}
                     onChange={e => setForm(p => ({ ...p, newRelease: e.target.checked }))}

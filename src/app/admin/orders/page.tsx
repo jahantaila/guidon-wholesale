@@ -177,13 +177,13 @@ export default function OrdersPage() {
             Orders
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             type="text"
             placeholder="Search orders..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input max-w-xs text-sm"
+            className="input max-w-xs text-sm flex-1 sm:flex-initial"
           />
           {/* View toggle */}
           <div className="flex border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>

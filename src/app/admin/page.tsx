@@ -2,17 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { AdminStats, Order, Customer, WholesaleApplication, Invoice, Product } from '@/lib/types';
+import { Order, Customer, WholesaleApplication, Invoice, Product } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [applications, setApplications] = useState<(WholesaleApplication & { status?: string })[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [kegsOut, setKegsOut] = useState<number>(0);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [healthIssues, setHealthIssues] = useState<string[]>([]);
 
@@ -39,36 +40,26 @@ export default function AdminDashboard() {
     let stop = false;
     async function load() {
       try {
-        const [statsRes, ordersRes, customersRes, appsRes, invoicesRes, productsRes] = await Promise.all([
-          adminFetch('/api/admin/stats', { cache: 'no-store' }),
+        // Single source of truth: fetch the raw arrays + keg balances, then
+        // derive every dashboard number from them. No separate /api/admin/stats
+        // call that could drift out of sync with the list pages.
+        const [ordersRes, customersRes, appsRes, invoicesRes, productsRes, balancesRes] = await Promise.all([
           adminFetch('/api/orders', { cache: 'no-store' }),
           adminFetch('/api/customers', { cache: 'no-store' }),
           adminFetch('/api/applications', { cache: 'no-store' }),
           adminFetch('/api/invoices', { cache: 'no-store' }),
           adminFetch('/api/products', { cache: 'no-store' }),
+          adminFetch('/api/keg-ledger?balances=true', { cache: 'no-store' }),
         ]);
-        // Only accept the response as stats if the request succeeded AND the
-        // body has the expected shape. Otherwise leave stats null so the
-        // ledger line falls back to the 'couldn't load' message instead of
-        // rendering NaN / empty numerals.
         if (stop) return;
-        if (statsRes.ok) {
-          const raw = await statsRes.json().catch(() => null);
-          if (raw && typeof raw === 'object' && 'kegsOut' in raw) {
-            setStats(raw as AdminStats);
-          } else {
-            setStats(null);
-          }
-        } else {
-          setStats(null);
-        }
         const safeArr = async (r: Response) => (r.ok ? r.json().catch(() => []) : []);
-        const [ordersData, customersData, appsData, invoicesData, productsData] = await Promise.all([
+        const [ordersData, customersData, appsData, invoicesData, productsData, balancesData] = await Promise.all([
           safeArr(ordersRes),
           safeArr(customersRes),
           safeArr(appsRes),
           safeArr(invoicesRes),
           safeArr(productsRes),
+          safeArr(balancesRes),
         ]);
         if (stop) return;
         setOrders(Array.isArray(ordersData) ? ordersData : []);
@@ -76,8 +67,21 @@ export default function AdminDashboard() {
         setApplications(Array.isArray(appsData) ? appsData : []);
         setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
         setProducts(Array.isArray(productsData) ? productsData : []);
+        // kegsOut = sum of per-size balances across every customer
+        let totalKegs = 0;
+        if (Array.isArray(balancesData)) {
+          for (const entry of balancesData) {
+            const bal = entry?.balance || {};
+            totalKegs += Math.max(0, Number(bal['1/2bbl']) || 0);
+            totalKegs += Math.max(0, Number(bal['1/4bbl']) || 0);
+            totalKegs += Math.max(0, Number(bal['1/6bbl']) || 0);
+          }
+        }
+        setKegsOut(totalKegs);
+        setLoadError(false);
       } catch (err) {
         console.error('Failed to load dashboard data', err);
+        if (!stop) setLoadError(true);
       } finally {
         if (!stop) setLoading(false);
       }
@@ -136,6 +140,19 @@ export default function AdminDashboard() {
     .filter((i) => i.status === 'overdue' || i.status === 'unpaid')
     .reduce((sum, i) => sum + i.total, 0);
 
+  // Derived ledger-line numbers (single source of truth — same arrays the
+  // list pages use). Previously came from /api/admin/stats which could
+  // drift out of sync with /api/orders on stale caches. Computing
+  // client-side means numbers always match what the orders page shows.
+  const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length;
+  const pendingApplications = applications.filter((a) => !a.status || a.status === 'pending').length;
+  // Revenue this month: delivered + completed orders placed in the current calendar month.
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const totalRevenue = orders
+    .filter((o) => (o.status === 'delivered' || o.status === 'completed') && new Date(o.createdAt) >= monthStart)
+    .reduce((s, o) => s + o.total, 0);
+  const totalCustomers = customers.filter((c) => !c.archivedAt).length;
+
   // Low inventory — any product-size with count < 5
   const lowInventory = products.flatMap((p) =>
     p.sizes
@@ -180,13 +197,13 @@ export default function AdminDashboard() {
         <div className="py-8">
           <div className="skeleton h-6 w-3/4" />
         </div>
-      ) : stats ? (
+      ) : !loadError ? (
         <div className="ledger-line">
           <span className="font-display italic text-[var(--muted)] mr-2" style={{ fontVariationSettings: "'opsz' 24" }}>
             Today,
           </span>
-          <span className="ledger-num">{stats.kegsOut ?? 0}</span> kegs outstanding with wholesale accounts.{' '}
-          <span className="ledger-num">{stats.pendingOrders ?? 0}</span> order{stats.pendingOrders === 1 ? '' : 's'} pending delivery.{' '}
+          <span className="ledger-num">{kegsOut}</span> kegs outstanding with wholesale accounts.{' '}
+          <span className="ledger-num">{pendingOrders}</span> order{pendingOrders === 1 ? '' : 's'} pending delivery.{' '}
           {overdueInvoices > 0 ? (
             <>
               <span className="ledger-num" style={{ color: 'var(--ruby)' }}>
@@ -204,11 +221,11 @@ export default function AdminDashboard() {
           <span className="font-display italic text-[var(--muted)]" style={{ fontVariationSettings: "'opsz' 24" }}>
             This month:
           </span>{' '}
-          <span className="ledger-num">{formatCurrency(stats.totalRevenue ?? 0)}</span> in revenue across{' '}
-          <span className="ledger-num">{stats.totalCustomers ?? 0}</span> wholesale account{stats.totalCustomers === 1 ? '' : 's'}
-          {(stats.pendingApplications ?? 0) > 0 && (
+          <span className="ledger-num">{formatCurrency(totalRevenue)}</span> in revenue across{' '}
+          <span className="ledger-num">{totalCustomers}</span> wholesale account{totalCustomers === 1 ? '' : 's'}
+          {pendingApplications > 0 && (
             <>
-              , plus <span className="ledger-num">{stats.pendingApplications}</span> application{stats.pendingApplications === 1 ? '' : 's'} awaiting review
+              , plus <span className="ledger-num">{pendingApplications}</span> application{pendingApplications === 1 ? '' : 's'} awaiting review
             </>
           )}
           .

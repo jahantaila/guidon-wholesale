@@ -109,18 +109,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [navCounts, setNavCounts] = useState<{ pendingOrders: number; pendingApps: number }>({ pendingOrders: 0, pendingApps: 0 });
   const pathname = usePathname();
 
-  // Poll nav badge counts every 60s so Mike sees new applications / pending
-  // orders without manual reload. Fires only when authenticated.
+  // Poll nav badge counts every 60s from the same raw endpoints the list
+  // pages use, so the sidebar badges stay in sync with the content you
+  // navigate to. Previously used /api/admin/stats which could drift.
   useEffect(() => {
     if (!authenticated) return;
     let stop = false;
     const refresh = async () => {
       try {
-        const r = await fetch('/api/admin/stats', { cache: 'no-store' });
-        if (!r.ok) return;
-        const data = await r.json();
+        const [ordersRes, appsRes] = await Promise.all([
+          fetch('/api/orders', { cache: 'no-store' }),
+          fetch('/api/applications', { cache: 'no-store' }),
+        ]);
         if (stop) return;
-        setNavCounts({ pendingOrders: data?.pendingOrders ?? 0, pendingApps: data?.pendingApplications ?? 0 });
+        const safeArr = async (r: Response) => (r.ok ? r.json().catch(() => []) : []);
+        const [orders, apps] = await Promise.all([safeArr(ordersRes), safeArr(appsRes)]);
+        if (stop) return;
+        const pendingOrders = Array.isArray(orders)
+          ? orders.filter((o: { status: string }) => o.status === 'pending' || o.status === 'confirmed').length
+          : 0;
+        const pendingApps = Array.isArray(apps)
+          ? apps.filter((a: { status?: string }) => !a.status || a.status === 'pending').length
+          : 0;
+        setNavCounts({ pendingOrders, pendingApps });
       } catch { /* ignore */ }
     };
     refresh();
