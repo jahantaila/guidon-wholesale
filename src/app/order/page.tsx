@@ -74,6 +74,15 @@ export default function OrderPage() {
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  // Pre-select a customer when ?customerId= is on the URL. Admin uses this
+  // from customer detail to "place an order for this customer." Using
+  // window.location directly (not useSearchParams) to avoid Next's
+  // static-bailout + Suspense requirement.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = new URLSearchParams(window.location.search).get('customerId');
+    if (id) setSelectedCustomerId(id);
+  }, []);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     businessName: '', contactName: '', email: '', phone: '', address: '',

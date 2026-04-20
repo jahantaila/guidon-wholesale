@@ -188,6 +188,12 @@ export default function CustomerDetailPage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 shrink-0">
+          <Link
+            href={`/order?customerId=${customer.id}`}
+            className="btn-primary text-sm text-center"
+          >
+            Create order &rarr;
+          </Link>
           {totalKegsOut > 0 && (
             <button
               onClick={remindAboutKegs}
