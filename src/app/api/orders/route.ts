@@ -10,6 +10,17 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
+    // Unfiltered (no customerId): admin-only. Scoped (with customerId):
+    // allowed for portal users querying their own history. The portal UI
+    // always passes the logged-in customer's id; for now we trust that
+    // envelope. A future tightening can enforce the id matches the
+    // authenticated email's customer row.
+    if (!customerId) {
+      const session = request.cookies.get('admin_session');
+      if (session?.value !== 'authenticated') {
+        return NextResponse.json([], { status: 200 });
+      }
+    }
     let orders = await getOrders();
     if (customerId) {
       orders = orders.filter(o => o.customerId === customerId);

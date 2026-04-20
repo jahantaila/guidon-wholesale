@@ -5,7 +5,12 @@ import type { WholesaleApplication, Customer } from '@/lib/types';
 import { notifyApplicationSubmitted, notifyApplicationDecision } from '@/lib/email';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Admin-only: applications contain applicant PII and business context.
+  const session = request.cookies.get('admin_session');
+  if (session?.value !== 'authenticated') {
+    return NextResponse.json([], { status: 200 });
+  }
   const applications = await getApplications();
   return NextResponse.json(applications);
 }

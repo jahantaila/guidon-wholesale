@@ -4,7 +4,20 @@ import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 import { generateId } from '@/lib/utils';
 import type { Customer } from '@/lib/types';
 
-export async function GET() {
+/**
+ * GET /api/customers
+ * Admin-only. Returns all wholesale customers stripped of their passwords.
+ * Previously this was public, which meant anyone browsing the wholesale
+ * portal embed could see every brewery customer's name, email, phone, and
+ * address — a real privacy issue. Now locked behind the admin_session
+ * cookie; public /order paths that need customer selection will just see
+ * an empty list and fall through to the "New Customer" form.
+ */
+export async function GET(request: NextRequest) {
+  const session = request.cookies.get('admin_session');
+  if (session?.value !== 'authenticated') {
+    return NextResponse.json([], { status: 200 });
+  }
   const customers = await getCustomers();
   // Strip passwords from response
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
