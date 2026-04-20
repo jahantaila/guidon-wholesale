@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
+import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
 
@@ -183,6 +183,14 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
   const [loadingBalances, setLoadingBalances] = useState(true);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
+  const [recurring, setRecurring] = useState<RecurringOrder[]>([]);
+
+  const fetchRecurring = useCallback(() => {
+    fetch(`/api/recurring-orders?customerId=${customer.id}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setRecurring(data); })
+      .catch(() => { /* ignore */ });
+  }, [customer.id]);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
 
@@ -219,7 +227,21 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
       .catch(() => setLoadingBalances(false));
   }, [customer.id]);
 
-  useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); }, [fetchOrders, fetchBalances, fetchInvoices]);
+  useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); fetchRecurring(); }, [fetchOrders, fetchBalances, fetchInvoices, fetchRecurring]);
+
+  const toggleRecurringActive = useCallback(async (rec: RecurringOrder) => {
+    try {
+      const res = await fetch('/api/recurring-orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: rec.id, active: !rec.active }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRecurring((prev) => prev.map((r) => (r.id === rec.id ? updated : r)));
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // Reorder-to-cart. Adds the most recent order's items to the ProductsTab
   // cart and switches to that tab so the user can review, adjust, add
@@ -345,6 +367,8 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             expandedOrderId={expandedOrderId}
             setExpandedOrderId={setExpandedOrderId}
             onReorder={handleReorder}
+            recurring={recurring}
+            onToggleRecurring={toggleRecurringActive}
           />
         )}
         {tab === 'invoices' && (
@@ -1239,15 +1263,52 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 
 function OrdersTab({
   orders, loadingOrders, expandedOrderId, setExpandedOrderId, onReorder,
+  recurring, onToggleRecurring,
 }: {
   orders: Order[];
   loadingOrders: boolean;
   expandedOrderId: string | null;
   setExpandedOrderId: (id: string | null) => void;
   onReorder: (orderId?: string) => void;
+  recurring: RecurringOrder[];
+  onToggleRecurring: (r: RecurringOrder) => void;
 }) {
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-8">
+      {recurring.length > 0 && (
+        <div>
+          <span className="section-label mb-3 block">Your Recurring Orders</span>
+          <div className="space-y-2">
+            {recurring.map((r) => (
+              <div key={r.id} className="card p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-heading font-bold text-cream text-sm">
+                    {r.name}
+                    {!r.active && (
+                      <span className="ml-2 text-xs font-normal italic text-cream/30">(paused)</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-cream/30 mt-0.5">
+                    Every {r.intervalDays} days &middot; {r.items.length} item{r.items.length === 1 ? '' : 's'}
+                    {r.active && <> &middot; next delivery {formatDate(r.nextRunAt)}</>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onToggleRecurring(r)}
+                  className="text-xs font-heading font-bold text-gold/60 hover:text-gold px-3 py-1 rounded-lg hover:bg-gold/10"
+                >
+                  {r.active ? 'Pause' : 'Resume'}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] italic text-cream/20 mt-2">
+            Paused? We won&rsquo;t auto-create the next order. Resume anytime to re-schedule from the date you click.
+          </p>
+        </div>
+      )}
+
+      <div>
       <span className="section-label mb-4 block">All Orders</span>
 
       {loadingOrders ? (
@@ -1290,6 +1351,7 @@ function OrdersTab({
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
