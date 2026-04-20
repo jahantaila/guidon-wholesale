@@ -6,6 +6,10 @@ export interface Customer {
   phone: string;
   address: string;
   password?: string;
+  /** Brewery-only notes. Not visible to the customer. */
+  notes?: string;
+  /** Free-form tags like "priority", "net-30", "tasting-room". */
+  tags?: string[];
   createdAt: string;
 }
 

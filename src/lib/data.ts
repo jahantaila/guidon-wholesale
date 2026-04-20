@@ -37,6 +37,8 @@ function rowToCustomer(row: any): Customer {
     email: row.email,
     phone: row.phone,
     address: row.address,
+    notes: row.notes ?? '',
+    tags: Array.isArray(row.tags) ? row.tags : [],
     createdAt: row.created_at,
   };
 }
@@ -177,6 +179,8 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.email !== undefined) row.email = updates.email;
     if (updates.phone !== undefined) row.phone = updates.phone;
     if (updates.address !== undefined) row.address = updates.address;
+    if (updates.notes !== undefined) row.notes = updates.notes;
+    if (updates.tags !== undefined) row.tags = updates.tags;
     const { data, error } = await sb.from('customers').update(row).eq('id', id).select().single();
     if (error) return undefined;
     return rowToCustomer(data);

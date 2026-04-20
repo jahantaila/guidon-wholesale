@@ -154,6 +154,12 @@ alter table invoices drop constraint if exists invoices_status_check;
 alter table invoices add constraint invoices_status_check check (status in ('draft', 'unpaid', 'paid', 'overdue'));
 alter table invoices add column if not exists sent_at timestamptz;
 
+-- Customer-level notes for brewery staff context ("prefers Thursday
+-- deliveries", "pays in cash", etc.). Not visible to the customer.
+alter table customers add column if not exists notes text not null default '';
+-- Customer tags for filtering/grouping (e.g. ["priority", "net-30", "tasting-room"]).
+alter table customers add column if not exists tags jsonb not null default '[]'::jsonb;
+
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;
 create policy "Service role full access" on invoices using (true) with check (true);

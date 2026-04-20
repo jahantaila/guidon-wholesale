@@ -18,6 +18,9 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [toast, setToast] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
+  const [tagsDraft, setTagsDraft] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -29,7 +32,12 @@ export default function CustomerDetailPage() {
           adminFetch(`/api/keg-ledger?customerId=${id}`),
         ]);
         const customers: Customer[] = await customersRes.json();
-        setCustomer(customers.find((c) => c.id === id) || null);
+        const c = customers.find((x) => x.id === id) || null;
+        setCustomer(c);
+        if (c) {
+          setNotesDraft(c.notes || '');
+          setTagsDraft((c.tags || []).join(', '));
+        }
         setOrders(await ordersRes.json());
         setInvoices(await invoicesRes.json());
         setLedger(await ledgerRes.json());
@@ -56,6 +64,35 @@ export default function CustomerDetailPage() {
   const deliveredOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'completed');
   const outstandingInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue');
   const outstandingAmount = outstandingInvoices.reduce((s, i) => s + i.total, 0);
+
+  const saveNotes = async () => {
+    if (!customer) return;
+    setSavingNotes(true);
+    try {
+      const tags = tagsDraft
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const res = await adminFetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id, notes: notesDraft, tags }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCustomer(updated);
+        setToast('Notes saved.');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast(data?.error || 'Save failed.');
+      }
+    } catch {
+      setToast('Save failed.');
+    } finally {
+      setSavingNotes(false);
+      window.setTimeout(() => setToast(''), 3000);
+    }
+  };
 
   const remindAboutKegs = async () => {
     if (deliveredOrders.length === 0) return;
@@ -193,6 +230,51 @@ export default function CustomerDetailPage() {
           <span style={{ color: 'var(--pine)' }}>All invoices settled.</span>
         )}
       </div>
+
+      {/* Brewery-only notes and tags. Customer never sees these. Saves only
+          on the explicit "Save" click so staff can draft in peace. */}
+      <section className="card p-5">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="section-label">Brewery Notes</span>
+          <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
+            Internal — not shown to customer
+          </span>
+        </div>
+        <textarea
+          value={notesDraft}
+          onChange={(e) => setNotesDraft(e.target.value)}
+          rows={3}
+          placeholder="e.g. Prefers Thursday deliveries. Pays in cash on arrival. Tap 4 is Guidon-only per contract."
+          className="input w-full text-sm mb-3"
+          style={{ resize: 'vertical' }}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>Tags <span className="font-normal">(comma-separated)</span></label>
+            <input
+              type="text"
+              value={tagsDraft}
+              onChange={(e) => setTagsDraft(e.target.value)}
+              placeholder="priority, net-30, tasting-room"
+              className="input w-full text-sm"
+            />
+          </div>
+          <button
+            onClick={saveNotes}
+            disabled={savingNotes}
+            className="btn-primary text-sm"
+          >
+            {savingNotes ? 'Saving...' : 'Save Notes'}
+          </button>
+        </div>
+        {customer.tags && customer.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-divider">
+            {customer.tags.map((t) => (
+              <span key={t} className="badge-sm" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>{t}</span>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Two-column editorial layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
