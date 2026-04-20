@@ -402,6 +402,22 @@ export default function OrderPage() {
                   key={product.id}
                   className="card-product flex flex-col"
                 >
+                  {/* Optional product image — admin supplies URL in product form. */}
+                  {product.imageUrl && (
+                    <div
+                      className="w-full h-40 bg-charcoal-200 overflow-hidden relative"
+                      style={{ borderBottom: '1px solid var(--divider)' }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
                   {/* Typographic label header — replaces the SaaS gradient.
                       Beer name in Fraunces display. Style + ABV/IBU in editorial meta row.
                       Awards rendered as small-caps accolade. */}

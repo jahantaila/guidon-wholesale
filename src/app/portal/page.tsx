@@ -883,6 +883,24 @@ function ProductsTab({
             const isLowStock = stockForSize > 0 && stockForSize < 3;
             return (
               <article key={product.id} className="card-product flex flex-col">
+                {/* Product image — rendered only if the admin supplied an
+                    imageUrl. Letterpress overlay preserves the serif aesthetic
+                    so photos don't feel shoehorned into SaaS-land. */}
+                {product.imageUrl && (
+                  <div
+                    className="w-full h-40 bg-charcoal-200 overflow-hidden relative"
+                    style={{ borderBottom: '1px solid var(--divider)' }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
                 {/* Typographic label header — matches /order catalog */}
                 <header className="px-5 pt-5 pb-4 border-b border-divider">
                   <div className="flex items-start justify-between gap-3 mb-2">
