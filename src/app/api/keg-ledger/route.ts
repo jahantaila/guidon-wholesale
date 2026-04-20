@@ -60,6 +60,16 @@ export async function POST(request: NextRequest) {
       ? body.depositAmount
       : KEG_DEPOSITS[body.size as KegSize];
 
+  // Stamp a default source on the notes field so the ledger reads as an audit
+  // trail: order-delivery auto-posts say "Order xxx delivery" (written by
+  // orders route), portal returns say "Portal return request", and any other
+  // direct POST gets a generic "Manual adjustment" tag. Customer-supplied
+  // notes win over the default.
+  const userNote: string = typeof body.notes === 'string' ? body.notes.trim() : '';
+  const defaultSource =
+    body.type === 'return' ? 'Portal return request' : 'Manual adjustment';
+  const notes = userNote ? `${defaultSource}: ${userNote}` : defaultSource;
+
   const entry: KegLedgerEntry = {
     id: generateId('kl'),
     customerId: body.customerId,
@@ -73,7 +83,7 @@ export async function POST(request: NextRequest) {
         ? -(depositAmount * quantity)
         : depositAmount * quantity,
     date: new Date().toISOString(),
-    notes: body.notes || '',
+    notes,
   };
   await addKegLedgerEntry(entry);
   return NextResponse.json(entry, { status: 201 });
