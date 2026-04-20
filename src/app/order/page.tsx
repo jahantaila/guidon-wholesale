@@ -255,7 +255,10 @@ export default function OrderPage() {
     try {
       if (isNewCustomer) {
         const custRes = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCustomer) });
-        if (!custRes.ok) throw new Error('Failed to create customer');
+        if (!custRes.ok) {
+          const data = await custRes.json().catch(() => ({}));
+          throw new Error(data?.error || `Failed to create customer (HTTP ${custRes.status})`);
+        }
         const cust: Customer = await custRes.json();
         customerId = cust.id;
       }
@@ -267,7 +270,10 @@ export default function OrderPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, deliveryDate, notes }),
       });
-      if (!orderRes.ok) throw new Error('Failed to create order');
+      if (!orderRes.ok) {
+        const data = await orderRes.json().catch(() => ({}));
+        throw new Error(data?.error || `Failed to create order (HTTP ${orderRes.status})`);
+      }
       const order = await orderRes.json();
       router.push(`/order/confirmation?orderId=${order.id}`);
     } catch (err) {
