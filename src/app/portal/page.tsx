@@ -348,7 +348,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
           />
         )}
         {tab === 'invoices' && (
-          <InvoicesTab invoices={invoices} loading={loadingInvoices} />
+          <InvoicesTab invoices={invoices} loading={loadingInvoices} customer={customer} />
         )}
         {tab === 'settings' && (
           <SettingsTab customer={customer} onLogout={onLogout} />
@@ -1266,8 +1266,92 @@ function OrderDetail({ order }: { order: Order }) {
 /*  INVOICES TAB                                                      */
 /* ================================================================== */
 
-function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: boolean }) {
-  const sorted = [...invoices].sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loading: boolean; customer: Customer }) {
+  // Drafts are admin-internal; customer shouldn't see an unsent bill.
+  const visible = invoices.filter((i) => i.status !== 'draft');
+  const sorted = [...visible].sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+  const [printing, setPrinting] = useState<Invoice | null>(null);
+
+  if (printing) {
+    return (
+      <div>
+        <div className="no-print mb-6 flex items-center gap-4">
+          <button onClick={() => setPrinting(null)} className="btn-secondary px-4 py-2">
+            &larr; Back to invoices
+          </button>
+          <button onClick={() => window.print()} className="btn-primary">Print / Download PDF</button>
+        </div>
+
+        <div className="bg-white max-w-3xl mx-auto p-8 sm:p-12 rounded-xl shadow-dark-lg print:shadow-none print:rounded-none">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
+              <div className="text-sm text-gray-500 space-y-0.5 mt-3">
+                <p>415 8th Ave. E., Hendersonville, NC 28792</p>
+                <p>info@guidonbrewing.com</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <h2 className="font-heading text-3xl font-black text-gray-900">INVOICE</h2>
+              <p className="text-sm text-gray-500">{printing.id}</p>
+              <p className="text-sm text-gray-500">Date: {formatDate(printing.issuedAt)}</p>
+            </div>
+          </div>
+          <div className="h-1 bg-gradient-to-r from-gray-900 via-amber-600 to-gray-900 rounded mb-6" />
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
+            <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
+            <p className="text-sm text-gray-600">{customer.contactName}</p>
+            <p className="text-sm text-gray-500">{customer.address}</p>
+          </div>
+          <table className="w-full mb-6">
+            <thead>
+              <tr className="border-b-2 border-gray-900">
+                <th className="text-left py-2 text-xs font-bold text-gray-900 uppercase">Product</th>
+                <th className="text-left py-2 text-xs font-bold text-gray-900 uppercase">Size</th>
+                <th className="text-right py-2 text-xs font-bold text-gray-900 uppercase">Qty</th>
+                <th className="text-right py-2 text-xs font-bold text-gray-900 uppercase">Price</th>
+                <th className="text-right py-2 text-xs font-bold text-gray-900 uppercase">Deposit</th>
+                <th className="text-right py-2 text-xs font-bold text-gray-900 uppercase">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printing.items.map((item, idx) => (
+                <tr key={idx} className="border-b border-gray-200">
+                  <td className="py-2 text-sm text-gray-800">{item.productName}</td>
+                  <td className="py-2 text-sm text-gray-600">{item.size}</td>
+                  <td className="py-2 text-sm text-right text-gray-600">{item.quantity}</td>
+                  <td className="py-2 text-sm text-right text-gray-600">{formatCurrency(item.unitPrice)}</td>
+                  <td className="py-2 text-sm text-right text-gray-600">{formatCurrency(item.deposit)}</td>
+                  <td className="py-2 text-sm text-right font-semibold text-gray-900">{formatCurrency((item.unitPrice + item.deposit) * item.quantity)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex justify-end">
+            <div className="w-72 space-y-2">
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(printing.subtotal)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Keg Deposits</span><span>{formatCurrency(printing.totalDeposit)}</span></div>
+              <div className="flex justify-between font-black text-xl border-t-2 border-gray-900 pt-2 mt-2"><span>Total</span><span>{formatCurrency(printing.total)}</span></div>
+            </div>
+          </div>
+          {printing.paidAt && (
+            <div className="mt-6 text-center py-3 bg-emerald-50 rounded-lg border border-emerald-200">
+              <p className="text-sm text-emerald-700 font-semibold">Paid on {formatDate(printing.paidAt)}</p>
+            </div>
+          )}
+          <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
+            <p>Guidon Brewing Company &bull; Veteran-Owned &bull; 415 8th Ave. E., Hendersonville, NC 28792</p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-center gap-2 text-[10px] text-gray-400">
+            <span>Powered by</span>
+            <span className="font-bold tracking-wider text-gray-500">DERBY DIGITAL</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -1279,7 +1363,7 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
         </div>
       ) : sorted.length === 0 ? (
         <div className="card text-center text-cream/25 py-10">
-          <p>No invoices yet. Invoices are generated when orders are delivered.</p>
+          <p>No invoices yet. Invoices are sent when orders are delivered.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -1293,6 +1377,13 @@ function InvoicesTab({ invoices, loading }: { invoices: Invoice[]; loading: bool
                 <div className="flex items-center gap-3">
                   <span className={cn('badge-sm', getStatusColor(inv.status))}>{inv.status}</span>
                   <span className="text-sm font-heading font-bold text-cream">{formatCurrency(inv.total)}</span>
+                  <button
+                    onClick={() => setPrinting(inv)}
+                    className="text-[10px] font-heading font-bold text-gold/60 hover:text-gold px-2 py-1 rounded-lg hover:bg-gold/10 transition-all"
+                    title="View / print / download PDF"
+                  >
+                    View PDF
+                  </button>
                 </div>
               </div>
               {inv.paidAt && (
