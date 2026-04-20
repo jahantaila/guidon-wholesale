@@ -66,8 +66,15 @@ export default function ApplicationsPage() {
           password: '',
         });
         setShowCreateCustomer(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const msg = typeof data?.error === 'string' ? data.error : `Approve failed (HTTP ${res.status})`;
+        alert(msg);
       }
-    } catch (err) { console.error('Failed to approve application', err); }
+    } catch (err) {
+      console.error('Failed to approve application', err);
+      alert('Network error approving application. Please retry.');
+    }
     finally { setUpdating(null); }
   };
 
@@ -104,8 +111,15 @@ export default function ApplicationsPage() {
           setShowCreateCustomer(false);
           setCustomerSuccess('');
         }, 2000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const msg = typeof data?.error === 'string' ? data.error : `Create failed (HTTP ${res.status})`;
+        alert(msg);
       }
-    } catch (err) { console.error('Failed to create customer', err); }
+    } catch (err) {
+      console.error('Failed to create customer', err);
+      alert('Network error creating customer. Please retry.');
+    }
     finally { setSavingCustomer(false); }
   };
 

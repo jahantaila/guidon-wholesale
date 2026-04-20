@@ -26,7 +26,11 @@ export async function GET(request: NextRequest) {
   const auth = request.headers.get('authorization');
   const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
   if (cookie === ADMIN_TOKEN_VALUE || bearer === ADMIN_TOKEN_VALUE) {
-    return NextResponse.json({ authenticated: true });
+    // Return the token even on GET so clients with an existing cookie-only
+    // session (from before the header auth landed) can backfill their
+    // localStorage token. Subsequent iframe-context requests then work
+    // even when the cookie is blocked.
+    return NextResponse.json({ authenticated: true, token: ADMIN_TOKEN_VALUE });
   }
   return NextResponse.json({ authenticated: false }, { status: 401 });
 }

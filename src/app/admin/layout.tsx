@@ -141,11 +141,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [authenticated]);
 
   useEffect(() => {
-    // Probe the server for auth. If we have a token in localStorage
-    // (iframe-context fallback), adminFetch sends it as a Bearer header so
-    // this works even when the admin_session cookie is blocked.
+    // Probe the server for auth. adminFetch sends the cached Bearer token
+    // if we have one (iframe fallback). If the server accepts the cookie
+    // instead, it returns a token in the body so we backfill localStorage
+    // — crucial for existing sessions that predate the header-auth
+    // rollout, otherwise they'd be silently broken in iframe context.
     adminFetch('/api/admin/login')
-      .then((r) => setAuthenticated(r.ok))
+      .then(async (r) => {
+        if (!r.ok) return false;
+        try {
+          const data = await r.json();
+          if (data?.token) setAdminToken(data.token);
+        } catch { /* no body — ignore */ }
+        return true;
+      })
+      .then((ok) => setAuthenticated(!!ok))
       .catch(() => setAuthenticated(false))
       .finally(() => setChecking(false));
   }, []);
