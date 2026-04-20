@@ -62,6 +62,47 @@ export default function ProductsPage() {
     setModalOpen(true);
   };
 
+  // Duplicate an existing product into the Add form pre-populated. Useful
+  // for seasonal variants (Winter Doppelbock → Spring Doppelbock with the
+  // same ABV / IBU / description but a new name + inventory). Admin tweaks
+  // what's different and hits Create.
+  const openDuplicate = (product: Product) => {
+    const sizesMap = new Map(product.sizes.map(s => [s.size, s]));
+    setForm({
+      name: `${product.name} (copy)`,
+      style: product.style,
+      abv: product.abv,
+      ibu: product.ibu ?? '',
+      description: product.description,
+      category: product.category,
+      available: product.available,
+      newRelease: product.newRelease ?? false,
+      limitedRelease: product.limitedRelease ?? false,
+      imageUrl: product.imageUrl ?? '',
+      awards: product.awards ?? [],
+      sizes: KEG_SIZES.map((s) => {
+        const existing = sizesMap.get(s);
+        return existing
+          ? {
+              size: s,
+              price: existing.price,
+              deposit: existing.deposit,
+              inventoryCount: 0, // start duplicates at 0 stock
+              available: existing.available ?? true,
+            }
+          : {
+              size: s,
+              price: 0,
+              deposit: 0,
+              inventoryCount: 0,
+              available: false,
+            };
+      }),
+    });
+    setEditingId(null); // treat as a new product, not an edit
+    setModalOpen(true);
+  };
+
   const openEdit = (product: Product) => {
     const sizesMap = new Map(product.sizes.map(s => [s.size, s]));
     setForm({
@@ -388,6 +429,13 @@ export default function ProductsPage() {
                       <div className="flex items-center justify-end gap-3">
                         <button onClick={() => openEdit(product)} className="text-gold/60 hover:text-gold text-sm font-bold transition-colors">
                           Edit
+                        </button>
+                        <button
+                          onClick={() => openDuplicate(product)}
+                          className="text-cream/40 hover:text-cream/70 text-sm font-bold transition-colors"
+                          title="Create a new product pre-filled from this one"
+                        >
+                          Duplicate
                         </button>
                         {deleteConfirm === product.id ? (
                           <div className="flex items-center gap-1">
