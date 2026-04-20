@@ -94,17 +94,17 @@ export default function CustomersPage() {
         body: JSON.stringify({ id }),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         setDeleteConfirm(null);
         await loadCustomers();
+        if (data?.archived) {
+          setDeleteError('Customer archived (had order history). Restore later from the archive view.');
+          window.setTimeout(() => setDeleteError(''), 6000);
+        }
       } else {
         const data = await res.json().catch(() => ({}));
-        // Most common: FK constraint (the customer has orders / invoices).
-        // Supabase returns a specific message we can detect and translate.
-        const raw = data?.error || '';
-        const friendly = /violates foreign key|still referenced|constraint/i.test(raw)
-          ? 'This customer has orders or invoices on file, so they can\'t be hard-deleted. Edit the row instead (or archive support coming later).'
-          : raw || 'Delete failed.';
-        setDeleteError(friendly);
+        const raw = data?.error || 'Delete failed.';
+        setDeleteError(raw);
         window.setTimeout(() => setDeleteError(''), 6000);
       }
     } catch (err) {
