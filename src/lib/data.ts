@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, Invoice, KegLedgerEntry, OrderTemplate, WholesaleApplication, KegSize } from './types';
+import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
@@ -854,5 +854,104 @@ export async function deleteOrderTemplate(id: string): Promise<boolean> {
   const next = all.filter((t) => t.id !== id);
   if (next.length === all.length) return false;
   writeJSON('order-templates.json', next);
+  return true;
+}
+
+// ─── Recurring Orders ──────────────────────────────────────────────────────────
+
+function rowToRecurring(row: Record<string, unknown>): RecurringOrder {
+  return {
+    id: row.id as string,
+    customerId: row.customer_id as string,
+    name: row.name as string,
+    items: (row.items as OrderItem[]) || [],
+    intervalDays: row.interval_days as number,
+    nextRunAt: row.next_run_at as string,
+    active: row.active as boolean,
+    createdAt: row.created_at as string,
+  };
+}
+
+export async function getRecurringOrders(customerId?: string): Promise<RecurringOrder[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const query = sb.from('recurring_orders').select('*').order('created_at', { ascending: false });
+    if (customerId) query.eq('customer_id', customerId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(rowToRecurring);
+  }
+  const all = readJSON<RecurringOrder[]>('recurring-orders.json');
+  return customerId ? all.filter((r) => r.customerId === customerId) : all;
+}
+
+export async function getDueRecurringOrders(): Promise<RecurringOrder[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('recurring_orders')
+      .select('*')
+      .eq('active', true)
+      .lte('next_run_at', new Date().toISOString());
+    if (error) throw error;
+    return (data || []).map(rowToRecurring);
+  }
+  return readJSON<RecurringOrder[]>('recurring-orders.json').filter(
+    (r) => r.active && new Date(r.nextRunAt) <= new Date(),
+  );
+}
+
+export async function createRecurringOrder(rec: RecurringOrder): Promise<RecurringOrder> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('recurring_orders').insert({
+      id: rec.id,
+      customer_id: rec.customerId,
+      name: rec.name,
+      items: rec.items,
+      interval_days: rec.intervalDays,
+      next_run_at: rec.nextRunAt,
+      active: rec.active,
+    });
+    if (error) throw error;
+    return rec;
+  }
+  const all = readJSON<RecurringOrder[]>('recurring-orders.json');
+  all.push(rec);
+  writeJSON('recurring-orders.json', all);
+  return rec;
+}
+
+export async function updateRecurringOrder(id: string, updates: Partial<RecurringOrder>): Promise<RecurringOrder | undefined> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const row: Record<string, unknown> = {};
+    if (updates.active !== undefined) row.active = updates.active;
+    if (updates.nextRunAt !== undefined) row.next_run_at = updates.nextRunAt;
+    if (updates.intervalDays !== undefined) row.interval_days = updates.intervalDays;
+    if (updates.name !== undefined) row.name = updates.name;
+    if (updates.items !== undefined) row.items = updates.items;
+    const { data, error } = await sb.from('recurring_orders').update(row).eq('id', id).select().single();
+    if (error) return undefined;
+    return rowToRecurring(data);
+  }
+  const all = readJSON<RecurringOrder[]>('recurring-orders.json');
+  const idx = all.findIndex((r) => r.id === id);
+  if (idx === -1) return undefined;
+  all[idx] = { ...all[idx], ...updates };
+  writeJSON('recurring-orders.json', all);
+  return all[idx];
+}
+
+export async function deleteRecurringOrder(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('recurring_orders').delete().eq('id', id);
+    return !error;
+  }
+  const all = readJSON<RecurringOrder[]>('recurring-orders.json');
+  const next = all.filter((r) => r.id !== id);
+  if (next.length === all.length) return false;
+  writeJSON('recurring-orders.json', next);
   return true;
 }

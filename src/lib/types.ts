@@ -105,6 +105,19 @@ export interface OrderTemplate {
   createdAt: string;
 }
 
+export interface RecurringOrder {
+  id: string;
+  customerId: string;
+  name: string;
+  items: OrderItem[];
+  /** How often (in days) the cron creates a new order from this template. */
+  intervalDays: number;
+  /** When the cron should next create an order (ISO). */
+  nextRunAt: string;
+  active: boolean;
+  createdAt: string;
+}
+
 export type InvoiceStatus = 'draft' | 'unpaid' | 'paid' | 'overdue';
 
 export interface Invoice {

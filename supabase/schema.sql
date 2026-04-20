@@ -182,6 +182,30 @@ create policy "Customer self read" on order_templates for select
   using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
 create index if not exists idx_order_templates_customer_id on order_templates(customer_id);
 
+-- Recurring orders: admin sets up "Brass Bell auto-orders 2 Pilsner 1/2bbl
+-- every 7 days." Daily cron (/api/cron/recurring-orders) reads active rows
+-- with next_run_at <= now() and creates pending orders from the template.
+-- Simple interval-in-days model (7, 14, 28). Fancier day-of-week scheduling
+-- can be added later; this covers the 80% case.
+create table if not exists recurring_orders (
+  id text primary key,
+  customer_id text not null references customers(id) on delete cascade,
+  name text not null,
+  items jsonb not null default '[]'::jsonb,
+  interval_days int not null check (interval_days > 0 and interval_days <= 365),
+  next_run_at timestamptz not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table recurring_orders enable row level security;
+drop policy if exists "Service role full access" on recurring_orders;
+create policy "Service role full access" on recurring_orders using (true) with check (true);
+drop policy if exists "Customer self read" on recurring_orders;
+create policy "Customer self read" on recurring_orders for select
+  using (customer_id in (select id from customers where email = lower(auth.jwt() ->> 'email')));
+create index if not exists idx_recurring_customer on recurring_orders(customer_id);
+create index if not exists idx_recurring_next_run on recurring_orders(next_run_at) where active = true;
+
 alter table invoices enable row level security;
 drop policy if exists "Service role full access" on invoices;
 create policy "Service role full access" on invoices using (true) with check (true);

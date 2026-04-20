@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance } from '@/lib/types';
+import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
@@ -15,6 +15,7 @@ export default function CustomerDetailPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [ledger, setLedger] = useState<KegLedgerEntry[]>([]);
+  const [recurring, setRecurring] = useState<RecurringOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [toast, setToast] = useState('');
@@ -22,15 +23,19 @@ export default function CustomerDetailPage() {
   const [tagsDraft, setTagsDraft] = useState('');
   const [autoSendDraft, setAutoSendDraft] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [recurringName, setRecurringName] = useState('');
+  const [recurringInterval, setRecurringInterval] = useState<number>(7);
+  const [creatingRecurring, setCreatingRecurring] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const [customersRes, ordersRes, invoicesRes, ledgerRes] = await Promise.all([
+        const [customersRes, ordersRes, invoicesRes, ledgerRes, recurringRes] = await Promise.all([
           adminFetch('/api/customers'),
           adminFetch(`/api/orders?customerId=${id}`),
           adminFetch(`/api/invoices?customerId=${id}`),
           adminFetch(`/api/keg-ledger?customerId=${id}`),
+          adminFetch(`/api/recurring-orders?customerId=${id}`),
         ]);
         const customers: Customer[] = await customersRes.json();
         const c = customers.find((x) => x.id === id) || null;
@@ -43,6 +48,8 @@ export default function CustomerDetailPage() {
         setOrders(await ordersRes.json());
         setInvoices(await invoicesRes.json());
         setLedger(await ledgerRes.json());
+        const recData = await recurringRes.json().catch(() => []);
+        setRecurring(Array.isArray(recData) ? recData : []);
       } catch (err) {
         console.error('Failed to load customer detail', err);
       } finally {
@@ -66,6 +73,67 @@ export default function CustomerDetailPage() {
   const deliveredOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'completed');
   const outstandingInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue');
   const outstandingAmount = outstandingInvoices.reduce((s, i) => s + i.total, 0);
+
+  // Schedule a recurring order using the customer's most recent order's items
+  // as the template. Easiest flow: customer has placed at least one order
+  // that Mike trusts → admin clicks to clone it into a weekly/biweekly cycle.
+  const createRecurringFromLastOrder = async () => {
+    const last = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    if (!last) return;
+    const name = recurringName.trim() || `Every ${recurringInterval} days`;
+    setCreatingRecurring(true);
+    try {
+      const res = await adminFetch('/api/recurring-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customer?.id,
+          name,
+          items: last.items,
+          intervalDays: recurringInterval,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setRecurring((prev) => [created, ...prev]);
+        setRecurringName('');
+        setToast(`Scheduled "${name}". Next order auto-creates in ${recurringInterval} days.`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast(data?.error || 'Failed to schedule.');
+      }
+    } catch {
+      setToast('Failed to schedule.');
+    } finally {
+      setCreatingRecurring(false);
+      window.setTimeout(() => setToast(''), 4000);
+    }
+  };
+
+  const toggleRecurring = async (rec: RecurringOrder) => {
+    try {
+      const res = await adminFetch('/api/recurring-orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: rec.id, active: !rec.active }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRecurring((prev) => prev.map((r) => (r.id === rec.id ? updated : r)));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const deleteRecurring = async (recId: string) => {
+    try {
+      const res = await adminFetch('/api/recurring-orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: recId }),
+      });
+      if (res.ok) setRecurring((prev) => prev.filter((r) => r.id !== recId));
+    } catch { /* ignore */ }
+  };
 
   const saveNotes = async () => {
     if (!customer) return;
@@ -296,6 +364,93 @@ export default function CustomerDetailPage() {
               <span key={t} className="badge-sm" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>{t}</span>
             ))}
           </div>
+        )}
+      </section>
+
+      {/* Recurring orders: admin-managed cron-fed templates. Daily cron
+          (/api/cron/recurring-orders at 13:00 UTC) creates a pending order
+          for this customer every interval_days. Pause or delete anytime. */}
+      <section className="card p-5">
+        <div className="mb-3">
+          <span className="section-label">Recurring Orders</span>
+          <p className="text-xs italic mt-1" style={{ color: 'var(--muted)' }}>
+            Daily cron creates a pending order from the saved items every N days. Admin reviews each one before delivery.
+          </p>
+        </div>
+        {/* Quick-create from last order */}
+        {orders.length > 0 && (
+          <div className="mb-4 p-3 bg-charcoal-200 rounded-lg border border-white/[0.04]">
+            <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+              Clone the customer&rsquo;s most recent order ({orders[0]?.id}) as a template:
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={recurringName}
+                onChange={(e) => setRecurringName(e.target.value)}
+                placeholder="Name (optional, e.g. Weekly Tuesday)"
+                className="input flex-1 min-w-[180px] text-sm"
+              />
+              <select
+                value={recurringInterval}
+                onChange={(e) => setRecurringInterval(Number(e.target.value))}
+                className="input max-w-[140px] text-sm"
+              >
+                <option value={7}>Every 7 days</option>
+                <option value={14}>Every 14 days</option>
+                <option value={28}>Every 28 days</option>
+              </select>
+              <button
+                onClick={createRecurringFromLastOrder}
+                disabled={creatingRecurring}
+                className="btn-primary text-xs"
+              >
+                {creatingRecurring ? 'Scheduling...' : 'Schedule'}
+              </button>
+            </div>
+          </div>
+        )}
+        {recurring.length === 0 ? (
+          <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
+            {orders.length === 0
+              ? 'Place at least one order for this customer first; then you can clone it as a recurring order.'
+              : 'No recurring orders yet.'}
+          </p>
+        ) : (
+          <ul className="border-t border-divider">
+            {recurring.map((r) => (
+              <li key={r.id} className="py-3 border-b border-divider flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="font-semibold" style={{ color: 'var(--ink)' }}>
+                    {r.name}
+                    {!r.active && (
+                      <span className="ml-2 text-xs font-normal italic" style={{ color: 'var(--muted)' }}>
+                        (paused)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    Every {r.intervalDays} days &middot; {r.items.length} item{r.items.length === 1 ? '' : 's'} &middot;
+                    next {r.active ? formatDate(r.nextRunAt) : 'paused'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => toggleRecurring(r)}
+                  className="btn-ghost text-xs"
+                  style={{ color: r.active ? 'var(--muted)' : 'var(--brass)' }}
+                >
+                  {r.active ? 'Pause' : 'Resume'}
+                </button>
+                <button
+                  onClick={() => deleteRecurring(r.id)}
+                  className="btn-ghost text-xs"
+                  style={{ color: 'var(--ruby)' }}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
