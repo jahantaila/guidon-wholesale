@@ -28,6 +28,15 @@ export async function POST(request: NextRequest) {
     if (!customerRow) {
       return NextResponse.json({ error: 'No customer account found for this email.' }, { status: 401 });
     }
+    // Defensive: reject login for archived customers even if their Supabase
+    // Auth user survived (normal archive flow deletes the auth user, but
+    // legacy rows or out-of-band admin actions might leave one orphaned).
+    if (customerRow.archived_at) {
+      return NextResponse.json(
+        { error: 'This account has been archived. Please contact the brewery.' },
+        { status: 403 },
+      );
+    }
 
     const customer = {
       id: customerRow.id,
