@@ -229,6 +229,25 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 
   useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); fetchRecurring(); }, [fetchOrders, fetchBalances, fetchInvoices, fetchRecurring]);
 
+  const cancelOrder = useCallback(async (orderId: string) => {
+    if (!window.confirm('Cancel this order? You can place a new one anytime.')) return;
+    try {
+      const res = await fetch('/api/portal/cancel-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, authEmail: customer.email }),
+      });
+      if (res.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || 'Failed to cancel.');
+      }
+    } catch {
+      alert('Failed to cancel.');
+    }
+  }, [customer.email]);
+
   const toggleRecurringActive = useCallback(async (rec: RecurringOrder) => {
     try {
       const res = await fetch('/api/recurring-orders', {
@@ -367,6 +386,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             expandedOrderId={expandedOrderId}
             setExpandedOrderId={setExpandedOrderId}
             onReorder={handleReorder}
+            onCancel={cancelOrder}
             recurring={recurring}
             onToggleRecurring={toggleRecurringActive}
           />
@@ -1262,7 +1282,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 /* ================================================================== */
 
 function OrdersTab({
-  orders, loadingOrders, expandedOrderId, setExpandedOrderId, onReorder,
+  orders, loadingOrders, expandedOrderId, setExpandedOrderId, onReorder, onCancel,
   recurring, onToggleRecurring,
 }: {
   orders: Order[];
@@ -1270,6 +1290,7 @@ function OrdersTab({
   expandedOrderId: string | null;
   setExpandedOrderId: (id: string | null) => void;
   onReorder: (orderId?: string) => void;
+  onCancel: (orderId: string) => void;
   recurring: RecurringOrder[];
   onToggleRecurring: (r: RecurringOrder) => void;
 }) {
@@ -1339,6 +1360,15 @@ function OrdersTab({
                   >
                     Reorder
                   </button>
+                  {order.status === 'pending' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onCancel(order.id); }}
+                      className="text-[10px] font-heading font-bold text-red-400/50 hover:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-all"
+                      title="Cancel this order"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </div>
               <p className="text-xs text-cream/20 mt-1 truncate">{order.items.map((i) => i.productName).join(', ')}</p>
