@@ -23,7 +23,7 @@ interface ProductForm {
   limitedRelease: boolean;
   imageUrl: string;
   awards: string[];
-  sizes: { size: KegSize; price: number; deposit: number; inventoryCount: number; available: boolean }[];
+  sizes: { size: KegSize; price: number; deposit: number; inventoryCount: number; parLevel: number | null; available: boolean }[];
 }
 
 const DEFAULT_DEPOSITS: Record<KegSize, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
@@ -32,7 +32,7 @@ const emptyForm: ProductForm = {
   name: '', style: '', abv: 0, ibu: '', description: '', category: 'Ale',
   available: true, newRelease: false, limitedRelease: false, imageUrl: '',
   awards: [],
-  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, available: true })),
+  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, parLevel: null, available: true })),
 };
 
 export default function ProductsPage() {
@@ -90,6 +90,7 @@ export default function ProductsPage() {
               price: existing.price,
               deposit: existing.deposit,
               inventoryCount: 0, // start duplicates at 0 stock
+              parLevel: existing.parLevel ?? null,
               available: existing.available ?? true,
             }
           : {
@@ -97,6 +98,7 @@ export default function ProductsPage() {
               price: 0,
               deposit: 0,
               inventoryCount: 0,
+              parLevel: null,
               available: false,
             };
       }),
@@ -127,9 +129,10 @@ export default function ProductsPage() {
               price: existing.price,
               deposit: existing.deposit,
               inventoryCount: existing.inventoryCount ?? 0,
+              parLevel: existing.parLevel ?? null,
               available: existing.available ?? true,
             }
-          : { size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, available: false };
+          : { size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, parLevel: null, available: false };
       }),
     });
     setEditingId(product.id);
@@ -580,10 +583,9 @@ export default function ProductsPage() {
                             disabled={!sizeData?.available}
                           />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                           <label className="text-[10px] text-cream/35 block mb-0.5">
                             Inventory
-                            <span className="text-cream/20 ml-1">(on-hand kegs)</span>
                           </label>
                           <input
                             type="number"
@@ -597,7 +599,26 @@ export default function ProductsPage() {
                             disabled={!sizeData?.available}
                           />
                         </div>
-                        <label className="col-span-3 flex items-center gap-2 cursor-pointer">
+                        <div className="col-span-2">
+                          <label className="text-[10px] text-cream/35 block mb-0.5" title="Brewing alert fires when inventory < par">
+                            Par
+                          </label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            placeholder="—"
+                            className="input text-sm py-1.5"
+                            value={sizeData?.parLevel ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim();
+                              updateSize(size, 'parLevel', v === '' ? null : (parseInt(v) || 0));
+                            }}
+                            disabled={!sizeData?.available}
+                            title="Minimum on-hand kegs before a brewing alert fires. Leave blank to use default (5)."
+                          />
+                        </div>
+                        <label className="col-span-2 flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={sizeData?.available ?? false}

@@ -69,6 +69,10 @@ alter table products add column if not exists awards jsonb not null default '[]'
 alter table products add column if not exists new_release boolean not null default false;
 alter table products add column if not exists limited_release boolean not null default false;
 alter table product_sizes add column if not exists inventory_count int not null default 0;
+-- par_level is the "brew me more" threshold. When inventory_count drops
+-- below par_level, dashboard surfaces a brewing alert. NULL means no
+-- threshold configured for that size (falls back to a global default).
+alter table product_sizes add column if not exists par_level int;
 
 alter table products enable row level security;
 drop policy if exists "Public read access" on products;

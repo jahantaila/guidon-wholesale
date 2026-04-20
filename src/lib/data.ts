@@ -60,11 +60,12 @@ function rowToProduct(row: any): Product {
     awards: Array.isArray(row.awards) ? row.awards : [],
     newRelease: row.new_release ?? false,
     limitedRelease: row.limited_release ?? false,
-    sizes: (row.product_sizes || []).map((s: { size: string; price: number; deposit: number; inventory_count?: number; available?: boolean }) => ({
+    sizes: (row.product_sizes || []).map((s: { size: string; price: number; deposit: number; inventory_count?: number; par_level?: number | null; available?: boolean }) => ({
       size: s.size,
       price: s.price,
       deposit: s.deposit,
       inventoryCount: s.inventory_count ?? 0,
+      parLevel: s.par_level ?? null,
       available: s.available ?? true,
     })),
   };
@@ -295,6 +296,7 @@ export async function createProduct(product: Product): Promise<Product> {
       };
       if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
       if (size.available !== undefined) sizeRow.available = size.available;
+      if (size.parLevel !== undefined) sizeRow.par_level = size.parLevel;
       const { error: sizeError } = await sb.from('product_sizes').insert(sizeRow);
       if (sizeError) throw sizeError;
     }
@@ -335,7 +337,8 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
           deposit: size.deposit,
         };
         if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
-      if (size.available !== undefined) sizeRow.available = size.available;
+        if (size.available !== undefined) sizeRow.available = size.available;
+        if (size.parLevel !== undefined) sizeRow.par_level = size.parLevel;
         const { error: sizeError } = await sb.from('product_sizes').insert(sizeRow);
         if (sizeError) throw sizeError;
       }

@@ -148,7 +148,18 @@ export async function PUT(request: NextRequest) {
   // pending -> confirmed: decrement inventory AND post keg ledger deposits +
   // returns. Confirmation is when the brewery commits to the order — kegs
   // are earmarked for the customer, so that's when keg tracking kicks in.
+  // Idempotent guard: if ledger entries already exist for this order
+  // (e.g. order was confirmed, cancelled back to pending, and is now being
+  // re-confirmed), skip the keg-ledger insert pass to avoid duplicates.
   if (updates.status === 'confirmed' && existingOrder.status === 'pending') {
+    const priorLedger = await (async () => {
+      try {
+        const { getKegLedgerByCustomer } = await import('@/lib/data');
+        const rows = await getKegLedgerByCustomer(existingOrder.customerId);
+        return rows.filter((r) => r.orderId === existingOrder.id);
+      } catch { return []; }
+    })();
+    const alreadyLedgered = priorLedger.length > 0;
     // Track which sizes cross below the low-stock threshold so we can fire
     // a single digest email instead of N per-order emails.
     const crossed: Array<{ productName: string; size: string; remaining: number }> = [];
@@ -169,38 +180,41 @@ export async function PUT(request: NextRequest) {
 
     // Keg ledger deposits: one row per line item. These count against the
     // customer's outstanding-keg balance until they return the empties.
-    const now = new Date().toISOString();
-    for (const item of existingOrder.items) {
-      const entry: KegLedgerEntry = {
-        id: generateId('kl'),
-        customerId: existingOrder.customerId,
-        orderId: existingOrder.id,
-        type: 'deposit',
-        size: item.size,
-        quantity: item.quantity,
-        depositAmount: item.deposit,
-        totalAmount: item.deposit * item.quantity,
-        date: now,
-        notes: `Order ${existingOrder.id} confirmed`,
-      };
-      await addKegLedgerEntry(entry);
-    }
-    // Returns the customer declared at checkout
-    for (const ret of existingOrder.kegReturns) {
-      const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
-      const entry: KegLedgerEntry = {
-        id: generateId('kl'),
-        customerId: existingOrder.customerId,
-        orderId: existingOrder.id,
-        type: 'return',
-        size: ret.size,
-        quantity: ret.quantity,
-        depositAmount: depositAmounts[ret.size] || 0,
-        totalAmount: -((depositAmounts[ret.size] || 0) * ret.quantity),
-        date: now,
-        notes: `Keg returns with order ${existingOrder.id}`,
-      };
-      await addKegLedgerEntry(entry);
+    // Skip if we already posted entries for this order (re-confirm flow).
+    if (!alreadyLedgered) {
+      const now = new Date().toISOString();
+      for (const item of existingOrder.items) {
+        const entry: KegLedgerEntry = {
+          id: generateId('kl'),
+          customerId: existingOrder.customerId,
+          orderId: existingOrder.id,
+          type: 'deposit',
+          size: item.size,
+          quantity: item.quantity,
+          depositAmount: item.deposit,
+          totalAmount: item.deposit * item.quantity,
+          date: now,
+          notes: `Order ${existingOrder.id} confirmed`,
+        };
+        await addKegLedgerEntry(entry);
+      }
+      // Returns the customer declared at checkout
+      for (const ret of existingOrder.kegReturns) {
+        const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
+        const entry: KegLedgerEntry = {
+          id: generateId('kl'),
+          customerId: existingOrder.customerId,
+          orderId: existingOrder.id,
+          type: 'return',
+          size: ret.size,
+          quantity: ret.quantity,
+          depositAmount: depositAmounts[ret.size] || 0,
+          totalAmount: -((depositAmounts[ret.size] || 0) * ret.quantity),
+          date: now,
+          notes: `Keg returns with order ${existingOrder.id}`,
+        };
+        await addKegLedgerEntry(entry);
+      }
     }
   }
 

@@ -153,11 +153,21 @@ export default function AdminDashboard() {
     .reduce((s, o) => s + o.total, 0);
   const totalCustomers = customers.filter((c) => !c.archivedAt).length;
 
-  // Low inventory — any product-size with count < 5
+  // Low inventory: any size with inventoryCount < par_level (or default 5).
+  // When par_level is explicitly set by admin, respect that per-size.
+  const DEFAULT_PAR = 5;
   const lowInventory = products.flatMap((p) =>
     p.sizes
-      .filter((s) => s.inventoryCount < 5)
-      .map((s) => ({ name: p.name, size: s.size, count: s.inventoryCount })),
+      .filter((s) => {
+        const par = (s.parLevel ?? null) !== null ? s.parLevel! : DEFAULT_PAR;
+        return s.inventoryCount < par;
+      })
+      .map((s) => ({
+        name: p.name,
+        size: s.size,
+        count: s.inventoryCount,
+        par: (s.parLevel ?? null) !== null ? s.parLevel! : DEFAULT_PAR,
+      })),
   );
 
   // Rolling 14-day revenue bucketed by day (delivered + completed orders only).
@@ -372,14 +382,16 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Low inventory warning — only shown when there's something to flag */}
+      {/* Brewing alert — any size below its par level (admin-set) or the
+          default of 5. Shows "3/10" format so Mike sees both current count
+          and the threshold that triggered it. */}
       {!loading && lowInventory.length > 0 && (
         <div
           className="border-l-2 pl-4 py-2"
           style={{ borderColor: 'var(--ember)', background: 'color-mix(in srgb, var(--ember) 6%, transparent)' }}
         >
           <span className="section-label mb-1 block" style={{ color: 'var(--ember)' }}>
-            Low Stock
+            Brewing Alert — Below Par
           </span>
           <p className="text-sm text-[var(--ink)]">
             {lowInventory.slice(0, 5).map((item, idx) => (
@@ -390,6 +402,7 @@ export default function AdminDashboard() {
                 <span className="font-variant-tabular" style={{ color: item.count === 0 ? 'var(--ruby)' : 'var(--ember)' }}>
                   {item.count}
                 </span>
+                <span className="text-[var(--muted)]">/{item.par}</span>
               </span>
             ))}
             {lowInventory.length > 5 && (

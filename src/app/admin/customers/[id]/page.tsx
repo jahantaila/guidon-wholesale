@@ -16,6 +16,8 @@ export default function CustomerDetailPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [ledger, setLedger] = useState<KegLedgerEntry[]>([]);
   const [recurring, setRecurring] = useState<RecurringOrder[]>([]);
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'deposit' | 'return'>('all');
+  const [ledgerSizeFilter, setLedgerSizeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [toast, setToast] = useState('');
@@ -554,12 +556,65 @@ export default function CustomerDetailPage() {
 
       {/* Keg ledger */}
       <section>
-        <span className="section-label mb-3 block">Keg Ledger</span>
+        <div className="flex items-baseline justify-between mb-3 flex-wrap gap-3">
+          <span className="section-label">Keg Ledger</span>
+          {ledger.length > 0 && (() => {
+            const deposits = ledger.filter((e) => e.type === 'deposit').reduce((s, e) => s + e.quantity, 0);
+            const returns = ledger.filter((e) => e.type === 'return').reduce((s, e) => s + e.quantity, 0);
+            const outstanding = deposits - returns;
+            return (
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                <strong style={{ color: 'var(--ink)' }}>{deposits}</strong> sent &middot;{' '}
+                <strong style={{ color: 'var(--pine)' }}>{returns}</strong> returned &middot;{' '}
+                <strong style={{ color: outstanding > 0 ? 'var(--ember)' : 'var(--pine)' }}>{outstanding}</strong> still out
+              </span>
+            );
+          })()}
+        </div>
+
         {ledger.length === 0 ? (
           <p className="italic" style={{ color: 'var(--muted)' }}>
-            No keg movements on record. Kegs appear here when orders are marked delivered or returns are requested.
+            No keg movements on record. Entries appear here when orders are confirmed or returns are requested.
           </p>
         ) : (
+          <>
+            {/* Filter chips: type + size */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(['all', 'deposit', 'return'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setLedgerFilter(t)}
+                  className="px-3 py-1 text-xs font-semibold font-ui border"
+                  style={{
+                    borderRadius: '3px',
+                    borderColor: ledgerFilter === t ? 'var(--brass-dim)' : 'var(--divider)',
+                    background: ledgerFilter === t ? 'var(--brass)' : 'transparent',
+                    color: ledgerFilter === t ? 'var(--paper)' : 'var(--ink)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  {t === 'all' ? 'All' : t === 'deposit' ? 'Deposits' : 'Returns'}
+                </button>
+              ))}
+              <span className="text-xs italic self-center mx-1" style={{ color: 'var(--muted)' }}>&middot;</span>
+              {(['all', ...Array.from(new Set(ledger.map((e) => e.size)))] as string[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setLedgerSizeFilter(s)}
+                  className="px-3 py-1 text-xs font-semibold font-ui border"
+                  style={{
+                    borderRadius: '3px',
+                    borderColor: ledgerSizeFilter === s ? 'var(--brass-dim)' : 'var(--divider)',
+                    background: ledgerSizeFilter === s ? 'var(--brass)' : 'transparent',
+                    color: ledgerSizeFilter === s ? 'var(--paper)' : 'var(--ink)',
+                  }}
+                >
+                  {s === 'all' ? 'All sizes' : s}
+                </button>
+              ))}
+            </div>
+
           <table className="w-full">
             <thead>
               <tr>
@@ -573,6 +628,8 @@ export default function CustomerDetailPage() {
             </thead>
             <tbody>
               {ledger
+                .filter((e) => ledgerFilter === 'all' || e.type === ledgerFilter)
+                .filter((e) => ledgerSizeFilter === 'all' || e.size === ledgerSizeFilter)
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .map((e) => (
                   <tr key={e.id}>
@@ -599,6 +656,7 @@ export default function CustomerDetailPage() {
                 ))}
             </tbody>
           </table>
+          </>
         )}
       </section>
     </div>

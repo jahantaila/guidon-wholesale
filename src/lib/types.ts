@@ -38,6 +38,9 @@ export interface ProductSize {
    * confirmed; can be adjusted manually by admin. 0 means out of stock but
    * checkout doesn't hard-block (brewery can brew-to-order). */
   inventoryCount: number;
+  /** Par level: when inventory drops below this threshold, brewing alert
+   * fires on the dashboard. null/undefined = use global default (5). */
+  parLevel?: number | null;
   /** Whether this size is currently offered for this beer. If false, the
    * customer card shows the size button disabled with a hover tooltip; the
    * size still persists in the DB so admin can re-enable without losing
