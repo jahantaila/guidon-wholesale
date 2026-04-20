@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
  * - Default is draft so admin can review first.
  */
 export async function POST(request: NextRequest) {
+  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  if (!admin) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
   const body = await request.json();
   const orderId: string = body.orderId;
   const autoSend: boolean = body.autoSend === true;
@@ -74,6 +78,10 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    if (!admin) {
+      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+    }
     const body = await request.json();
     const { id, action } = body as { id?: string; action?: string };
     if (!id) {

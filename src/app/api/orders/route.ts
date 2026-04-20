@@ -111,6 +111,10 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  if (!admin) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
   const body = await request.json();
   const { id, ...updates } = body;
 
