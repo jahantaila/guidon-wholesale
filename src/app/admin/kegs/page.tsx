@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useEffect, Fragment } from 'react';
-import { Customer, KegBalance, KegLedgerEntry } from '@/lib/types';
+import { useState, useEffect, Fragment, useCallback } from 'react';
+import { Customer, KegBalance, KegLedgerEntry, KegSize } from '@/lib/types';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
+
+type AdjustForm = { customerId: string; type: 'return' | 'deposit'; size: KegSize; quantity: number; notes: string };
+const emptyAdjust: AdjustForm = { customerId: '', type: 'return', size: '1/2bbl', quantity: 1, notes: '' };
 
 interface CustomerBalance {
   customerId: string;
@@ -28,6 +32,11 @@ export default function KegTrackerPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [ledgerEntries, setLedgerEntries] = useState<KegLedgerEntry[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustForm, setAdjustForm] = useState<AdjustForm>(emptyAdjust);
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [adjustError, setAdjustError] = useState('');
+  const [toast, setToast] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -61,6 +70,53 @@ export default function KegTrackerPage() {
 
   const handleExport = () => window.open('/api/keg-ledger/export', '_blank');
 
+  const openAdjust = (customerId: string, type: 'return' | 'deposit') => {
+    setAdjustForm({ ...emptyAdjust, customerId, type });
+    setAdjustError('');
+    setAdjustOpen(true);
+  };
+
+  const refreshBalances = useCallback(async () => {
+    try {
+      const res = await adminFetch('/api/keg-ledger?balances=true');
+      const data = await res.json();
+      setBalances(Array.isArray(data) ? data : []);
+    } catch {}
+  }, []);
+
+  const submitAdjust = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdjustSaving(true);
+    setAdjustError('');
+    try {
+      const res = await adminFetch('/api/keg-ledger', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: adjustForm.customerId,
+          type: adjustForm.type,
+          size: adjustForm.size,
+          quantity: adjustForm.quantity,
+          notes: adjustForm.notes ? `Admin: ${adjustForm.notes}` : 'Admin adjustment',
+        }),
+      });
+      if (res.ok) {
+        setAdjustOpen(false);
+        setToast(`${adjustForm.type === 'return' ? 'Return' : 'Deposit'} recorded.`);
+        window.setTimeout(() => setToast(''), 3000);
+        await refreshBalances();
+        if (expandedId === adjustForm.customerId) {
+          const lr = await adminFetch(`/api/keg-ledger?customerId=${adjustForm.customerId}`);
+          const ld = await lr.json();
+          setLedgerEntries(Array.isArray(ld) ? ld : []);
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAdjustError(data?.error || 'Save failed.');
+      }
+    } catch { setAdjustError('Save failed. Try again.'); }
+    finally { setAdjustSaving(false); }
+  }, [adjustForm, expandedId, refreshBalances]);
+
   const totals = balances.reduce((acc, b) => ({
     half: acc.half + (b.balance['1/2bbl'] || 0),
     quarter: acc.quarter + (b.balance['1/4bbl'] || 0),
@@ -70,6 +126,7 @@ export default function KegTrackerPage() {
 
   return (
     <div className="space-y-6">
+      {toast && <div className="toast" style={{ color: 'var(--pine)' }}>{toast}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="section-label mb-1 block">Inventory</span>
@@ -113,6 +170,7 @@ export default function KegTrackerPage() {
                   <th className="table-header text-center">1/4 Barrel</th>
                   <th className="table-header text-center">1/6 Barrel</th>
                   <th className="table-header text-center">Total Out</th>
+                  <th className="table-header text-right">Record</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
@@ -138,10 +196,23 @@ export default function KegTrackerPage() {
                         <td className="table-cell text-center">
                           <span className={cn('badge font-black', getCountColor(total))}>{total}</span>
                         </td>
+                        <td className="table-cell text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => openAdjust(entry.customerId, 'return')}
+                              className="text-xs font-semibold hover:underline" style={{ color: 'var(--pine)' }}>
+                              Return
+                            </button>
+                            <span className="text-cream/20">·</span>
+                            <button onClick={() => openAdjust(entry.customerId, 'deposit')}
+                              className="text-xs font-semibold hover:underline" style={{ color: 'var(--brass)' }}>
+                              Deposit
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={5} className="bg-white/[0.02] px-6 py-4">
+                          <td colSpan={6} className="bg-white/[0.02] px-6 py-4">
                             <div className="animate-fade-in">
                               <div className="flex items-center gap-2 mb-3">
                                 <div className="w-1 h-4 bg-gold rounded-full" />
@@ -195,6 +266,51 @@ export default function KegTrackerPage() {
           </div>
         )}
       </div>
+
+      {adjustOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl shadow-dark-lg max-w-md w-full p-6 animate-scale-in">
+            <h3 className="font-heading text-xl font-bold text-cream mb-1">
+              Record {adjustForm.type === 'return' ? 'Keg Return' : 'Keg Deposit'}
+            </h3>
+            <p className="text-xs text-cream/40 mb-5">
+              {customerMap.get(adjustForm.customerId)?.businessName || adjustForm.customerId}
+              {adjustForm.type === 'return' ? ' — customer returned kegs in person.' : ' — manual deposit adjustment.'}
+            </p>
+            <form onSubmit={submitAdjust} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-cream/60 mb-1.5">Size</label>
+                  <select value={adjustForm.size} onChange={(e) => setAdjustForm((p) => ({ ...p, size: e.target.value as KegSize }))} className="input">
+                    <option value="1/2bbl">1/2 Barrel</option>
+                    <option value="1/4bbl">1/4 Barrel</option>
+                    <option value="1/6bbl">1/6 Barrel</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-cream/60 mb-1.5">Quantity</label>
+                  <input type="number" min={1} value={adjustForm.quantity}
+                    onChange={(e) => setAdjustForm((p) => ({ ...p, quantity: Math.max(1, Number(e.target.value) || 1) }))}
+                    className="input" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-cream/60 mb-1.5">Notes <span className="text-cream/25 font-normal">(optional)</span></label>
+                <input type="text" value={adjustForm.notes} onChange={(e) => setAdjustForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="e.g. dropped off at brewery" className="input" />
+                <p className="text-[10px] text-cream/25 mt-1">Will appear in the ledger as &ldquo;Admin: {'{your note}'}&rdquo; for the audit trail.</p>
+              </div>
+              {adjustError && <p className="text-red-400 text-sm">{adjustError}</p>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setAdjustOpen(false)} className="btn-secondary px-4 py-2">Cancel</button>
+                <button type="submit" disabled={adjustSaving} className="btn-primary">
+                  {adjustSaving ? 'Saving...' : 'Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
