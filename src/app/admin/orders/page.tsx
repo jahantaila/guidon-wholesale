@@ -95,6 +95,33 @@ export default function OrdersPage() {
     }
   }, []);
 
+  // Inline delivery-date edit from the order expand row. Admin can change
+  // when they'll deliver without touching Supabase.
+  const updateDeliveryDate = useCallback(async (order: Order, newDate: string) => {
+    if (!newDate || newDate === order.deliveryDate) return;
+    setUpdating(order.id);
+    try {
+      const res = await adminFetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id, deliveryDate: newDate }),
+      });
+      if (res.ok) {
+        const updated = await res.json().catch(() => null);
+        setOrders((prev) => prev.map((o) => (o.id === order.id ? (updated ?? { ...o, deliveryDate: newDate }) : o)));
+        setReminderToast(`Delivery for ${order.id} moved to ${newDate}.`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setReminderToast(data?.error || `Failed to update delivery date.`);
+      }
+    } catch {
+      setReminderToast('Network error updating delivery date.');
+    } finally {
+      setUpdating(null);
+      window.setTimeout(() => setReminderToast(''), 4000);
+    }
+  }, []);
+
   const sendReminder = useCallback(async (order: Order) => {
     try {
       const res = await adminFetch('/api/admin/remind-kegs', {
@@ -247,6 +274,7 @@ export default function OrdersPage() {
           setExpandedId={setExpandedId}
           onStatusChange={handleStatusChange}
           sendReminder={sendReminder}
+          updateDeliveryDate={updateDeliveryDate}
           updating={updating}
         />
       )}
@@ -262,6 +290,7 @@ function TableView({
   setExpandedId,
   onStatusChange,
   sendReminder,
+  updateDeliveryDate,
   updating,
 }: {
   orders: Order[];
@@ -271,6 +300,7 @@ function TableView({
   setExpandedId: (id: string | null) => void;
   onStatusChange: (o: Order, next: OrderStatus) => void;
   sendReminder: (o: Order) => void;
+  updateDeliveryDate: (o: Order, newDate: string) => void;
   updating: string | null;
 }) {
   return (
@@ -396,6 +426,24 @@ function TableView({
                         <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
                           Notes: {order.notes}
                         </p>
+                      )}
+                      {/* Inline delivery-date edit for pending/confirmed orders.
+                          Customer calls to push back delivery — admin can adjust
+                          without touching Supabase. Disabled once delivered. */}
+                      {(order.status === 'pending' || order.status === 'confirmed') && (
+                        <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
+                          <span className="section-label" style={{ color: 'var(--muted)' }}>Delivery date</span>
+                          <input
+                            type="date"
+                            defaultValue={order.deliveryDate}
+                            onBlur={(e) => updateDeliveryDate(order, e.target.value)}
+                            className="input text-xs max-w-[160px]"
+                            disabled={updating === order.id}
+                          />
+                          <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
+                            Saves on blur.
+                          </span>
+                        </div>
                       )}
                       {/* Invoice link — drops admin straight into billing context */}
                       <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
