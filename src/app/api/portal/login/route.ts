@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
     response.cookies.set('portal_session', customer.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      // SameSite=None + Secure in prod so /embed/portal works in cross-site
+      // iframes on the brewery's WordPress site. Lax in dev (HTTP localhost
+      // rejects SameSite=None).
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 60 * 60 * 24,
       path: '/',
     });
@@ -95,7 +98,7 @@ export async function DELETE() {
   response.cookies.set('portal_session', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 0,
     path: '/',
   });

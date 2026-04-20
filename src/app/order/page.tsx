@@ -512,31 +512,44 @@ export default function OrderPage() {
                       </div>
                     )}
 
-                    {/* Size selector — radio-style row, not pills */}
+                    {/* Size selector — radio-style row. A size is OFFERED when
+                        it exists in product.sizes AND its .available flag is
+                        not explicitly false. Unavailable sizes stay in the
+                        row so the full 3-slot grid is always visible, but are
+                        grayed/struck with a hover tooltip per the admin request. */}
                     <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
                       {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
-                        const hasSize = product.sizes.find((s) => s.size === kegSize);
+                        const sizeData = product.sizes.find((s) => s.size === kegSize);
+                        const offered = !!sizeData && sizeData.available !== false;
+                        const existsButUnavailable = !!sizeData && sizeData.available === false;
+                        const title = existsButUnavailable
+                          ? `Not currently offered for ${product.name}`
+                          : !sizeData
+                          ? `Not available for ${product.name}`
+                          : undefined;
                         return (
                           <button
                             key={kegSize}
-                            onClick={() => hasSize && updateSelection(product.id, 'size', kegSize)}
-                            disabled={!hasSize}
+                            onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
+                            disabled={!offered}
+                            title={title}
                             className="flex-1 py-2 text-xs font-semibold font-ui transition-colors"
                             style={{
                               background:
-                                sel.size === kegSize && hasSize
+                                sel.size === kegSize && offered
                                   ? 'var(--brass)'
-                                  : !hasSize
+                                  : !offered
                                   ? 'transparent'
                                   : 'var(--paper)',
                               color:
-                                sel.size === kegSize && hasSize
+                                sel.size === kegSize && offered
                                   ? 'var(--paper)'
-                                  : !hasSize
+                                  : !offered
                                   ? 'var(--faint)'
                                   : 'var(--ink)',
-                              cursor: hasSize ? 'pointer' : 'not-allowed',
-                              opacity: hasSize ? 1 : 0.4,
+                              cursor: offered ? 'pointer' : 'not-allowed',
+                              opacity: offered ? 1 : 0.4,
+                              textDecoration: existsButUnavailable ? 'line-through' : 'none',
                             }}
                           >
                             {SIZE_SHORT[kegSize]}

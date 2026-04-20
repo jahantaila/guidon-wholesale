@@ -14,15 +14,24 @@ interface ProductForm {
   name: string;
   style: string;
   abv: number;
+  ibu: number | '';
   description: string;
   category: string;
   available: boolean;
-  sizes: { size: KegSize; price: number; deposit: number }[];
+  newRelease: boolean;
+  limitedRelease: boolean;
+  imageUrl: string;
+  awards: string[];
+  sizes: { size: KegSize; price: number; deposit: number; inventoryCount: number; available: boolean }[];
 }
 
+const DEFAULT_DEPOSITS: Record<KegSize, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
+
 const emptyForm: ProductForm = {
-  name: '', style: '', abv: 0, description: '', category: 'Ale', available: true,
-  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: 0 })),
+  name: '', style: '', abv: 0, ibu: '', description: '', category: 'Ale',
+  available: true, newRelease: false, limitedRelease: false, imageUrl: '',
+  awards: [],
+  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, available: true })),
 };
 
 export default function ProductsPage() {
@@ -59,10 +68,26 @@ export default function ProductsPage() {
       name: product.name,
       style: product.style,
       abv: product.abv,
+      ibu: product.ibu ?? '',
       description: product.description,
       category: product.category,
       available: product.available,
-      sizes: KEG_SIZES.map(s => sizesMap.get(s) || { size: s, price: 0, deposit: 0 }),
+      newRelease: product.newRelease ?? false,
+      limitedRelease: product.limitedRelease ?? false,
+      imageUrl: product.imageUrl ?? '',
+      awards: product.awards ?? [],
+      sizes: KEG_SIZES.map((s) => {
+        const existing = sizesMap.get(s);
+        return existing
+          ? {
+              size: s,
+              price: existing.price,
+              deposit: existing.deposit,
+              inventoryCount: existing.inventoryCount ?? 0,
+              available: existing.available ?? true,
+            }
+          : { size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, available: false };
+      }),
     });
     setEditingId(product.id);
     setModalOpen(true);
@@ -73,17 +98,26 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       const activeSizes = form.sizes.filter(s => s.price > 0);
-      const body = { ...form, sizes: activeSizes };
+      // Normalize: coerce ibu '' -> undefined so the API doesn't persist NaN;
+      // trim empty awards so '' doesn't become a visible bullet on the card.
+      const cleanAwards = form.awards.map(a => a.trim()).filter(Boolean);
+      const body = {
+        ...form,
+        ibu: form.ibu === '' ? undefined : Number(form.ibu),
+        awards: cleanAwards,
+        imageUrl: form.imageUrl.trim() || undefined,
+        sizes: activeSizes,
+      };
 
       if (editingId) {
-        const res = await fetch('/api/products', {
+        const res = await adminFetch('/api/products', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: editingId, ...body }),
         });
         if (res.ok) { setModalOpen(false); await loadProducts(); }
       } else {
-        const res = await fetch('/api/products', {
+        const res = await adminFetch('/api/products', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -97,7 +131,7 @@ export default function ProductsPage() {
   const handleToggleAvailability = async (product: Product) => {
     setToggling(product.id);
     try {
-      const res = await fetch('/api/products', {
+      const res = await adminFetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: product.id, available: !product.available }),
@@ -111,7 +145,7 @@ export default function ProductsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await adminFetch('/api/products', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
@@ -120,10 +154,14 @@ export default function ProductsPage() {
     } catch (err) { console.error('Failed to delete product', err); }
   };
 
-  const updateSize = (sizeKey: KegSize, field: 'price', value: number) => {
-    setForm(prev => ({
+  const updateSize = <K extends keyof ProductForm['sizes'][number]>(
+    sizeKey: KegSize,
+    field: K,
+    value: ProductForm['sizes'][number][K],
+  ) => {
+    setForm((prev) => ({
       ...prev,
-      sizes: prev.sizes.map(s => s.size === sizeKey ? { ...s, [field]: value } : s),
+      sizes: prev.sizes.map((s) => (s.size === sizeKey ? { ...s, [field]: value } : s)),
     }));
   };
 
@@ -390,11 +428,17 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-cream/40 mb-1.5">ABV (%)</label>
                   <input type="number" step="0.1" min="0" max="20" className="input" value={form.abv}
                     onChange={e => setForm(p => ({ ...p, abv: parseFloat(e.target.value) || 0 }))} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cream/40 mb-1.5">IBU <span className="text-xs text-cream/25">(optional)</span></label>
+                  <input type="number" step="1" min="0" max="200" className="input"
+                    placeholder="e.g. 25" value={form.ibu}
+                    onChange={e => setForm(p => ({ ...p, ibu: e.target.value === '' ? '' : parseInt(e.target.value) || 0 }))} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-cream/40 mb-1.5">Category</label>
@@ -410,26 +454,118 @@ export default function ProductsPage() {
                   onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
               </div>
 
-              {/* Keg Sizes Pricing */}
+              {/* Awards / accolades — render as ◆ lines on the product card */}
               <div>
-                <span className="section-label mb-3 block">Keg Pricing</span>
+                <label className="block text-sm font-medium text-cream/40 mb-1.5">
+                  Tags &amp; Awards
+                  <span className="text-xs text-cream/25 ml-2 font-normal">
+                    (one per line — e.g. &ldquo;2025 N.C. Brewers Cup, Gold Medal Winner&rdquo;)
+                  </span>
+                </label>
+                <textarea
+                  className="input resize-none font-mono text-xs"
+                  rows={3}
+                  placeholder="2025 N.C. Brewers Cup, Honorable Mention&#10;Blue Ribbon Winner, Brew Horizons Fest"
+                  value={form.awards.join('\n')}
+                  onChange={(e) => setForm((p) => ({ ...p, awards: e.target.value.split('\n') }))}
+                />
+                <p className="text-[10px] text-cream/20 mt-1">
+                  These render as &#9670; accolades on the customer-facing product card.
+                </p>
+              </div>
+
+              {/* Release flags + image URL */}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04] cursor-pointer hover:border-gold/30 transition-colors">
+                  <input type="checkbox" checked={form.newRelease}
+                    onChange={e => setForm(p => ({ ...p, newRelease: e.target.checked }))}
+                    className="w-4 h-4" />
+                  <span className="text-sm text-cream/60">New Release badge</span>
+                </label>
+                <label className="flex items-center gap-2 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04] cursor-pointer hover:border-gold/30 transition-colors">
+                  <input type="checkbox" checked={form.limitedRelease}
+                    onChange={e => setForm(p => ({ ...p, limitedRelease: e.target.checked }))}
+                    className="w-4 h-4" />
+                  <span className="text-sm text-cream/60">Limited Release badge</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-cream/40 mb-1.5">
+                  Image URL
+                  <span className="text-xs text-cream/25 ml-2 font-normal">(optional)</span>
+                </label>
+                <input type="url" className="input" placeholder="https://... or /images/products/mybeer.png"
+                  value={form.imageUrl}
+                  onChange={e => setForm(p => ({ ...p, imageUrl: e.target.value }))} />
+                <p className="text-[10px] text-cream/20 mt-1">
+                  Leave blank to use the typographic card treatment (no photo).
+                </p>
+              </div>
+
+              {/* Keg Sizes: price + initial inventory + per-size available toggle */}
+              <div>
+                <span className="section-label mb-3 block">Keg Sizes</span>
                 <div className="space-y-2">
-                  {KEG_SIZES.map(size => {
-                    const sizeData = form.sizes.find(s => s.size === size);
+                  {KEG_SIZES.map((size) => {
+                    const sizeData = form.sizes.find((s) => s.size === size);
                     return (
-                      <div key={size} className="flex items-center gap-3 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04]">
-                        <span className="text-xs font-heading font-bold text-cream/50 w-24">{SIZE_LABELS[size]}</span>
-                        <div className="flex-1">
-                          <label className="text-[10px] text-cream/25 block mb-0.5">Price ($)</label>
-                          <input type="number" step="1" min="0" className="input text-sm py-1.5"
+                      <div
+                        key={size}
+                        className="grid grid-cols-12 items-end gap-3 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04]"
+                        style={{ opacity: sizeData?.available ? 1 : 0.5 }}
+                      >
+                        <span className="col-span-3 text-xs font-heading font-bold text-cream/60">
+                          {SIZE_LABELS[size]}
+                        </span>
+                        <div className="col-span-3">
+                          <label className="text-[10px] text-cream/35 block mb-0.5">Price ($)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            className="input text-sm py-1.5"
                             value={sizeData?.price || 0}
-                            onChange={e => updateSize(size, 'price', parseInt(e.target.value) || 0)} />
+                            onChange={(e) => updateSize(size, 'price', parseInt(e.target.value) || 0)}
+                            disabled={!sizeData?.available}
+                          />
                         </div>
+                        <div className="col-span-3">
+                          <label className="text-[10px] text-cream/35 block mb-0.5">
+                            Inventory
+                            <span className="text-cream/20 ml-1">(on-hand kegs)</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            className="input text-sm py-1.5"
+                            value={sizeData?.inventoryCount ?? 0}
+                            onChange={(e) =>
+                              updateSize(size, 'inventoryCount', parseInt(e.target.value) || 0)
+                            }
+                            disabled={!sizeData?.available}
+                          />
+                        </div>
+                        <label className="col-span-3 flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={sizeData?.available ?? false}
+                            onChange={(e) => updateSize(size, 'available', e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-xs text-cream/55">Offered</span>
+                        </label>
                       </div>
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-cream/15 mt-1.5">Set price to $0 to exclude a size from this product.</p>
+                <p className="text-[10px] text-cream/30 mt-1.5">
+                  Uncheck <strong>Offered</strong> to gray the size out on the customer catalog with
+                  a hover tooltip &mdash; the size stays in the DB so you can re-enable it later
+                  without losing the price or inventory. Use this for seasonal offerings or limited
+                  releases like Ciao Matteo (1/6 BBL only).
+                </p>
               </div>
 
               {/* Availability toggle */}

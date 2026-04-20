@@ -30,6 +30,11 @@ export interface ProductSize {
    * confirmed; can be adjusted manually by admin. 0 means out of stock but
    * checkout doesn't hard-block (brewery can brew-to-order). */
   inventoryCount: number;
+  /** Whether this size is currently offered for this beer. If false, the
+   * customer card shows the size button disabled with a hover tooltip; the
+   * size still persists in the DB so admin can re-enable without losing
+   * pricing/inventory data. */
+  available?: boolean;
 }
 
 export interface Product {

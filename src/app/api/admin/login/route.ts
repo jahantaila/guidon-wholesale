@@ -42,13 +42,22 @@ export async function POST(request: NextRequest) {
   if (body.password === adminPassword) {
     clearKey(key);
     const response = NextResponse.json({ success: true });
+    // Cookie attributes:
+    // - SameSite=None + Secure in production so the admin keeps working when
+    //   iframed from a different origin (the user is testing the app
+    //   embedded in a WordPress site; SameSite=Lax would drop the cookie on
+    //   cross-site iframe requests and the admin would appear unauthed).
+    //   SameSite=None requires Secure which requires HTTPS, so dev falls
+    //   back to Lax.
+    // - httpOnly so JS on the page can't read the token.
+    // - 7-day maxAge so brewery staff don't re-login every morning.
+    const isProd = process.env.NODE_ENV === 'production';
     response.cookies.set('admin_session', 'authenticated', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days — brewery staff don't want to log
-                                // back in every morning
+      maxAge: 60 * 60 * 24 * 7,
     });
     return response;
   }

@@ -820,21 +820,32 @@ function ProductsTab({
                       </span>
                     </div>
                   )}
-                  {/* Size selector — fixed 3-slot row, disabled for missing sizes */}
+                  {/* Size selector — 3-slot row. Unavailable sizes stay
+                      visible but disabled with native tooltip + strike-
+                      through, per admin-side availability flag. */}
                   <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
                     {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
-                      const hasSize = product.sizes.find((s) => s.size === kegSize);
+                      const sizeData = product.sizes.find((s) => s.size === kegSize);
+                      const offered = !!sizeData && sizeData.available !== false;
+                      const existsButUnavailable = !!sizeData && sizeData.available === false;
+                      const title = existsButUnavailable
+                        ? `Not currently offered for ${product.name}`
+                        : !sizeData
+                        ? `Not available for ${product.name}`
+                        : undefined;
                       return (
                         <button
                           key={kegSize}
-                          onClick={() => hasSize && updateSelection(product.id, 'size', kegSize)}
-                          disabled={!hasSize}
+                          onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
+                          disabled={!offered}
+                          title={title}
                           className="flex-1 py-1.5 text-xs font-semibold font-ui transition-colors"
                           style={{
-                            background: sel.size === kegSize && hasSize ? 'var(--brass)' : 'transparent',
-                            color: sel.size === kegSize && hasSize ? 'var(--paper)' : !hasSize ? 'var(--faint)' : 'var(--ink)',
-                            cursor: hasSize ? 'pointer' : 'not-allowed',
-                            opacity: hasSize ? 1 : 0.4,
+                            background: sel.size === kegSize && offered ? 'var(--brass)' : 'transparent',
+                            color: sel.size === kegSize && offered ? 'var(--paper)' : !offered ? 'var(--faint)' : 'var(--ink)',
+                            cursor: offered ? 'pointer' : 'not-allowed',
+                            opacity: offered ? 1 : 0.4,
+                            textDecoration: existsButUnavailable ? 'line-through' : 'none',
                           }}
                         >
                           {SIZE_SHORT[kegSize]}

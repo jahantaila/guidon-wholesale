@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Customer } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 interface CustomerForm {
   businessName: string;
@@ -28,7 +29,7 @@ export default function CustomersPage() {
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await fetch('/api/customers');
+      const res = await adminFetch('/api/customers');
       const data = await res.json();
       setCustomers(Array.isArray(data) ? data : []);
     } catch (err) { console.error('Failed to load customers', err); }
@@ -48,23 +49,46 @@ export default function CustomersPage() {
     try {
       const method = editingId ? 'PUT' : 'POST';
       const body = editingId ? { id: editingId, ...form } : form;
-      const res = await fetch('/api/customers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await adminFetch('/api/customers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) { setModalOpen(false); setForm(emptyForm); setEditingId(null); await loadCustomers(); }
     } catch (err) { console.error('Failed to save customer', err); }
     finally { setSaving(false); }
   };
 
+  const [deleteError, setDeleteError] = useState('');
   const handleDelete = async (id: string) => {
+    setDeleteError('');
     try {
-      const res = await fetch('/api/customers', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      if (res.ok) { setDeleteConfirm(null); await loadCustomers(); }
-    } catch (err) { console.error('Failed to delete customer', err); }
+      const res = await adminFetch('/api/customers', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setDeleteConfirm(null);
+        await loadCustomers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        // Most common: FK constraint (the customer has orders / invoices).
+        // Supabase returns a specific message we can detect and translate.
+        const raw = data?.error || '';
+        const friendly = /violates foreign key|still referenced|constraint/i.test(raw)
+          ? 'This customer has orders or invoices on file, so they can\'t be hard-deleted. Edit the row instead (or archive support coming later).'
+          : raw || 'Delete failed.';
+        setDeleteError(friendly);
+        window.setTimeout(() => setDeleteError(''), 6000);
+      }
+    } catch (err) {
+      console.error('Failed to delete customer', err);
+      setDeleteError('Delete failed. Please try again.');
+    }
   };
 
   const updateField = (field: keyof CustomerForm, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
   return (
     <div className="space-y-6">
+      {deleteError && <div className="toast" style={{ color: 'var(--ruby)' }}>{deleteError}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="section-label mb-1 block">Management</span>
