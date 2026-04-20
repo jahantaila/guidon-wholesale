@@ -106,7 +106,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [loginError, setLoginError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navCounts, setNavCounts] = useState<{ pendingOrders: number; pendingApps: number }>({ pendingOrders: 0, pendingApps: 0 });
   const pathname = usePathname();
+
+  // Poll nav badge counts every 60s so Mike sees new applications / pending
+  // orders without manual reload. Fires only when authenticated.
+  useEffect(() => {
+    if (!authenticated) return;
+    let stop = false;
+    const refresh = async () => {
+      try {
+        const r = await fetch('/api/admin/stats', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (stop) return;
+        setNavCounts({ pendingOrders: data?.pendingOrders ?? 0, pendingApps: data?.pendingApplications ?? 0 });
+      } catch { /* ignore */ }
+    };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [authenticated]);
 
   useEffect(() => {
     // admin_session is HTTP-only so document.cookie can't see it. Probe the
@@ -195,6 +215,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
             const Icon = item.icon;
+            const badge =
+              item.href === '/admin/orders' ? navCounts.pendingOrders :
+              item.href === '/admin/applications' ? navCounts.pendingApps :
+              0;
             return (
               <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
                 className={cn(
@@ -204,7 +228,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     : 'text-cream/30 hover:bg-white/[0.03] hover:text-cream/50'
                 )}>
                 <Icon className={isActive ? 'text-gold' : ''} />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {badge > 0 && (
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{ background: 'var(--brass)', color: 'var(--paper)' }}
+                  >
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
