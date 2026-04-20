@@ -82,9 +82,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
 
   useEffect(() => {
-    const hasAuth = document.cookie.includes('admin_session');
-    setAuthenticated(hasAuth);
-    setChecking(false);
+    // admin_session is HTTP-only so document.cookie can't see it. Probe the
+    // server instead.
+    fetch('/api/admin/login')
+      .then((r) => setAuthenticated(r.ok))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
   }, []);
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
