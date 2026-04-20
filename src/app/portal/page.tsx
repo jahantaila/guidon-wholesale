@@ -231,15 +231,20 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
   // click so the child effect can detect re-triggers even if the items
   // array is identical.
   const [reorderSeed, setReorderSeed] = useState<{ nonce: number; items: OrderItem[] } | null>(null);
-  const handleReorder = useCallback(() => {
+  // Reorder accepts an optional orderId so the per-row Reorder buttons can
+  // seed from any past order, not just the most recent one. Defaults to
+  // the latest order when called with no argument (used by the hero
+  // "Reorder Last" button).
+  const handleReorder = useCallback((orderId?: string) => {
     if (orders.length === 0) return;
-    const lastOrder = [...orders].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )[0];
-    setReorderSeed({ nonce: Date.now(), items: lastOrder.items });
+    const target = orderId
+      ? orders.find((o) => o.id === orderId)
+      : [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    if (!target) return;
+    setReorderSeed({ nonce: Date.now(), items: target.items });
     setTab('products');
     setReorderToast(
-      `Added ${lastOrder.items.length} item${lastOrder.items.length === 1 ? '' : 's'} from ${lastOrder.id} to your cart. Review and checkout when ready.`,
+      `Added ${target.items.length} item${target.items.length === 1 ? '' : 's'} from ${target.id} to your cart. Review and checkout when ready.`,
     );
     window.setTimeout(() => setReorderToast(''), 5000);
   }, [orders]);
@@ -376,7 +381,7 @@ function OverviewTab({
   onSwitchTab: (tab: Tab) => void;
   totalSpent: number;
   totalKegsOut: number;
-  onReorder: () => void;
+  onReorder: (orderId?: string) => void;
 }) {
   const recentOrders = orders.slice(0, 5);
 
@@ -534,7 +539,27 @@ function ProductsTab({
   const [search, setSearch] = useState('');
   const [sizeFilter, setSizeFilter] = useState<string>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Cart persists per-customer in localStorage so closing the tab + returning
+  // doesn't wipe a half-built order. Scoped by customerId to avoid leaking
+  // between accounts on shared devices. Initialized lazily via a function so
+  // we only hit localStorage once on mount.
+  const cartStorageKey = `guidon_cart_${customerId}`;
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(cartStorageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (cart.length === 0) window.localStorage.removeItem(cartStorageKey);
+      else window.localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+    } catch { /* storage full, ignore */ }
+  }, [cart, cartStorageKey]);
   const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
@@ -1008,7 +1033,7 @@ function OrdersTab({
   loadingOrders: boolean;
   expandedOrderId: string | null;
   setExpandedOrderId: (id: string | null) => void;
-  onReorder: () => void;
+  onReorder: (orderId?: string) => void;
 }) {
   return (
     <div className="animate-fade-in">
@@ -1036,9 +1061,9 @@ function OrdersTab({
                   <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
                   <span className="text-sm font-heading font-bold text-cream">{formatCurrency(order.total)}</span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); onReorder(); }}
+                    onClick={(e) => { e.stopPropagation(); onReorder(order.id); }}
                     className="text-[10px] font-heading font-bold text-gold/50 hover:text-gold px-2 py-1 rounded-lg hover:bg-gold/10 transition-all"
-                    title="Reorder"
+                    title={`Add items from ${order.id} to cart`}
                   >
                     Reorder
                   </button>
