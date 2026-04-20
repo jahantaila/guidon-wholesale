@@ -98,6 +98,8 @@ export interface Invoice {
   totalDeposit: number;
   total: number;
   issuedAt: string;
+  /** Set when admin transitions draft -> unpaid (clicks Send Invoice). */
+  sentAt?: string | null;
   paidAt: string | null;
 }
 

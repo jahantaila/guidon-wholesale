@@ -104,6 +104,7 @@ function rowToInvoice(row: any): Invoice {
     totalDeposit: row.total_deposit,
     total: row.total,
     issuedAt: row.issued_at,
+    sentAt: row.sent_at ?? null,
     paidAt: row.paid_at,
   };
 }
@@ -574,6 +575,7 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
     const row: Record<string, unknown> = {};
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.paidAt !== undefined) row.paid_at = updates.paidAt;
+    if (updates.sentAt !== undefined) row.sent_at = updates.sentAt;
     const { data, error } = await sb
       .from('invoices')
       .update(row)
@@ -589,6 +591,59 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
   invoices[index] = { ...invoices[index], ...updates };
   writeJSON('invoices.json', invoices);
   return invoices[index];
+}
+
+// ─── Settings (admin-editable config) ─────────────────────────────────────────
+
+export async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('settings')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle();
+    if (error || !data) return fallback;
+    return (data.value as T) ?? fallback;
+  }
+  try {
+    const filePath = path.join(dataDir, 'settings.json');
+    if (!fs.existsSync(filePath)) return fallback;
+    const all = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
+    return (all[key] as T) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function setSetting<T>(key: string, value: T): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb
+      .from('settings')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) throw error;
+    return;
+  }
+  const filePath = path.join(dataDir, 'settings.json');
+  let all: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(filePath)) {
+      all = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    }
+  } catch {
+    // start fresh on parse error
+  }
+  all[key] = value;
+  writeJSON('settings.json', all);
+}
+
+export async function getNotificationEmails(): Promise<string[]> {
+  const fallback = process.env.EMAIL_ADMIN
+    ? process.env.EMAIL_ADMIN.split(',').map((s) => s.trim()).filter(Boolean)
+    : ['sales@guidonbrewing.com'];
+  const saved = await getSetting<string[]>('notification_emails', fallback);
+  return Array.isArray(saved) && saved.length > 0 ? saved : fallback;
 }
 
 // ─── Keg Ledger ────────────────────────────────────────────────────────────────

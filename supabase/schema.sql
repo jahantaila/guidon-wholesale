@@ -207,6 +207,25 @@ drop policy if exists "Service role full access" on applications;
 create policy "Service role full access" on applications using (true) with check (true);
 
 -- ============================================================
+-- SETTINGS (admin-editable config: notification emails, etc.)
+-- ============================================================
+create table if not exists settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table settings enable row level security;
+drop policy if exists "Service role full access" on settings;
+create policy "Service role full access" on settings
+  using (true) with check (true);
+
+-- Default notification recipients if no row exists yet.
+insert into settings (key, value)
+  values ('notification_emails', '["sales@guidonbrewing.com"]'::jsonb)
+  on conflict (key) do nothing;
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 create index if not exists idx_orders_customer_id on orders(customer_id);

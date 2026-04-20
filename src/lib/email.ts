@@ -18,6 +18,7 @@
  */
 
 import { Resend } from 'resend';
+import { getNotificationEmails } from './data';
 
 type SendArgs = {
   to: string | string[];
@@ -33,8 +34,21 @@ function fromAddress(): string {
   return process.env.EMAIL_FROM || FROM_FALLBACK;
 }
 
-function adminAddress(): string | null {
-  return process.env.EMAIL_ADMIN || null;
+/**
+ * Admin notification recipients, pulled from the admin-editable settings
+ * table first, falling back to EMAIL_ADMIN env, then to a sensible default.
+ * Called on every send, so changes in the settings UI take effect
+ * immediately for subsequent events.
+ */
+async function adminRecipients(): Promise<string[]> {
+  try {
+    return await getNotificationEmails();
+  } catch {
+    if (process.env.EMAIL_ADMIN) {
+      return process.env.EMAIL_ADMIN.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return ['sales@guidonbrewing.com'];
+  }
 }
 
 let _client: Resend | null | undefined;
@@ -226,14 +240,16 @@ export async function notifyOrderPlaced(args: {
       subject: `Order ${args.orderId} received — delivery ${args.deliveryDate}`,
       html: customerHtml,
     }),
-    adminAddress()
-      ? send({
-          to: adminAddress()!,
-          subject: `New order: ${args.businessName} (${args.orderId})`,
-          html: adminHtml,
-          replyTo: args.customerEmail,
-        })
-      : Promise.resolve({ ok: true }),
+    (async () => {
+      const adminTo = await adminRecipients();
+      if (adminTo.length === 0) return { ok: true } as const;
+      return send({
+        to: adminTo,
+        subject: `New order: ${args.businessName} (${args.orderId})`,
+        html: adminHtml,
+        replyTo: args.customerEmail,
+      });
+    })(),
   ]);
 }
 
@@ -319,14 +335,16 @@ export async function notifyApplicationSubmitted(args: {
       subject: 'Guidon Brewing — Application received',
       html: applicantHtml,
     }),
-    adminAddress()
-      ? send({
-          to: adminAddress()!,
-          subject: `New application: ${args.businessName}`,
-          html: adminHtml,
-          replyTo: args.applicantEmail,
-        })
-      : Promise.resolve({ ok: true }),
+    (async () => {
+      const adminTo = await adminRecipients();
+      if (adminTo.length === 0) return { ok: true } as const;
+      return send({
+        to: adminTo,
+        subject: `New application: ${args.businessName}`,
+        html: adminHtml,
+        replyTo: args.applicantEmail,
+      });
+    })(),
   ]);
 }
 

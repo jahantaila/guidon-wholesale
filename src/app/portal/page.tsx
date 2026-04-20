@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Customer, Order, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
+import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
 
@@ -187,50 +187,28 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 
   useEffect(() => { fetchOrders(); fetchBalances(); fetchInvoices(); }, [fetchOrders, fetchBalances, fetchInvoices]);
 
-  // Quick reorder — places an identical order to the most recent one.
-  // Delivery date defaults to 7 days out; notes carry a reorder marker.
+  // Reorder-to-cart. Adds the most recent order's items to the ProductsTab
+  // cart and switches to that tab so the user can review, adjust, add
+  // returns, pick a delivery date, and checkout. Prevents accidental
+  // one-click reorders (the prior implementation placed the order directly,
+  // which was dangerous if a customer misclicked).
   const [reorderToast, setReorderToast] = useState<string>('');
-  const [reordering, setReordering] = useState(false);
-  const handleReorder = useCallback(async () => {
+  // Seed payload handed to ProductsTab. Bumps a nonce on every reorder
+  // click so the child effect can detect re-triggers even if the items
+  // array is identical.
+  const [reorderSeed, setReorderSeed] = useState<{ nonce: number; items: OrderItem[] } | null>(null);
+  const handleReorder = useCallback(() => {
     if (orders.length === 0) return;
     const lastOrder = [...orders].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     )[0];
-    setReordering(true);
-    try {
-      const deliveryDate = new Date();
-      deliveryDate.setDate(deliveryDate.getDate() + 7);
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customer.id,
-          items: lastOrder.items,
-          kegReturns: [],
-          subtotal: lastOrder.subtotal,
-          totalDeposit: lastOrder.totalDeposit,
-          total: lastOrder.subtotal + lastOrder.totalDeposit,
-          deliveryDate: deliveryDate.toISOString().slice(0, 10),
-          notes: `Reorder of ${lastOrder.id}`,
-        }),
-      });
-      if (res.ok) {
-        const newOrder = await res.json();
-        setReorderToast(`Placed new order ${newOrder.id} — delivery ${deliveryDate.toLocaleDateString()}.`);
-        fetchOrders();
-        window.setTimeout(() => setReorderToast(''), 4000);
-      } else {
-        setReorderToast('Reorder failed. Try again or browse the catalog.');
-        window.setTimeout(() => setReorderToast(''), 4000);
-      }
-    } catch (err) {
-      console.error('Reorder failed', err);
-      setReorderToast('Reorder failed. Try again or browse the catalog.');
-      window.setTimeout(() => setReorderToast(''), 4000);
-    } finally {
-      setReordering(false);
-    }
-  }, [orders, customer.id, fetchOrders]);
+    setReorderSeed({ nonce: Date.now(), items: lastOrder.items });
+    setTab('products');
+    setReorderToast(
+      `Added ${lastOrder.items.length} item${lastOrder.items.length === 1 ? '' : 's'} from ${lastOrder.id} to your cart. Review and checkout when ready.`,
+    );
+    window.setTimeout(() => setReorderToast(''), 5000);
+  }, [orders]);
 
   const totalSpent = useMemo(() => orders.reduce((sum, o) => sum + o.total, 0), [orders]);
   const totalKegsOut = useMemo(() => {
@@ -314,7 +292,12 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
           />
         )}
         {tab === 'products' && (
-          <ProductsTab customerId={customer.id} onOrderPlaced={() => { fetchOrders(); setTab('orders'); }} />
+          <ProductsTab
+            customerId={customer.id}
+            onOrderPlaced={() => { fetchOrders(); setTab('orders'); }}
+            seedCart={reorderSeed}
+            onSeedConsumed={() => setReorderSeed(null)}
+          />
         )}
         {tab === 'orders' && (
           <OrdersTab
@@ -501,7 +484,17 @@ const BEER_COLORS: Record<string, string> = {
   'Lager': 'from-yellow-400/20 to-amber-500/15',
 };
 
-function ProductsTab({ customerId, onOrderPlaced }: { customerId: string; onOrderPlaced: () => void }) {
+function ProductsTab({
+  customerId,
+  onOrderPlaced,
+  seedCart,
+  onSeedConsumed,
+}: {
+  customerId: string;
+  onOrderPlaced: () => void;
+  seedCart?: { nonce: number; items: OrderItem[] } | null;
+  onSeedConsumed?: () => void;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -517,8 +510,35 @@ function ProductsTab({ customerId, onOrderPlaced }: { customerId: string; onOrde
   const [submitError, setSubmitError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
 
+  // Consume reorder seed: merge the seeded items into the cart.
+  // Keyed by nonce so repeated reorders trigger even if the items array
+  // is reference-identical.
   useEffect(() => {
-    fetch('/api/products')
+    if (!seedCart) return;
+    setCart((prev) => {
+      const next = [...prev];
+      for (const item of seedCart.items) {
+        const existing = next.find((c) => c.productId === item.productId && c.size === item.size);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          next.push({
+            productId: item.productId,
+            productName: item.productName,
+            size: item.size,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            deposit: item.deposit,
+          });
+        }
+      }
+      return next;
+    });
+    onSeedConsumed?.();
+  }, [seedCart?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetch('/api/products', { cache: 'no-store' })
       .then((r) => r.json())
       .then((data: Product[]) => { setProducts(data.filter((p) => p.available)); setLoading(false); })
       .catch(() => setLoading(false));
