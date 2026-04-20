@@ -378,9 +378,10 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         {tab === 'products' && (
           <ProductsTab
             customerId={customer.id}
-            onOrderPlaced={() => { fetchOrders(); setTab('orders'); }}
+            onOrderPlaced={() => { fetchOrders(); fetchBalances(); setTab('orders'); }}
             seedCart={reorderSeed}
             onSeedConsumed={() => setReorderSeed(null)}
+            balances={balances}
           />
         )}
         {tab === 'orders' && (
@@ -576,11 +577,13 @@ function ProductsTab({
   onOrderPlaced,
   seedCart,
   onSeedConsumed,
+  balances,
 }: {
   customerId: string;
   onOrderPlaced: () => void;
   seedCart?: { nonce: number; items: OrderItem[] } | null;
   onSeedConsumed?: () => void;
+  balances?: KegBalance | null;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1185,13 +1188,23 @@ function ProductsTab({
                 ))}
               </div>
 
-              {/* Keg Returns — always visible with 3 size rows starting at 0,
-                  so customer can't miss the option. Enter 0 if no returns. */}
+              {/* Keg Returns — rows are derived from the customer's
+                  outstanding-keg balance (each size they actually have
+                  out). Falls back to the legacy 3 sizes if they have no
+                  outstanding kegs yet. */}
               <div>
                 <span className="section-label mb-2 block">Keg Returns</span>
                 <p className="text-xs text-cream/35 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
                 <div className="space-y-2">
-                  {KEG_SIZES.map((size) => {
+                  {(() => {
+                    const outstandingSizes = balances
+                      ? Object.entries(balances).filter(([, n]) => (n as number) > 0).map(([k]) => k)
+                      : [];
+                    const sizesToRender = outstandingSizes.length > 0
+                      ? outstandingSizes
+                      : ['1/2bbl', '1/4bbl', '1/6bbl'];
+                    return sizesToRender;
+                  })().map((size) => {
                     const existing = kegReturns.find((r) => r.size === size);
                     const qty = existing?.quantity ?? 0;
                     const setQty = (n: number) => {

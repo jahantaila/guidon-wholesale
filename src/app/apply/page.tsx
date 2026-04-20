@@ -138,21 +138,6 @@ export default function ApplyPage() {
             </div>
           </div>
 
-          <div className="border-t border-white/[0.04] pt-5">
-            <span className="section-label mb-3 block">Volume</span>
-            <div>
-              <label htmlFor="volume" className="block text-sm font-medium text-cream/50 mb-1.5">Expected Monthly Volume</label>
-              <select id="volume" className="input" value={form.expectedMonthlyVolume} onChange={(e) => update('expectedMonthlyVolume', e.target.value)}>
-                <option value="">Select volume...</option>
-                <option value="1-5 kegs">1-5 kegs</option>
-                <option value="6-15 kegs">6-15 kegs</option>
-                <option value="16-30 kegs">16-30 kegs</option>
-                <option value="31-50 kegs">31-50 kegs</option>
-                <option value="50+ kegs">50+ kegs</option>
-              </select>
-            </div>
-          </div>
-
           {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-3 border border-red-500/20">{error}</p>}
 
           <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>

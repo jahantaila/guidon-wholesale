@@ -172,11 +172,10 @@ export default function ApplicationsPage() {
                   </div>
                 </div>
                 {expandedId === app.id && (
-                  <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs animate-fade-in">
+                  <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fade-in">
                     <div><span className="text-cream/25">Phone:</span><p className="text-cream/60 mt-0.5">{app.phone || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Address:</span><p className="text-cream/60 mt-0.5">{app.address || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Business Type:</span><p className="text-cream/60 mt-0.5">{app.businessType || 'N/A'}</p></div>
-                    <div><span className="text-cream/25">Monthly Volume:</span><p className="text-cream/60 mt-0.5">{app.expectedMonthlyVolume || 'N/A'}</p></div>
                   </div>
                 )}
               </div>
@@ -202,7 +201,6 @@ export default function ApplicationsPage() {
                     <th className="table-header">Contact</th>
                     <th className="table-header">Email</th>
                     <th className="table-header">Type</th>
-                    <th className="table-header">Volume</th>
                     <th className="table-header">Date</th>
                     <th className="table-header">Status</th>
                   </tr>
@@ -214,7 +212,6 @@ export default function ApplicationsPage() {
                       <td className="table-cell">{app.contactName}</td>
                       <td className="table-cell text-cream/40">{app.email}</td>
                       <td className="table-cell text-cream/40">{app.businessType || '—'}</td>
-                      <td className="table-cell text-cream/40">{app.expectedMonthlyVolume || '—'}</td>
                       <td className="table-cell text-cream/30">{formatDate(app.createdAt)}</td>
                       <td className="table-cell">
                         <span className={cn('badge-sm', statusColor(app.status || 'pending'))}>

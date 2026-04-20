@@ -6,8 +6,10 @@ import { formatCurrency, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
+// Legacy default sizes that prefill when creating a brand-new product.
+// Admin can now remove any of these or add their own (mixed case,
+// 1 barrel, cans, etc.) — sizes are fully dynamic per product.
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
-const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
 
 const CATEGORIES = ['Ale', 'IPA', 'Stout', 'Porter', 'Lager', 'Wheat', 'Sour', 'Other'];
 
@@ -24,15 +26,17 @@ interface ProductForm {
   imageUrl: string;
   awards: string[];
   sizes: { size: KegSize; price: number; deposit: number; inventoryCount: number; parLevel: number | null; available: boolean }[];
+  // (sortOrder is implicit from array index — drag + drop reorders the
+  // array, server writes them with sort_order = index.)
 }
 
-const DEFAULT_DEPOSITS: Record<KegSize, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
+const DEFAULT_DEPOSITS: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
 
 const emptyForm: ProductForm = {
   name: '', style: '', abv: 0, ibu: '', description: '', category: 'Ale',
   available: true, newRelease: false, limitedRelease: false, imageUrl: '',
   awards: [],
-  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, parLevel: null, available: true })),
+  sizes: KEG_SIZES.map(s => ({ size: s, price: 0, deposit: DEFAULT_DEPOSITS[s] ?? 0, inventoryCount: 0, parLevel: null, available: true })),
 };
 
 export default function ProductsPage() {
@@ -45,6 +49,18 @@ export default function ProductsPage() {
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  // Drag state for size-row reorder (native HTML5 DnD; no external lib).
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const reorderSize = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setForm((p) => {
+      const next = [...p.sizes];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return { ...p, sizes: next };
+    });
+  };
   const [toggling, setToggling] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
@@ -556,86 +572,204 @@ export default function ProductsPage() {
                 </p>
               </div>
 
-              {/* Keg Sizes: price + initial inventory + per-size available toggle */}
+              {/* Sizes: admin can define arbitrary sizes per product —
+                  1/2bbl, mixed case, 1 barrel, cans, whatever. Each row
+                  has its own price, deposit, inventory, par, and offered
+                  toggle. Add/remove rows as needed. */}
               <div>
-                <span className="section-label mb-3 block">Keg Sizes</span>
-                <div className="space-y-2">
-                  {KEG_SIZES.map((size) => {
-                    const sizeData = form.sizes.find((s) => s.size === size);
-                    return (
+                <div className="flex items-baseline justify-between mb-3">
+                  <span className="section-label">Sizes</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Quick-pick chips for common Guidon sizes */}
+                    {['1/2bbl', '1/4bbl', '1/6bbl'].map((s) => {
+                      const already = form.sizes.some((x) => x.size === s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            if (already) return;
+                            setForm((p) => ({
+                              ...p,
+                              sizes: [...p.sizes, {
+                                size: s,
+                                price: 0,
+                                deposit: DEFAULT_DEPOSITS[s as '1/2bbl'|'1/4bbl'|'1/6bbl'] ?? 0,
+                                inventoryCount: 0,
+                                parLevel: null,
+                                available: true,
+                              }],
+                            }));
+                          }}
+                          disabled={already}
+                          className="text-[10px] font-semibold font-ui px-2 py-1 border rounded disabled:opacity-30"
+                          style={{ borderColor: 'var(--divider)', color: 'var(--muted)' }}
+                          title={already ? 'Already added' : `Add ${s}`}
+                        >
+                          + {s}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((p) => ({
+                          ...p,
+                          sizes: [...p.sizes, {
+                            size: '',
+                            price: 0,
+                            deposit: 0,
+                            inventoryCount: 0,
+                            parLevel: null,
+                            available: true,
+                          }],
+                        }));
+                      }}
+                      className="text-[10px] font-semibold font-ui px-2 py-1 rounded"
+                      style={{ background: 'var(--brass)', color: 'var(--paper)' }}
+                    >
+                      + Custom size
+                    </button>
+                  </div>
+                </div>
+                {form.sizes.length === 0 ? (
+                  <p className="text-xs italic p-4 text-center" style={{ color: 'var(--muted)' }}>
+                    No sizes yet. Use the quick-add chips above, or &ldquo;+ Custom size&rdquo; for anything else (mixed case, 1 barrel, cans, etc.).
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.sizes.map((sizeData, idx) => (
                       <div
-                        key={size}
-                        className="grid grid-cols-12 items-end gap-3 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04]"
-                        style={{ opacity: sizeData?.available ? 1 : 0.5 }}
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragIndex(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(idx));
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number(e.dataTransfer.getData('text/plain'));
+                          if (!Number.isNaN(from) && from !== idx) reorderSize(from, idx);
+                          setDragIndex(null);
+                        }}
+                        onDragEnd={() => setDragIndex(null)}
+                        className="grid grid-cols-12 items-end gap-2 p-3 rounded-xl bg-charcoal-200 border border-white/[0.04] cursor-move"
+                        style={{
+                          opacity: sizeData.available ? (dragIndex === idx ? 0.4 : 1) : 0.5,
+                          transition: 'opacity 120ms',
+                        }}
                       >
-                        <span className="col-span-3 text-xs font-heading font-bold text-cream/60">
-                          {SIZE_LABELS[size]}
-                        </span>
                         <div className="col-span-3">
+                          <label className="text-[10px] text-cream/35 block mb-0.5">Size name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 1/2bbl, Mixed Case"
+                            className="input text-sm py-1.5"
+                            value={sizeData.size}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              sizes: p.sizes.map((s, i) => i === idx ? { ...s, size: e.target.value } : s),
+                            }))}
+                          />
+                        </div>
+                        <div className="col-span-2">
                           <label className="text-[10px] text-cream/35 block mb-0.5">Price ($)</label>
                           <input
                             type="number"
                             step="1"
                             min="0"
                             className="input text-sm py-1.5"
-                            value={sizeData?.price || 0}
-                            onChange={(e) => updateSize(size, 'price', parseInt(e.target.value) || 0)}
-                            disabled={!sizeData?.available}
+                            value={sizeData.price || 0}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              sizes: p.sizes.map((s, i) => i === idx ? { ...s, price: parseInt(e.target.value) || 0 } : s),
+                            }))}
+                            disabled={!sizeData.available}
                           />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[10px] text-cream/35 block mb-0.5">
-                            Inventory
-                          </label>
+                          <label className="text-[10px] text-cream/35 block mb-0.5">Deposit ($)</label>
                           <input
                             type="number"
                             step="1"
                             min="0"
                             className="input text-sm py-1.5"
-                            value={sizeData?.inventoryCount ?? 0}
-                            onChange={(e) =>
-                              updateSize(size, 'inventoryCount', parseInt(e.target.value) || 0)
-                            }
-                            disabled={!sizeData?.available}
+                            value={sizeData.deposit || 0}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              sizes: p.sizes.map((s, i) => i === idx ? { ...s, deposit: parseInt(e.target.value) || 0 } : s),
+                            }))}
+                            disabled={!sizeData.available}
+                            title="Refundable keg deposit per unit. 0 for non-keg sizes (cans, bottles)."
                           />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[10px] text-cream/35 block mb-0.5" title="Brewing alert fires when inventory < par">
-                            Par
-                          </label>
+                          <label className="text-[10px] text-cream/35 block mb-0.5">Inventory</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            className="input text-sm py-1.5"
+                            value={sizeData.inventoryCount ?? 0}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              sizes: p.sizes.map((s, i) => i === idx ? { ...s, inventoryCount: parseInt(e.target.value) || 0 } : s),
+                            }))}
+                            disabled={!sizeData.available}
+                          />
+                        </div>
+                        <div className="col-span-1">
+                          <label className="text-[10px] text-cream/35 block mb-0.5" title="Brewing alert fires when inventory < par">Par</label>
                           <input
                             type="number"
                             step="1"
                             min="0"
                             placeholder="—"
                             className="input text-sm py-1.5"
-                            value={sizeData?.parLevel ?? ''}
+                            value={sizeData.parLevel ?? ''}
                             onChange={(e) => {
                               const v = e.target.value.trim();
-                              updateSize(size, 'parLevel', v === '' ? null : (parseInt(v) || 0));
+                              const parsed = v === '' ? null : (parseInt(v) || 0);
+                              setForm((p) => ({
+                                ...p,
+                                sizes: p.sizes.map((s, i) => i === idx ? { ...s, parLevel: parsed } : s),
+                              }));
                             }}
-                            disabled={!sizeData?.available}
-                            title="Minimum on-hand kegs before a brewing alert fires. Leave blank to use default (5)."
+                            disabled={!sizeData.available}
                           />
                         </div>
-                        <label className="col-span-2 flex items-center gap-2 cursor-pointer">
+                        <label className="col-span-1 flex items-center justify-center cursor-pointer pb-2" title="Offered">
                           <input
                             type="checkbox"
-                            checked={sizeData?.available ?? false}
-                            onChange={(e) => updateSize(size, 'available', e.target.checked)}
-                            className="w-4 h-4"
+                            checked={sizeData.available ?? false}
+                            onChange={(e) => setForm((p) => ({
+                              ...p,
+                              sizes: p.sizes.map((s, i) => i === idx ? { ...s, available: e.target.checked } : s),
+                            }))}
+                            className="w-4 h-4 accent-gold"
                           />
-                          <span className="text-xs text-cream/55">Offered</span>
                         </label>
+                        <button
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, sizes: p.sizes.filter((_, i) => i !== idx) }))}
+                          className="col-span-1 pb-2 text-red-400/50 hover:text-red-400 text-lg leading-none flex items-center justify-center"
+                          title="Remove this size from the product"
+                        >
+                          ×
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[10px] text-cream/30 mt-1.5">
-                  Uncheck <strong>Offered</strong> to gray the size out on the customer catalog with
-                  a hover tooltip &mdash; the size stays in the DB so you can re-enable it later
-                  without losing the price or inventory. Use this for seasonal offerings or limited
-                  releases like Ciao Matteo (1/6 BBL only).
+                  Uncheck the checkbox (under &ldquo;&#10003;&rdquo;) to hide a size from the customer catalog without losing its pricing.
+                  Use <strong>+ Custom size</strong> for anything non-keg (mixed case, single bottles, 12-pack).
+                  Deposit = 0 for non-returnable sizes.
                 </p>
               </div>
 

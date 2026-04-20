@@ -60,14 +60,22 @@ function rowToProduct(row: any): Product {
     awards: Array.isArray(row.awards) ? row.awards : [],
     newRelease: row.new_release ?? false,
     limitedRelease: row.limited_release ?? false,
-    sizes: (row.product_sizes || []).map((s: { size: string; price: number; deposit: number; inventory_count?: number; par_level?: number | null; available?: boolean }) => ({
-      size: s.size,
-      price: s.price,
-      deposit: s.deposit,
-      inventoryCount: s.inventory_count ?? 0,
-      parLevel: s.par_level ?? null,
-      available: s.available ?? true,
-    })),
+    sizes: (row.product_sizes || [])
+      .slice()
+      .sort((a: { sort_order?: number | null }, b: { sort_order?: number | null }) => {
+        const ao = a.sort_order ?? 999;
+        const bo = b.sort_order ?? 999;
+        return ao - bo;
+      })
+      .map((s: { size: string; price: number; deposit: number; inventory_count?: number; par_level?: number | null; available?: boolean; sort_order?: number | null }) => ({
+        size: s.size,
+        price: s.price,
+        deposit: s.deposit,
+        inventoryCount: s.inventory_count ?? 0,
+        parLevel: s.par_level ?? null,
+        available: s.available ?? true,
+        sortOrder: s.sort_order ?? null,
+      })),
   };
 }
 
@@ -287,12 +295,14 @@ export async function createProduct(product: Product): Promise<Product> {
     if (product.limitedRelease !== undefined) productRow.limited_release = product.limitedRelease;
     const { error } = await sb.from('products').insert(productRow);
     if (error) throw error;
-    for (const size of product.sizes) {
+    for (let i = 0; i < product.sizes.length; i++) {
+      const size = product.sizes[i];
       const sizeRow: Record<string, unknown> = {
         product_id: product.id,
         size: size.size,
         price: size.price,
         deposit: size.deposit,
+        sort_order: i,
       };
       if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
       if (size.available !== undefined) sizeRow.available = size.available;
@@ -329,12 +339,14 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
     }
     if (fields.sizes) {
       await sb.from('product_sizes').delete().eq('product_id', id);
-      for (const size of fields.sizes) {
+      for (let i = 0; i < fields.sizes.length; i++) {
+        const size = fields.sizes[i];
         const sizeRow: Record<string, unknown> = {
           product_id: id,
           size: size.size,
           price: size.price,
           deposit: size.deposit,
+          sort_order: i,
         };
         if (size.inventoryCount !== undefined) sizeRow.inventory_count = size.inventoryCount;
         if (size.available !== undefined) sizeRow.available = size.available;

@@ -74,6 +74,19 @@ alter table product_sizes add column if not exists inventory_count int not null 
 -- threshold configured for that size (falls back to a global default).
 alter table product_sizes add column if not exists par_level int;
 
+-- Drop the fixed-size CHECK constraints so admin can define custom sizes
+-- (mixed case, 1 barrel, cans, bottles, etc.). The product_sizes row's
+-- deposit column is the source of truth for what that size costs to
+-- keep/return — no more dependency on a hardcoded deposits table.
+alter table product_sizes drop constraint if exists product_sizes_size_check;
+alter table keg_ledger drop constraint if exists keg_ledger_size_check;
+alter table keg_returns drop constraint if exists keg_returns_size_check;
+
+-- Display order: admin drags sizes up/down in the product form; we
+-- persist the order here and render in ascending sort_order. NULL falls
+-- back to the legacy insertion order.
+alter table product_sizes add column if not exists sort_order int;
+
 alter table products enable row level security;
 drop policy if exists "Public read access" on products;
 create policy "Public read access" on products for select using (true);

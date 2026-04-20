@@ -41,6 +41,8 @@ export interface ProductSize {
   /** Par level: when inventory drops below this threshold, brewing alert
    * fires on the dashboard. null/undefined = use global default (5). */
   parLevel?: number | null;
+  /** Admin-defined display order. Lower numbers render first. */
+  sortOrder?: number | null;
   /** Whether this size is currently offered for this beer. If false, the
    * customer card shows the size button disabled with a hover tooltip; the
    * size still persists in the DB so admin can re-enable without losing
@@ -70,7 +72,14 @@ export interface Product {
   limitedRelease?: boolean;
 }
 
-export type KegSize = '1/2bbl' | '1/4bbl' | '1/6bbl';
+// KegSize was a fixed union ('1/2bbl' | '1/4bbl' | '1/6bbl'). Admin now
+// defines arbitrary sizes ("Mixed Case", "1 Barrel", "12-pack", etc.) on
+// each product. The type stays string so existing code compiles; deposit
+// / price per size live on the product_sizes row, so there's no global
+// lookup table anymore.
+export type KegSize = string;
+/** Legacy defaults kept for backward compat + keg-return fallbacks. */
+export const LEGACY_KEG_SIZES = ['1/2bbl', '1/4bbl', '1/6bbl'] as const;
 
 export type OrderStatus = 'pending' | 'confirmed' | 'delivered' | 'completed' | 'cancelled';
 
@@ -166,11 +175,11 @@ export interface CartItem {
   deposit: number;
 }
 
-export interface KegBalance {
-  '1/2bbl': number;
-  '1/4bbl': number;
-  '1/6bbl': number;
-}
+/** KegBalance maps size name to outstanding-kegs count. Sizes are now
+ * admin-defined (custom), so the keys are arbitrary strings. The three
+ * legacy sizes are still pre-initialized to 0 by the balance computation
+ * for backward compat. */
+export type KegBalance = Record<string, number>;
 
 export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
 

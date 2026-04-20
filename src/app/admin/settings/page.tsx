@@ -3,21 +3,9 @@
 import { useState, useEffect } from 'react';
 import { adminFetch } from '@/lib/admin-fetch';
 
-const WEEKDAYS = [
-  { n: 0, label: 'Sun' },
-  { n: 1, label: 'Mon' },
-  { n: 2, label: 'Tue' },
-  { n: 3, label: 'Wed' },
-  { n: 4, label: 'Thu' },
-  { n: 5, label: 'Fri' },
-  { n: 6, label: 'Sat' },
-];
-
 export default function SettingsPage() {
   const [emails, setEmails] = useState<string[]>([]);
   const [newEmail, setNewEmail] = useState('');
-  const [deliveryDays, setDeliveryDays] = useState<number[]>([2, 4]);
-  const [deliveryLeadDays, setDeliveryLeadDays] = useState<number>(2);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -28,8 +16,6 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((data) => {
         setEmails(Array.isArray(data.notificationEmails) ? data.notificationEmails : []);
-        setDeliveryDays(Array.isArray(data.deliveryDays) ? data.deliveryDays : [2, 4]);
-        setDeliveryLeadDays(typeof data.deliveryLeadDays === 'number' ? data.deliveryLeadDays : 2);
       })
       .catch(() => setError('Failed to load settings.'))
       .finally(() => setLoading(false));
@@ -61,39 +47,6 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const saveDelivery = async (daysNext: number[], leadNext: number) => {
-    setSaving(true);
-    setError(''); setSuccess('');
-    try {
-      const res = await adminFetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deliveryDays: daysNext, deliveryLeadDays: leadNext }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Save failed.');
-      }
-      const data = await res.json();
-      setDeliveryDays(data.deliveryDays);
-      setDeliveryLeadDays(data.deliveryLeadDays);
-      flash('success', 'Saved.');
-    } catch (err) {
-      flash('error', err instanceof Error ? err.message : 'Save failed.');
-    } finally { setSaving(false); }
-  };
-
-  const toggleDay = (n: number) => {
-    const next = deliveryDays.includes(n)
-      ? deliveryDays.filter((d) => d !== n)
-      : [...deliveryDays, n].sort();
-    if (next.length === 0) {
-      flash('error', 'Select at least one delivery day.');
-      return;
-    }
-    saveDelivery(next, deliveryLeadDays);
   };
 
   const addEmail = async (e: React.FormEvent) => {
@@ -139,65 +92,6 @@ export default function SettingsPage() {
         <div className="skeleton h-32 w-full" />
       ) : (
         <>
-          {/* Delivery schedule */}
-          <section className="card p-5 space-y-4">
-            <div>
-              <span className="section-label">Delivery Schedule</span>
-              <p className="text-sm mt-1 italic" style={{ color: 'var(--muted)' }}>
-                Pick the weekdays the brewery delivers. Customers see only these
-                dates at checkout. Lead time prevents last-minute orders from
-                jumping the queue.
-              </p>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-                Delivery days
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {WEEKDAYS.map((d) => {
-                  const on = deliveryDays.includes(d.n);
-                  return (
-                    <button
-                      key={d.n}
-                      onClick={() => toggleDay(d.n)}
-                      disabled={saving}
-                      className="px-4 py-2 text-xs font-semibold font-ui border transition-colors"
-                      style={{
-                        borderRadius: '3px',
-                        borderColor: on ? 'var(--brass-dim)' : 'var(--divider)',
-                        background: on ? 'var(--brass)' : 'transparent',
-                        color: on ? 'var(--paper)' : 'var(--ink)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
-                      {d.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--muted)' }}>
-                Lead time (days)
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min={0}
-                  max={30}
-                  value={deliveryLeadDays}
-                  onChange={(e) => setDeliveryLeadDays(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
-                  onBlur={() => saveDelivery(deliveryDays, deliveryLeadDays)}
-                  className="input max-w-[100px]"
-                />
-                <span className="text-sm italic" style={{ color: 'var(--muted)' }}>
-                  Earliest delivery is today + {deliveryLeadDays} day{deliveryLeadDays === 1 ? '' : 's'}. Saves on blur.
-                </span>
-              </div>
-            </div>
-          </section>
-
           {/* Notification recipients */}
           <section className="card p-5">
             <div className="mb-3">

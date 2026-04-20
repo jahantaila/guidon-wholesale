@@ -38,7 +38,11 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <Link href="/admin" className="inline-block mt-10 text-cream/[0.08] text-[10px] hover:text-cream/20 transition-colors duration-300">
+        <Link
+          href="/admin"
+          className="inline-block mt-10 text-xs font-semibold tracking-wider uppercase transition-colors duration-200"
+          style={{ color: 'var(--ink)', textDecoration: 'underline', textUnderlineOffset: '3px' }}
+        >
           Admin
         </Link>
       </div>
