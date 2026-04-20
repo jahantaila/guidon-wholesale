@@ -7,6 +7,7 @@ import Image from 'next/image';
 import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
 const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
@@ -65,6 +66,7 @@ export default function OrderPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  useBodyScrollLock(cartOpen);
   const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [toastMsg, setToastMsg] = useState('');
 
@@ -73,6 +75,7 @@ export default function OrderPage() {
   >({});
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  useBodyScrollLock(checkoutOpen);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   // Pre-select a customer when ?customerId= is on the URL. Admin uses this
   // from customer detail to "place an order for this customer." Using

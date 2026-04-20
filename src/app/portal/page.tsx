@@ -6,6 +6,7 @@ import Image from 'next/image';
 import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 const KEG_LABELS: Record<KegSize, string> = {
   '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel',
@@ -193,6 +194,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
   }, [customer.id]);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  useBodyScrollLock(showReturnModal);
 
   const fetchInvoices = useCallback(() => {
     setLoadingInvoices(true);
@@ -607,9 +609,11 @@ function ProductsTab({
   const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
+  useBodyScrollLock(showCheckout);
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; items: OrderItem[]; createdAt: string }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  useBodyScrollLock(showSaveTemplate);
   const [templateName, setTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
 

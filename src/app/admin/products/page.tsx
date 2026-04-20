@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Product, KegSize } from '@/lib/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
 const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
@@ -39,6 +40,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  useBodyScrollLock(modalOpen);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -507,13 +509,13 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-cream/40 mb-1.5">
                   Tags &amp; Awards
                   <span className="text-xs text-cream/25 ml-2 font-normal">
-                    (one per line — e.g. &ldquo;2025 N.C. Brewers Cup, Gold Medal Winner&rdquo;)
+                    (one per line — e.g. &ldquo;N.C. Brewers Cup, Gold Medal&rdquo;)
                   </span>
                 </label>
                 <textarea
                   className="input resize-none font-mono text-xs"
                   rows={3}
-                  placeholder="2025 N.C. Brewers Cup, Honorable Mention&#10;Blue Ribbon Winner, Brew Horizons Fest"
+                  placeholder="N.C. Brewers Cup, Honorable Mention&#10;Blue Ribbon Winner, Brew Horizons Fest"
                   value={form.awards.join('\n')}
                   onChange={(e) => setForm((p) => ({ ...p, awards: e.target.value.split('\n') }))}
                 />

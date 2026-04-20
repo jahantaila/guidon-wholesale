@@ -23,6 +23,9 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  // When toggling into/out of the full-page invoice viewer, scroll to top
+  // so the user doesn't land mid-viewport on the opposite page.
+  useEffect(() => { if (typeof window !== 'undefined') window.scrollTo(0, 0); }, [viewingInvoice]);
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('table');

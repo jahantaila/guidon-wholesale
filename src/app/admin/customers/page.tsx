@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Customer, Order, Invoice } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 interface CustomerForm {
   businessName: string;
@@ -24,6 +25,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  useBodyScrollLock(modalOpen);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [saving, setSaving] = useState(false);

@@ -4,6 +4,7 @@ import { useState, useEffect, Fragment, useCallback, useMemo } from 'react';
 import { Customer, KegBalance, KegLedgerEntry, KegSize, KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 type AdjustForm = { customerId: string; type: 'return' | 'deposit'; size: KegSize; quantity: number; notes: string };
 const emptyAdjust: AdjustForm = { customerId: '', type: 'return', size: '1/2bbl', quantity: 1, notes: '' };
@@ -41,6 +42,7 @@ export default function KegTrackerPage() {
   const [ledgerEntries, setLedgerEntries] = useState<KegLedgerEntry[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  useBodyScrollLock(adjustOpen);
   const [adjustForm, setAdjustForm] = useState<AdjustForm>(emptyAdjust);
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [adjustError, setAdjustError] = useState('');
