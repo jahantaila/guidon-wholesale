@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Fragment, useCallback } from 'react';
+import { useState, useEffect, Fragment, useCallback, useMemo } from 'react';
 import { Customer, KegBalance, KegLedgerEntry, KegSize } from '@/lib/types';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
@@ -25,9 +25,17 @@ function getRowHighlight(total: number): string {
   return 'border-l-2 border-l-emerald-500/50';
 }
 
+function getAgeColor(days: number): string {
+  if (days > 90) return 'text-red-400';
+  if (days > 60) return 'text-orange-400';
+  if (days > 30) return 'text-gold';
+  return 'text-emerald-400';
+}
+
 export default function KegTrackerPage() {
   const [balances, setBalances] = useState<CustomerBalance[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [allLedger, setAllLedger] = useState<KegLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [ledgerEntries, setLedgerEntries] = useState<KegLedgerEntry[]>([]);
@@ -41,18 +49,67 @@ export default function KegTrackerPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [balancesRes, customersRes] = await Promise.all([
-          adminFetch('/api/keg-ledger?balances=true'), adminFetch('/api/customers'),
+        const [balancesRes, customersRes, ledgerRes] = await Promise.all([
+          adminFetch('/api/keg-ledger?balances=true'),
+          adminFetch('/api/customers'),
+          adminFetch('/api/keg-ledger'),
         ]);
         const balancesData = await balancesRes.json();
         const customersData = await customersRes.json();
+        const ledgerData = await ledgerRes.json();
         setBalances(Array.isArray(balancesData) ? balancesData : []);
         setCustomers(Array.isArray(customersData) ? customersData : []);
+        setAllLedger(Array.isArray(ledgerData) ? ledgerData : []);
       } catch (err) { console.error('Failed to load keg data', err); }
       finally { setLoading(false); }
     }
     load();
   }, []);
+
+  // Compute "oldest outstanding deposit age" per customer. FIFO: offset
+  // deposits against returns starting from the earliest, then the oldest
+  // surviving deposit's date is what Mike cares about. If balance is zero
+  // or negative, return null (no outstanding kegs).
+  const oldestAgeByCustomer = useMemo(() => {
+    const map = new Map<string, number>(); // customerId -> days
+    const byCustomer = new Map<string, KegLedgerEntry[]>();
+    for (const e of allLedger) {
+      if (!byCustomer.has(e.customerId)) byCustomer.set(e.customerId, []);
+      byCustomer.get(e.customerId)!.push(e);
+    }
+    const now = Date.now();
+    byCustomer.forEach((entries, custId) => {
+      // Sort by date ascending.
+      const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // Build a queue of deposit quantities with their date; consume from front
+      // with each return.
+      type Q = { date: string; qty: number };
+      const queue: Q[] = [];
+      for (const e of sorted) {
+        if (e.type === 'deposit') {
+          queue.push({ date: e.date, qty: e.quantity });
+        } else {
+          let remaining = e.quantity;
+          while (remaining > 0 && queue.length > 0) {
+            const head = queue[0];
+            if (head.qty <= remaining) {
+              remaining -= head.qty;
+              queue.shift();
+            } else {
+              head.qty -= remaining;
+              remaining = 0;
+            }
+          }
+        }
+      }
+      if (queue.length > 0) {
+        const oldest = queue[0].date;
+        const days = Math.floor((now - new Date(oldest).getTime()) / (1000 * 60 * 60 * 24));
+        map.set(custId, days);
+      }
+    });
+    return map;
+  }, [allLedger]);
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
@@ -78,9 +135,14 @@ export default function KegTrackerPage() {
 
   const refreshBalances = useCallback(async () => {
     try {
-      const res = await adminFetch('/api/keg-ledger?balances=true');
-      const data = await res.json();
-      setBalances(Array.isArray(data) ? data : []);
+      const [bRes, allRes] = await Promise.all([
+        adminFetch('/api/keg-ledger?balances=true'),
+        adminFetch('/api/keg-ledger'),
+      ]);
+      const bData = await bRes.json();
+      const allData = await allRes.json();
+      setBalances(Array.isArray(bData) ? bData : []);
+      setAllLedger(Array.isArray(allData) ? allData : []);
     } catch {}
   }, []);
 
@@ -170,6 +232,7 @@ export default function KegTrackerPage() {
                   <th className="table-header text-center">1/4 Barrel</th>
                   <th className="table-header text-center">1/6 Barrel</th>
                   <th className="table-header text-center">Total Out</th>
+                  <th className="table-header text-center">Oldest</th>
                   <th className="table-header text-right">Record</th>
                 </tr>
               </thead>
@@ -196,6 +259,20 @@ export default function KegTrackerPage() {
                         <td className="table-cell text-center">
                           <span className={cn('badge font-black', getCountColor(total))}>{total}</span>
                         </td>
+                        <td className="table-cell text-center">
+                          {(() => {
+                            const age = oldestAgeByCustomer.get(entry.customerId);
+                            if (total === 0 || age === undefined) return <span className="text-cream/20">—</span>;
+                            return (
+                              <span
+                                className={cn('text-xs font-variant-tabular font-semibold', getAgeColor(age))}
+                                title={`Oldest outstanding keg is ${age} days old (FIFO).`}
+                              >
+                                {age}d
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="table-cell text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
                             <button onClick={() => openAdjust(entry.customerId, 'return')}
@@ -212,7 +289,7 @@ export default function KegTrackerPage() {
                       </tr>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={6} className="bg-white/[0.02] px-6 py-4">
+                          <td colSpan={7} className="bg-white/[0.02] px-6 py-4">
                             <div className="animate-fade-in">
                               <div className="flex items-center gap-2 mb-3">
                                 <div className="w-1 h-4 bg-gold rounded-full" />
