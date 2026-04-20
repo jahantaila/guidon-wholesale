@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { Order, Customer } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 type DeliveryGroup = {
   date: string;
@@ -17,8 +18,8 @@ export default function DeliveriesPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/orders').then((r) => r.json()),
-      fetch('/api/customers').then((r) => r.json()),
+      adminFetch('/api/orders').then((r) => r.json()),
+      adminFetch('/api/customers').then((r) => r.json()),
     ])
       .then(([o, c]) => {
         setOrders(Array.isArray(o) ? o : []);

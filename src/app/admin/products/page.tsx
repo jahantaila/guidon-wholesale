@@ -47,7 +47,7 @@ export default function ProductsPage() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const res = await fetch('/api/products?all=true');
+      const res = await adminFetch('/api/products?all=true');
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (err) { console.error('Failed to load products', err); }

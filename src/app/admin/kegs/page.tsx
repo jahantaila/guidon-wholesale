@@ -42,7 +42,7 @@ export default function KegTrackerPage() {
     async function load() {
       try {
         const [balancesRes, customersRes] = await Promise.all([
-          fetch('/api/keg-ledger?balances=true'), fetch('/api/customers'),
+          adminFetch('/api/keg-ledger?balances=true'), adminFetch('/api/customers'),
         ]);
         const balancesData = await balancesRes.json();
         const customersData = await customersRes.json();
@@ -61,7 +61,7 @@ export default function KegTrackerPage() {
     setExpandedId(customerId);
     setLedgerLoading(true);
     try {
-      const res = await fetch(`/api/keg-ledger?customerId=${customerId}`);
+      const res = await adminFetch(`/api/keg-ledger?customerId=${customerId}`);
       const data = await res.json();
       setLedgerEntries(Array.isArray(data) ? data : []);
     } catch (err) { console.error('Failed to load ledger', err); setLedgerEntries([]); }

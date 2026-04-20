@@ -23,10 +23,10 @@ export default function CustomerDetailPage() {
     async function load() {
       try {
         const [customersRes, ordersRes, invoicesRes, ledgerRes] = await Promise.all([
-          fetch('/api/customers'),
-          fetch(`/api/orders?customerId=${id}`),
-          fetch(`/api/invoices?customerId=${id}`),
-          fetch(`/api/keg-ledger?customerId=${id}`),
+          adminFetch('/api/customers'),
+          adminFetch(`/api/orders?customerId=${id}`),
+          adminFetch(`/api/invoices?customerId=${id}`),
+          adminFetch(`/api/keg-ledger?customerId=${id}`),
         ]);
         const customers: Customer[] = await customersRes.json();
         setCustomer(customers.find((c) => c.id === id) || null);

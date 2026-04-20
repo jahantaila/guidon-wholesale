@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AdminStats, Order, Customer, WholesaleApplication, Invoice, Product } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -18,12 +19,12 @@ export default function AdminDashboard() {
     async function load() {
       try {
         const [statsRes, ordersRes, customersRes, appsRes, invoicesRes, productsRes] = await Promise.all([
-          fetch('/api/admin/stats', { cache: 'no-store' }),
-          fetch('/api/orders', { cache: 'no-store' }),
-          fetch('/api/customers', { cache: 'no-store' }),
-          fetch('/api/applications', { cache: 'no-store' }),
-          fetch('/api/invoices', { cache: 'no-store' }),
-          fetch('/api/products', { cache: 'no-store' }),
+          adminFetch('/api/admin/stats', { cache: 'no-store' }),
+          adminFetch('/api/orders', { cache: 'no-store' }),
+          adminFetch('/api/customers', { cache: 'no-store' }),
+          adminFetch('/api/applications', { cache: 'no-store' }),
+          adminFetch('/api/invoices', { cache: 'no-store' }),
+          adminFetch('/api/products', { cache: 'no-store' }),
         ]);
         // Only accept the response as stats if the request succeeded AND the
         // body has the expected shape. Otherwise leave stats null so the

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WholesaleApplication, Customer } from '@/lib/types';
 import { formatDate, cn } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 function statusColor(status: string): string {
   switch (status) {
@@ -36,7 +37,7 @@ export default function ApplicationsPage() {
 
   const loadApplications = useCallback(async () => {
     try {
-      const res = await fetch('/api/applications');
+      const res = await adminFetch('/api/applications');
       const data = await res.json();
       setApplications(Array.isArray(data) ? data : []);
     } catch (err) { console.error('Failed to load applications', err); }
@@ -48,7 +49,7 @@ export default function ApplicationsPage() {
   const handleApprove = async (app: WholesaleApplication & { status?: string }) => {
     setUpdating(app.id);
     try {
-      const res = await fetch('/api/applications', {
+      const res = await adminFetch('/api/applications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: app.id, status: 'approved' }),
@@ -73,7 +74,7 @@ export default function ApplicationsPage() {
   const handleReject = async (id: string) => {
     setUpdating(id);
     try {
-      const res = await fetch('/api/applications', {
+      const res = await adminFetch('/api/applications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: 'rejected' }),
@@ -91,7 +92,7 @@ export default function ApplicationsPage() {
     setSavingCustomer(true);
     setCustomerSuccess('');
     try {
-      const res = await fetch('/api/customers', {
+      const res = await adminFetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(customerForm),

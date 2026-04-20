@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import type { Order, Product, KegSize } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { adminFetch } from '@/lib/admin-fetch';
 
 type RowKey = `${string}::${KegSize}`;
 
@@ -32,8 +33,8 @@ export default function ProductionPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/orders').then((r) => r.json()),
-      fetch('/api/products?all=true').then((r) => r.json()),
+      adminFetch('/api/orders').then((r) => r.json()),
+      adminFetch('/api/products?all=true').then((r) => r.json()),
     ])
       .then(([o, p]) => {
         setOrders(Array.isArray(o) ? o : []);
