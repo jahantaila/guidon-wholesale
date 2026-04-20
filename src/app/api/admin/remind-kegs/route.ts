@@ -1,24 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrder, getCustomers } from '@/lib/data';
+import { getOrder, getOrders, getCustomers } from '@/lib/data';
 import { notifyKegReminder } from '@/lib/email';
 
 /**
  * POST /api/admin/remind-kegs
- * Body: { orderId: string }
+ * Body: { orderId?: string } OR { customerId?: string }
  *
- * Sends a keg-return reminder email to the customer of the given order.
- * Intended for admin use on delivered orders that still have outstanding
- * keg deposits. Idempotent — admin can click multiple times; the email
- * goes out each time.
+ * Sends a keg-return reminder email to the customer. Two call shapes:
+ * - orderId: reminder tied to a specific delivered order (original flow,
+ *   called from admin orders list).
+ * - customerId: finds the customer's most recent delivered-or-completed
+ *   order and uses that as context (called from admin keg tracker row
+ *   where "the" order doesn't make sense — Mike just wants the customer
+ *   to return all outstanding kegs).
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const orderId: string | undefined = body?.orderId;
-  if (!orderId) {
-    return NextResponse.json({ error: 'orderId is required.' }, { status: 400 });
+  const customerId: string | undefined = body?.customerId;
+  if (!orderId && !customerId) {
+    return NextResponse.json({ error: 'orderId or customerId is required.' }, { status: 400 });
   }
 
-  const order = await getOrder(orderId);
+  let order = orderId ? await getOrder(orderId) : undefined;
+
+  // customerId path: find the customer's most recent delivered-or-completed
+  // order and use that as the email context.
+  if (!order && customerId) {
+    const all = await getOrders();
+    const candidates = all
+      .filter((o) => o.customerId === customerId && (o.status === 'delivered' || o.status === 'completed'))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    order = candidates[0];
+    if (!order) {
+      return NextResponse.json(
+        { error: 'No delivered orders found for this customer yet.' },
+        { status: 404 },
+      );
+    }
+  }
+
   if (!order) {
     return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
   }

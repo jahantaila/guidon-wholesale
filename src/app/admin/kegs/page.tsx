@@ -275,6 +275,38 @@ export default function KegTrackerPage() {
                         </td>
                         <td className="table-cell text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
+                            {total > 0 && (
+                              <>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const res = await adminFetch('/api/admin/remind-kegs', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ customerId: entry.customerId }),
+                                      });
+                                      if (res.ok) {
+                                        setToast('Reminder sent.');
+                                        window.setTimeout(() => setToast(''), 3000);
+                                      } else {
+                                        const data = await res.json().catch(() => ({}));
+                                        setToast(data?.error || 'Reminder failed.');
+                                        window.setTimeout(() => setToast(''), 4000);
+                                      }
+                                    } catch {
+                                      setToast('Reminder failed.');
+                                      window.setTimeout(() => setToast(''), 4000);
+                                    }
+                                  }}
+                                  className="text-xs font-semibold hover:underline"
+                                  style={{ color: 'var(--muted)' }}
+                                  title="Email the customer reminding them to return kegs"
+                                >
+                                  Remind
+                                </button>
+                                <span className="text-cream/20">·</span>
+                              </>
+                            )}
                             <button onClick={() => openAdjust(entry.customerId, 'return')}
                               className="text-xs font-semibold hover:underline" style={{ color: 'var(--pine)' }}>
                               Return
