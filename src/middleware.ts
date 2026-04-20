@@ -4,10 +4,15 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Protect admin API routes (except login)
+  // Protect admin API routes (except login). Accepts either the
+  // admin_session cookie or an Authorization: Bearer <token> header so
+  // iframe-embedded admin dashboards still work when browsers block
+  // 3rd-party cookies.
   if (pathname.startsWith('/api/admin/') && !pathname.startsWith('/api/admin/login')) {
-    const session = request.cookies.get('admin_session');
-    if (!session || session.value !== 'authenticated') {
+    const cookie = request.cookies.get('admin_session')?.value;
+    const auth = request.headers.get('authorization');
+    const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+    if (cookie !== 'authenticated' && bearer !== 'authenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }

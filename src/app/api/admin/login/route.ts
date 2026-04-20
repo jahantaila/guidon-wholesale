@@ -2,15 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, recordFailure, clearKey, keyForRequest } from '@/lib/rate-limit';
 
 /**
- * GET /api/admin/login — session check. Returns 200 if the admin_session
- * cookie is present and valid, 401 otherwise. Required because the session
- * cookie is HTTP-only so the browser's document.cookie cannot see it, and
- * relying on document.cookie for auth state (as the old admin layout did)
- * broke navigation between admin sub-routes.
+ * Shared token for header-based auth. Any code using the Authorization
+ * header as a cookie replacement passes this constant — admin.
+ *
+ * Why: modern browsers (Chrome, Safari ITP) block 3rd-party cookies when
+ * the admin dashboard is loaded in an iframe on a different origin (e.g.
+ * Derby Digital's management portal embedding /admin). With cookies
+ * silently dropped, every admin PUT/DELETE 401'd.
+ *
+ * Fix: admin login POST returns a token. The client stores it in localStorage
+ * and sends Authorization: Bearer <token> on every admin request.
+ * adminFetch handles this transparently. Middleware accepts either the
+ * cookie OR the header.
+ *
+ * Security model is unchanged: the token IS the auth marker, same as the
+ * old cookie value was. Stored in the admin-origin localStorage — not
+ * exposed to 3rd-party sites even if they iframe the admin.
  */
+const ADMIN_TOKEN_VALUE = 'authenticated';
+
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('admin_session');
-  if (session?.value === 'authenticated') {
+  const cookie = request.cookies.get('admin_session')?.value;
+  const auth = request.headers.get('authorization');
+  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (cookie === ADMIN_TOKEN_VALUE || bearer === ADMIN_TOKEN_VALUE) {
     return NextResponse.json({ authenticated: true });
   }
   return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -41,7 +56,10 @@ export async function POST(request: NextRequest) {
 
   if (body.password === adminPassword) {
     clearKey(key);
-    const response = NextResponse.json({ success: true });
+    // Return the token in the body so iframe clients can cache it in
+    // localStorage and send it as Authorization: Bearer on subsequent
+    // requests (fallback when 3rd-party cookies are blocked).
+    const response = NextResponse.json({ success: true, token: ADMIN_TOKEN_VALUE });
     // Cookie attributes:
     // - SameSite=None + Secure in production so the admin keeps working when
     //   iframed from a different origin (the user is testing the app

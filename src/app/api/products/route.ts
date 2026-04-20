@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getProducts, getAllProducts, createProduct, updateProduct, deleteProduct } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Product } from '@/lib/types';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
@@ -87,7 +88,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

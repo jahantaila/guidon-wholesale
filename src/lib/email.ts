@@ -533,7 +533,7 @@ export async function notifyApplicationDecision(args: {
         preheader: 'Your wholesale account is live.',
         body: `
           <p>${escapeHtml(args.applicantName)} &mdash;</p>
-          <p style="margin:12px 0;">Your wholesale account for <strong>${escapeHtml(args.businessName)}</strong> is approved. You can now place keg orders through the portal.</p>
+          <p style="margin:12px 0;">Your wholesale account for <strong>${escapeHtml(args.businessName)}</strong> is approved. You can now place orders through the portal.</p>
           ${
             args.portalUrl
               ? `<p style="margin:12px 0;"><a href="${args.portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open wholesale portal &rarr;</a></p>`

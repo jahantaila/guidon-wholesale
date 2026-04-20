@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getKegLedger, getKegLedgerByCustomer, getAllKegBalances, addKegLedgerEntry } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { KegLedgerEntry, KegSize } from '@/lib/types';
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
   const balances = searchParams.get('balances');
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   const portalCustomerId = request.cookies.get('portal_session')?.value || '';
 
   // Balances and unfiltered ledger: admin-only.
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
   // Authz: admin can log any customer's keg movement; portal user can
   // only log their own (e.g. request a return). Prevents a logged-in
   // customer from crediting arbitrary accounts.
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   const portalCustomerId = request.cookies.get('portal_session')?.value || '';
   if (!admin && portalCustomerId !== body.customerId) {
     return NextResponse.json({ error: 'Not authorized for this customer' }, { status: 403 });

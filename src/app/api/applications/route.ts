@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getApplications, createApplication, updateApplication, createCustomer, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { WholesaleApplication, Customer } from '@/lib/types';
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   if (!admin) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }

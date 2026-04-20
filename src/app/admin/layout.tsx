@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { adminFetch, getAdminToken, setAdminToken } from '@/lib/admin-fetch';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: DashboardIcon },
@@ -118,8 +119,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const refresh = async () => {
       try {
         const [ordersRes, appsRes] = await Promise.all([
-          fetch('/api/orders', { cache: 'no-store' }),
-          fetch('/api/applications', { cache: 'no-store' }),
+          adminFetch('/api/orders', { cache: 'no-store' }),
+          adminFetch('/api/applications', { cache: 'no-store' }),
         ]);
         if (stop) return;
         const safeArr = async (r: Response) => (r.ok ? r.json().catch(() => []) : []);
@@ -140,9 +141,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [authenticated]);
 
   useEffect(() => {
-    // admin_session is HTTP-only so document.cookie can't see it. Probe the
-    // server instead.
-    fetch('/api/admin/login')
+    // Probe the server for auth. If we have a token in localStorage
+    // (iframe-context fallback), adminFetch sends it as a Bearer header so
+    // this works even when the admin_session cookie is blocked.
+    adminFetch('/api/admin/login')
       .then((r) => setAuthenticated(r.ok))
       .catch(() => setAuthenticated(false))
       .finally(() => setChecking(false));
@@ -157,7 +159,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       });
-      if (res.ok) setAuthenticated(true);
+      if (res.ok) {
+        // Persist the token in localStorage so iframe-context requests can
+        // send it as a Bearer header (when 3rd-party cookies are blocked).
+        try {
+          const data = await res.json();
+          if (data?.token) setAdminToken(data.token);
+        } catch { /* token is optional; cookie still works in 1st-party */ }
+        setAuthenticated(true);
+      }
       else {
         const data = await res.json();
         setLoginError(data.error || 'Invalid password');
@@ -168,6 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = useCallback(async () => {
     await fetch('/api/admin/login', { method: 'DELETE' });
+    setAdminToken(null);
     setAuthenticated(false);
     setPassword('');
   }, []);

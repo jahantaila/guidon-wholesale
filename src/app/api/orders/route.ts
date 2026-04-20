@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
 import { authContext } from '@/lib/auth-check';
 import { generateId } from '@/lib/utils';
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   if (!admin) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }

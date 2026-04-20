@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getOrders, getInvoices, getKegLedger } from '@/lib/data';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 import { generateId } from '@/lib/utils';
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     const body = await request.json();
     const { id, ...rawUpdates } = body;
@@ -164,7 +165,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

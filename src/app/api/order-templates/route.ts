@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getOrderTemplates, createOrderTemplate, deleteOrderTemplate } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { OrderTemplate } from '@/lib/types';
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ error: 'customerId is required' }, { status: 400 });
     }
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin && portalCustomerId !== customerId) {
       return NextResponse.json([], { status: 200 });
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin && portalCustomerId !== body.customerId) {
       return NextResponse.json({ error: 'Not authorized for this customer' }, { status: 403 });
@@ -67,7 +68,7 @@ export async function DELETE(request: NextRequest) {
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin) {
       // Portal user can only delete their own templates.

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getInvoices, createInvoice, updateInvoice, getCustomers, getOrder } from '@/lib/data';
 import { send, formatCurrencyForEmail } from '@/lib/email';
 import { generateId } from '@/lib/utils';
@@ -7,7 +8,7 @@ import type { Invoice } from '@/lib/types';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   const portalCustomerId = request.cookies.get('portal_session')?.value || '';
   if (!customerId && !admin) {
     return NextResponse.json([], { status: 200 });
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
  * - Default is draft so admin can review first.
  */
 export async function POST(request: NextRequest) {
-  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const admin = isAdminRequest(request);
   if (!admin) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getRecurringOrders, createRecurringOrder, updateRecurringOrder, deleteRecurringOrder } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { RecurringOrder } from '@/lib/types';
@@ -7,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId') || undefined;
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     // Unfiltered: admin-only.
     if (!customerId && !admin) return NextResponse.json([], { status: 200 });
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
     // Admin-only: creating a recurring order is a scheduled-billing commitment
     // the brewery owns. Portal users can pause/resume via PUT but not create.
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
@@ -75,7 +76,7 @@ export async function PUT(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     // Portal user: can only toggle active on their own recurring order.
     // Admin: full control.
@@ -126,7 +127,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
     // Admin-only: deleting a recurring schedule is a management decision.
-    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const admin = isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

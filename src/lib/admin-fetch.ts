@@ -1,36 +1,55 @@
 /**
- * Admin-side fetch wrapper. Every admin UI fetch goes through this so we
- * can handle session-expiry (401) uniformly: instead of letting the caller
- * show a cryptic "Unauthorized" alert, we silently clear any stale local
- * auth state and bounce the user to /admin (which renders the login form).
+ * Admin-side fetch wrapper.
  *
- * Usage in admin components:
- *   import { adminFetch } from '@/lib/admin-fetch';
- *   const res = await adminFetch('/api/admin/inventory', { method: 'PATCH', body: JSON.stringify(...) });
+ * 1. Adds `Authorization: Bearer <token>` from localStorage on every request.
+ *    The token is set after a successful admin login (see AdminLayout).
+ *    This is the fallback for when the admin dashboard is loaded in an
+ *    iframe on a different origin (Derby Digital's management portal
+ *    embedding /admin). Modern browsers block 3rd-party cookies even with
+ *    SameSite=None, so the admin_session cookie silently fails to flow.
+ *    The header gets through regardless.
  *
- * Non-401 responses pass through unchanged. Callers still check res.ok for
- * validation / server errors and handle those domain errors themselves.
+ * 2. On 401 — session expired or missing — clears the token, drops any
+ *    server cookie via DELETE /api/admin/login, and redirects back to
+ *    /admin so the layout re-renders the login form.
+ *
+ * Non-401 responses pass through unchanged; callers still inspect res.ok
+ * for domain errors.
  */
+
+const TOKEN_KEY = 'guidon_admin_token';
+
+export function getAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try { return window.localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+
+export function setAdminToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch { /* storage disabled */ }
+}
+
 export async function adminFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const res = await fetch(input, init);
+  const token = getAdminToken();
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  const res = await fetch(input, { ...init, headers });
   if (res.status === 401 && typeof window !== 'undefined') {
-    // Session expired or missing. Drop any stored auth state so AdminLayout
-    // re-renders the login form, and redirect to /admin if we're deeper in
-    // the admin section.
+    setAdminToken(null);
     try {
-      // Best-effort logout to clear any state the server has as well.
       await fetch('/api/admin/login', { method: 'DELETE' });
     } catch {
-      // ignore; the redirect itself is sufficient
+      // ignore
     }
     const path = window.location.pathname;
     if (path.startsWith('/admin/')) {
-      // Bounce to /admin; the layout will show the login form. After login,
-      // the original admin URL is still intact because we only navigated the
-      // tab once.
       window.location.href = '/admin';
     } else if (path === '/admin') {
-      // Already on /admin; just reload so the layout re-evaluates auth.
       window.location.reload();
     }
   }
