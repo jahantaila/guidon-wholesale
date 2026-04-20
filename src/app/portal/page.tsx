@@ -66,6 +66,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -113,12 +114,45 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-cream/40 mb-1.5">Password</label>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-cream/40">Password</label>
+              <button
+                type="button"
+                onClick={async () => {
+                  const addr = email.trim();
+                  if (!addr) {
+                    setError('Enter your email above first, then click Forgot password.');
+                    return;
+                  }
+                  setError('');
+                  try {
+                    await fetch('/api/portal/reset-password', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: addr }),
+                    });
+                    setResetSent(true);
+                    window.setTimeout(() => setResetSent(false), 6000);
+                  } catch {
+                    setError('Could not send reset email. Please try again.');
+                  }
+                }}
+                className="text-xs italic underline-offset-2"
+                style={{ color: 'var(--brass)' }}
+              >
+                Forgot password?
+              </button>
+            </div>
             <input id="password" type="password" className="input" placeholder="Enter your password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
           {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
+          {resetSent && (
+            <p className="text-sm" style={{ color: 'var(--pine)', background: 'color-mix(in srgb, var(--pine) 8%, transparent)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--pine)' }}>
+              If an account exists for <strong>{email.trim()}</strong>, a reset email is on the way. Check your inbox.
+            </p>
+          )}
 
           <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
             {submitting ? 'Signing in...' : 'Sign In'}

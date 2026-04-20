@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getApplications, createApplication, updateApplication } from '@/lib/data';
+import { getApplications, createApplication, updateApplication, createCustomer, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
-import type { WholesaleApplication } from '@/lib/types';
+import type { WholesaleApplication, Customer } from '@/lib/types';
 import { notifyApplicationSubmitted, notifyApplicationDecision } from '@/lib/email';
+import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 
 export async function GET() {
   const applications = await getApplications();
@@ -64,33 +65,119 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
   }
 
+  // Resolve the application record before mutating, so we can pass the
+  // full payload to the approval flow.
+  const allApps = await getApplications();
+  const app = allApps.find((a) => a.id === body.id);
+  if (!app) {
+    return NextResponse.json({ error: 'Application not found.' }, { status: 404 });
+  }
+
   const success = await updateApplication(body.id, body.status);
   if (!success) {
     return NextResponse.json({ error: 'Application not found.' }, { status: 404 });
   }
 
-  // Notify the applicant of the decision. We don't have the full application
-  // on `updateApplication`, so re-fetch for the email payload.
+  let tempPassword: string | undefined;
+
+  // APPROVAL: upgrade the applicant into a real wholesale customer.
+  // 1. Check whether a customer with this email already exists (idempotent).
+  // 2. If not, create a file/DB customer row and generate a temp password.
+  // 3. If Supabase is configured, provision a Supabase Auth user with the
+  //    same temp password so they can log into /portal immediately.
+  // All failures are logged but don't block the admin's approve action.
+  if (body.status === 'approved') {
+    try {
+      const existingCustomers = await getCustomers();
+      const alreadyCustomer = existingCustomers.find(
+        (c) => c.email.toLowerCase() === app.email.toLowerCase(),
+      );
+
+      if (!alreadyCustomer) {
+        tempPassword = generateTempPassword();
+        const newCustomer: Customer = {
+          id: generateId('cust'),
+          businessName: app.businessName,
+          contactName: app.contactName,
+          email: app.email.toLowerCase().trim(),
+          phone: app.phone,
+          address: app.address,
+          password: tempPassword, // only used by file-based fallback auth
+          createdAt: new Date().toISOString(),
+        };
+        await createCustomer(newCustomer);
+
+        // Provision a Supabase Auth user so the portal login (which uses
+        // sb.auth.signInWithPassword) works for this email.
+        if (isSupabaseConfigured()) {
+          try {
+            const sb = createAdminClient();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const adminApi = (sb.auth as any).admin;
+            if (adminApi?.createUser) {
+              const res = await adminApi.createUser({
+                email: newCustomer.email,
+                password: tempPassword,
+                email_confirm: true,
+                user_metadata: {
+                  business_name: newCustomer.businessName,
+                  contact_name: newCustomer.contactName,
+                },
+              });
+              if (res?.error) {
+                // If the user already exists in Supabase Auth, treat as success.
+                const alreadyExists = /already|exists|registered/i.test(res.error.message);
+                if (!alreadyExists) {
+                  console.error('[approval] Supabase auth user creation failed:', res.error.message);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[approval] Supabase auth provisioning failed (non-fatal):', err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[approval] customer creation failed (non-fatal):', err);
+    }
+  }
+
+  // Notify the applicant of the decision.
   if (body.status === 'approved' || body.status === 'rejected') {
     (async () => {
       try {
-        const apps = await getApplications();
-        const app = apps.find((a) => a.id === body.id);
-        if (app) {
-          await notifyApplicationDecision({
-            applicationId: app.id,
-            applicantEmail: app.email,
-            applicantName: app.contactName,
-            businessName: app.businessName,
-            decision: body.status,
-            portalUrl: 'https://guidon-wholesale.vercel.app/portal',
-          });
-        }
+        await notifyApplicationDecision({
+          applicationId: app.id,
+          applicantEmail: app.email,
+          applicantName: app.contactName,
+          businessName: app.businessName,
+          decision: body.status,
+          portalUrl: 'https://guidon-wholesale.vercel.app/portal',
+          tempPassword,
+        });
       } catch (err) {
         console.error('[email] notifyApplicationDecision failed (non-fatal):', err);
       }
     })();
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, tempPassword });
+}
+
+/**
+ * Generate a human-typable temp password: 3 short words + 2 digits.
+ * Readable over the phone in case the email ends up in spam and the
+ * admin needs to relay it. Low bits of entropy but fine as a one-time
+ * reset credential; the portal prompts for a password change on first
+ * login (future work) and these are always replaceable via the reset
+ * flow.
+ */
+function generateTempPassword(): string {
+  const words = [
+    'amber', 'brass', 'hops', 'malt', 'pine', 'cask', 'reed', 'barn',
+    'field', 'stone', 'ridge', 'flag', 'oak', 'drift', 'clove', 'wheat',
+  ];
+  const pick = () => words[Math.floor(Math.random() * words.length)];
+  const digits = Math.floor(10 + Math.random() * 90);
+  return `${pick()}-${pick()}-${pick()}-${digits}`;
 }
