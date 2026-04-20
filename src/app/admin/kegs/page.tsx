@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Fragment, useCallback, useMemo } from 'react';
-import { Customer, KegBalance, KegLedgerEntry, KegSize } from '@/lib/types';
+import { Customer, KegBalance, KegLedgerEntry, KegSize, KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
@@ -185,6 +185,10 @@ export default function KegTrackerPage() {
     sixth: acc.sixth + (b.balance['1/6bbl'] || 0),
   }), { half: 0, quarter: 0, sixth: 0 });
   const grandTotal = totals.half + totals.quarter + totals.sixth;
+  const depositValue =
+    totals.half * KEG_DEPOSITS['1/2bbl'] +
+    totals.quarter * KEG_DEPOSITS['1/4bbl'] +
+    totals.sixth * KEG_DEPOSITS['1/6bbl'];
 
   return (
     <div className="space-y-6">
@@ -203,16 +207,17 @@ export default function KegTrackerPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: '1/2 Barrel', value: totals.half, color: 'text-gold' },
-          { label: '1/4 Barrel', value: totals.quarter, color: 'text-gold' },
-          { label: '1/6 Barrel', value: totals.sixth, color: 'text-gold' },
-          { label: 'Total Kegs', value: grandTotal, color: 'text-gold' },
+          { label: '1/2 Barrel', value: totals.half.toString() },
+          { label: '1/4 Barrel', value: totals.quarter.toString() },
+          { label: '1/6 Barrel', value: totals.sixth.toString() },
+          { label: 'Total Kegs', value: grandTotal.toString() },
+          { label: 'Deposits Out', value: formatCurrency(depositValue), small: true },
         ].map((item) => (
           <div key={item.label} className="card py-4 px-4 text-center">
             <p className="text-[10px] font-bold text-cream/30 uppercase tracking-widest mb-1">{item.label}</p>
-            <p className={cn('text-2xl font-black', item.color)}>{item.value}</p>
+            <p className={cn('font-black text-gold', item.small ? 'text-lg' : 'text-2xl')}>{item.value}</p>
           </div>
         ))}
       </div>
