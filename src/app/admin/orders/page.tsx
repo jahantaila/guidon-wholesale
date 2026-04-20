@@ -14,6 +14,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [reminderToast, setReminderToast] = useState<string>('');
 
   useEffect(() => {
     async function load() {
@@ -53,6 +54,7 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
+      {reminderToast && <div className="toast">{reminderToast}</div>}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <span className="section-label mb-1 block">Management</span>
@@ -174,6 +176,41 @@ export default function OrdersPage() {
                                 <span>Total: <strong className="text-gold">{formatCurrency(order.total)}</strong></span>
                               </div>
                               {order.notes && <p className="text-sm text-cream/30 italic">Notes: {order.notes}</p>}
+
+                              {/* Admin actions for delivered/completed orders:
+                                  remind the customer to return outstanding kegs. */}
+                              {(order.status === 'delivered' || order.status === 'completed') && (
+                                <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/admin/remind-kegs', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ orderId: order.id }),
+                                        });
+                                        if (res.ok) {
+                                          setReminderToast(`Reminder email sent for ${order.id}.`);
+                                        } else {
+                                          const data = await res.json().catch(() => ({}));
+                                          setReminderToast(data.error || 'Reminder failed.');
+                                        }
+                                        window.setTimeout(() => setReminderToast(''), 3500);
+                                      } catch {
+                                        setReminderToast('Reminder failed.');
+                                        window.setTimeout(() => setReminderToast(''), 3500);
+                                      }
+                                    }}
+                                    className="btn-secondary text-xs"
+                                    title="Email the customer reminding them to return outstanding kegs"
+                                  >
+                                    Remind about kegs
+                                  </button>
+                                  <span className="text-xs italic text-cream/30">
+                                    Sends a reminder email asking them to request a return via the portal.
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

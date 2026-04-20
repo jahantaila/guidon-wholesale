@@ -349,6 +349,49 @@ export async function notifyApplicationSubmitted(args: {
 }
 
 /**
+ * Keg-return reminder. Admin clicks a button on a delivered order; this
+ * emails the customer asking them to put in a return request on the
+ * portal.
+ */
+export async function notifyKegReminder(args: {
+  orderId: string;
+  customerEmail: string;
+  customerName: string;
+  businessName: string;
+  items: OrderLine[];
+  deliveryDate: string;
+  portalUrl?: string;
+}): Promise<void> {
+  const kegRows = args.items
+    .map(
+      (i) =>
+        `<li style="margin:4px 0;"><span style="font-family:monospace;color:#9E7A3B;font-weight:600;">${i.quantity}</span> &middot; <em style="color:#6B5F48;">${escapeHtml(i.size)}</em> ${escapeHtml(i.productName)}</li>`,
+    )
+    .join('');
+
+  await send({
+    to: args.customerEmail,
+    subject: `Keg return reminder — order ${args.orderId}`,
+    html: emailShell({
+      title: 'Time to return those kegs',
+      preheader: `We still have kegs out from order ${args.orderId}.`,
+      body: `
+        <p>${escapeHtml(args.customerName)} &mdash;</p>
+        <p style="margin:12px 0;">We still have kegs out from your order <strong>${escapeHtml(args.orderId)}</strong> (delivered ${escapeHtml(args.deliveryDate)}):</p>
+        <ul style="margin:8px 0 16px 18px;font-size:14px;">${kegRows}</ul>
+        <p style="margin:12px 0;">When you&rsquo;re ready, log into the portal and submit a return request so we can pick them up on your next delivery and credit the deposits back.</p>
+        ${
+          args.portalUrl
+            ? `<p style="margin:14px 0;"><a href="${args.portalUrl}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open wholesale portal &rarr;</a></p>`
+            : ''
+        }
+        <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;font-style:italic;">No rush — we just want to make sure our empties come home eventually. Reply if you already sent them and our tracking is stale.</p>
+      `,
+    }),
+  });
+}
+
+/**
  * Application decision. Called when an admin approves or rejects an
  * application. Includes portal login info on approval.
  */
