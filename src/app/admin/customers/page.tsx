@@ -28,11 +28,13 @@ export default function CustomersPage() {
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadCustomers = useCallback(async () => {
     try {
+      const custPath = showArchived ? '/api/customers?includeArchived=true' : '/api/customers';
       const [custRes, ordRes, invRes] = await Promise.all([
-        adminFetch('/api/customers'),
+        adminFetch(custPath),
         adminFetch('/api/orders'),
         adminFetch('/api/invoices'),
       ]);
@@ -44,7 +46,18 @@ export default function CustomersPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadCustomers(); }, [loadCustomers]);
+  useEffect(() => { loadCustomers(); }, [loadCustomers, showArchived]);
+
+  const restoreCustomer = async (id: string) => {
+    try {
+      const res = await adminFetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, archivedAt: null }),
+      });
+      if (res.ok) await loadCustomers();
+    } catch { /* ignore */ }
+  };
 
   // Per-customer metrics: LTV (sum of all order totals), last order date, outstanding invoice count + $
   const metricsByCustomer = useMemo(() => {
@@ -124,6 +137,10 @@ export default function CustomersPage() {
           <h2 className="font-heading text-2xl font-black text-cream">Customers</h2>
         </div>
         <div className="flex items-center gap-3 self-start">
+          <label className="flex items-center gap-1.5 text-xs text-cream/50 cursor-pointer select-none">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-gold cursor-pointer" />
+            Show archived
+          </label>
           <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="input max-w-[200px] text-sm" />
           <button onClick={openAdd} className="btn-primary">
@@ -189,21 +206,36 @@ export default function CustomersPage() {
                     </td>
                     <td className="table-cell text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <Link href={`/admin/customers/${c.id}`} className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                          Details
-                        </Link>
-                        <button onClick={() => openEdit(c)} className="text-gold/70 hover:text-gold text-sm font-semibold transition-colors">
-                          Edit
-                        </button>
-                        {deleteConfirm === c.id ? (
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => handleDelete(c.id)} className="text-red-400 text-sm font-semibold">Confirm</button>
-                            <button onClick={() => setDeleteConfirm(null)} className="text-cream/30 text-sm">Cancel</button>
-                          </div>
+                        {c.archivedAt ? (
+                          <>
+                            <span className="text-xs italic text-cream/30">archived {formatDate(c.archivedAt)}</span>
+                            <button
+                              onClick={() => restoreCustomer(c.id)}
+                              className="text-sm font-semibold"
+                              style={{ color: 'var(--pine)' }}
+                            >
+                              Restore
+                            </button>
+                          </>
                         ) : (
-                          <button onClick={() => setDeleteConfirm(c.id)} className="text-red-400/50 hover:text-red-400 text-sm font-semibold transition-colors">
-                            Delete
-                          </button>
+                          <>
+                            <Link href={`/admin/customers/${c.id}`} className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
+                              Details
+                            </Link>
+                            <button onClick={() => openEdit(c)} className="text-gold/70 hover:text-gold text-sm font-semibold transition-colors">
+                              Edit
+                            </button>
+                            {deleteConfirm === c.id ? (
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleDelete(c.id)} className="text-red-400 text-sm font-semibold">Confirm</button>
+                                <button onClick={() => setDeleteConfirm(null)} className="text-cream/30 text-sm">Cancel</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setDeleteConfirm(c.id)} className="text-red-400/50 hover:text-red-400 text-sm font-semibold transition-colors">
+                                Delete
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

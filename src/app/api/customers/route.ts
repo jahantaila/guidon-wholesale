@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
   if (session?.value !== 'authenticated') {
     return NextResponse.json([], { status: 200 });
   }
-  const customers = await getCustomers();
+  const { searchParams } = new URL(request.url);
+  const includeArchived = searchParams.get('includeArchived') === 'true';
+  const customers = await getCustomers(includeArchived);
   // Strip passwords from response
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const safe = customers.map(({ password, ...rest }) => rest);
