@@ -14,7 +14,6 @@ const SIZE_SHORT: Record<string, string> = { '1/2bbl': 'Half', '1/4bbl': 'Quarte
 const STEPS: { key: OrderStatus; label: string }[] = [
   { key: 'pending', label: 'Placed' },
   { key: 'confirmed', label: 'Confirmed' },
-  { key: 'delivered', label: 'Delivered' },
   { key: 'completed', label: 'Completed' },
 ];
 

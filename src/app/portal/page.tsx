@@ -1570,7 +1570,7 @@ function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loa
         </div>
       ) : sorted.length === 0 ? (
         <div className="card text-center text-cream/25 py-10">
-          <p>No invoices yet. Invoices are sent when orders are delivered.</p>
+          <p>No invoices yet. Invoices are sent when orders are confirmed.</p>
         </div>
       ) : (
         <div className="space-y-2">

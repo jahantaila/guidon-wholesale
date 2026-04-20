@@ -58,8 +58,8 @@ describe("getStatusColor", () => {
     expect(getStatusColor("pending")).toContain("gold");
   });
 
-  it("returns emerald for delivered", () => {
-    expect(getStatusColor("delivered")).toContain("emerald");
+  it("returns emerald for completed", () => {
+    expect(getStatusColor("completed")).toContain("emerald");
   });
 
   it("returns red for unpaid", () => {

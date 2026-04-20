@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
+import { extractError } from '@/lib/extract-error';
 
 /**
  * GET /api/health
@@ -21,7 +22,7 @@ export async function GET() {
       const { error } = await sb.from('products').select('id', { count: 'exact', head: true });
       checks.supabase = error ? { ok: false, detail: error.message } : { ok: true };
     } catch (err) {
-      checks.supabase = { ok: false, detail: err instanceof Error ? err.message : String(err) };
+      checks.supabase = { ok: false, detail: extractError(err) };
     }
   } else {
     checks.supabase = { ok: false, detail: 'Not configured (file-based fallback)' };

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { getOrder, updateOrder, getCustomers, adjustProductInventory } from '@/lib/data';
 
 /**
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, order: updated });
   } catch (err) {
     console.error('[portal/cancel-order] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

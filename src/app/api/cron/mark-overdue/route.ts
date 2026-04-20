@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { getInvoices, updateInvoice } from '@/lib/data';
 
 /**
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(await runCron());
   } catch (err) {
     console.error('[mark-overdue] top-level:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

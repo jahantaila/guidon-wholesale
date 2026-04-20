@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import {
   getDueRecurringOrders,
   getUpcomingRecurringOrders,
@@ -137,7 +138,7 @@ async function runCron() {
       created.push(`${rec.id} -> ${order.id}`);
     } catch (err) {
       console.error('[cron] failed for recurring', rec.id, err);
-      skipped.push(`${rec.id}: ${err instanceof Error ? err.message : String(err)}`);
+      skipped.push(`${rec.id}: ${extractError(err)}`);
     }
   }
 
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     console.error('[cron] top-level error:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

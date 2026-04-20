@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { getOrders, getCustomers, getInvoices, getKegLedger, getApplications } from '@/lib/data';
 import { send, formatCurrencyForEmail } from '@/lib/email';
 
@@ -7,7 +8,7 @@ import { send, formatCurrencyForEmail } from '@/lib/email';
  *
  * Vercel cron runs this Mondays at 13:00 UTC. Sends a single email to the
  * notification recipients summarizing the past 7 days: orders placed,
- * revenue delivered, outstanding AR, applications awaiting review, and
+ * revenue confirmed, outstanding AR, applications awaiting review, and
  * kegs that have been out a while (>60 days) so Mike can follow up.
  *
  * Auth: same shape as the recurring-orders cron — Vercel cron header or
@@ -37,7 +38,7 @@ async function buildDigest() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const weekOrders = orders.filter((o) => new Date(o.createdAt) >= weekAgo);
   const weekRevenue = orders
-    .filter((o) => (o.status === 'delivered' || o.status === 'completed') && new Date(o.createdAt) >= weekAgo)
+    .filter((o) => (o.status === 'confirmed' || o.status === 'completed') && new Date(o.createdAt) >= weekAgo)
     .reduce((s, o) => s + o.total, 0);
 
   const outstandingInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue');
@@ -106,7 +107,7 @@ function renderDigestHtml(d: Awaited<ReturnType<typeof buildDigest>>) {
   </td></tr>
   <tr><td style="padding:20px 28px;font-size:15px;line-height:1.6;">
     <p style="margin:0 0 12px;"><strong>${d.weekOrders}</strong> order${d.weekOrders === 1 ? '' : 's'} placed this week.</p>
-    <p style="margin:0 0 12px;"><strong>${formatCurrencyForEmail(d.weekRevenue)}</strong> in delivered revenue this week.</p>
+    <p style="margin:0 0 12px;"><strong>${formatCurrencyForEmail(d.weekRevenue)}</strong> in confirmed revenue this week.</p>
     ${d.outstandingInvoices > 0
       ? `<p style="margin:0 0 12px;color:#C0392B;"><strong>${d.outstandingInvoices}</strong> invoice${d.outstandingInvoices === 1 ? '' : 's'} outstanding (${formatCurrencyForEmail(d.outstandingAR)}).</p>`
       : `<p style="margin:0 0 12px;">No outstanding invoices.</p>`}
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(await runCron());
   } catch (err) {
     console.error('[weekly-digest] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

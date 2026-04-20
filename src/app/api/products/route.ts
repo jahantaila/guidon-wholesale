@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getProducts, getAllProducts, createProduct, updateProduct, deleteProduct } from '@/lib/data';
 import { generateId } from '@/lib/utils';
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(products);
   } catch (err) {
     console.error('[api/products GET] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(product, { status: 201 });
   } catch (err) {
     console.error('[api/products POST] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -81,7 +82,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[api/products PUT] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -106,7 +107,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[api/products DELETE] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { createCustomer, getCustomers } from '@/lib/data';
 import { isAdminRequest } from '@/lib/auth-check';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ created, skipped, total: rows.length });
   } catch (err) {
     console.error('[api/customers/import] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

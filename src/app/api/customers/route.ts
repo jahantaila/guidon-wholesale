@@ -3,6 +3,7 @@ import { isAdminRequest } from '@/lib/auth-check';
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getOrders, getInvoices, getKegLedger } from '@/lib/data';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 import { generateId } from '@/lib/utils';
+import { extractError, isAlreadyExistsError } from '@/lib/extract-error';
 import type { Customer } from '@/lib/types';
 
 /**
@@ -37,17 +38,46 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const normalizedEmail = String(body.email).toLowerCase().trim();
+
+    // If a customer with this email already exists (common when admin
+    // approves an application — the approval flow auto-creates the
+    // customer, then the admin UI ALSO tries to create one), return the
+    // existing record instead of erroring. Idempotent.
+    const existing = await getCustomers(true);
+    const dup = existing.find((c) => c.email.toLowerCase() === normalizedEmail);
+    if (dup) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...safe } = dup;
+      return NextResponse.json(safe, { status: 200 });
+    }
+
     const customer: Customer = {
       id: generateId('cust'),
       businessName: body.businessName,
       contactName: body.contactName,
-      email: String(body.email).toLowerCase().trim(),
+      email: normalizedEmail,
       phone: body.phone || '',
       address: body.address || '',
       password: body.password || '',
       createdAt: new Date().toISOString(),
     };
-    await createCustomer(customer);
+    try {
+      await createCustomer(customer);
+    } catch (err) {
+      if (isAlreadyExistsError(err)) {
+        // Race: someone else created between our check and insert. Fetch
+        // and return.
+        const fresh = await getCustomers(true);
+        const row = fresh.find((c) => c.email.toLowerCase() === normalizedEmail);
+        if (row) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { password, ...safe } = row;
+          return NextResponse.json(safe, { status: 200 });
+        }
+      }
+      throw err;
+    }
 
     // Provision a Supabase Auth user so the customer can actually log into
     // /portal. Without this, admin-created customers can't sign in and Mike
@@ -84,7 +114,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(safe, { status: 201 });
   } catch (err) {
     console.error('[api/customers POST] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -158,7 +188,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(safe);
   } catch (err) {
     console.error('[api/customers PUT] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -226,7 +256,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[api/customers DELETE] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: `Customer delete failed: ${message}` }, { status: 500 });
   }
 }

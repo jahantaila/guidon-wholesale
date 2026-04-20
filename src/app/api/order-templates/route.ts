@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getOrderTemplates, createOrderTemplate, deleteOrderTemplate } from '@/lib/data';
 import { generateId } from '@/lib/utils';
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(templates);
   } catch (err) {
     console.error('[api/order-templates GET] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(template, { status: 201 });
   } catch (err) {
     console.error('[api/order-templates POST] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -84,7 +85,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[api/order-templates DELETE] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

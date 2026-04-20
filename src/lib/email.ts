@@ -293,23 +293,19 @@ export async function notifyOrderPlaced(args: {
 
 /**
  * Order status changed. Notifies the customer of transitions that matter to
- * them (confirmed, delivered, completed).
+ * them (confirmed, completed).
  */
 export async function notifyOrderStatusChanged(args: {
   orderId: string;
   customerEmail: string;
   customerName: string;
-  newStatus: 'confirmed' | 'delivered' | 'completed';
+  newStatus: 'confirmed' | 'completed';
   deliveryDate: string;
 }): Promise<void> {
   const copyByStatus: Record<typeof args.newStatus, { title: string; lead: string }> = {
     confirmed: {
       title: `Order ${args.orderId} confirmed`,
-      lead: `Your order is confirmed and scheduled for delivery on <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>.`,
-    },
-    delivered: {
-      title: `Order ${args.orderId} delivered`,
-      lead: `Your kegs have been delivered. An invoice for this order is on its way.`,
+      lead: `Your order is confirmed and scheduled for delivery on <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>. An invoice is on its way.`,
     },
     completed: {
       title: `Order ${args.orderId} completed`,
@@ -393,8 +389,8 @@ export async function notifyApplicationSubmitted(args: {
 }
 
 /**
- * Keg-return reminder. Admin clicks a button on a delivered order; this
- * emails the customer asking them to put in a return request on the
+ * Keg-return reminder. Admin clicks a button on a confirmed/completed order;
+ * this emails the customer asking them to put in a return request on the
  * portal.
  */
 export async function notifyKegReminder(args: {
@@ -421,7 +417,7 @@ export async function notifyKegReminder(args: {
       preheader: `We still have kegs out from order ${args.orderId}.`,
       body: `
         <p>${escapeHtml(args.customerName)} &mdash;</p>
-        <p style="margin:12px 0;">We still have kegs out from your order <strong>${escapeHtml(args.orderId)}</strong> (delivered ${escapeHtml(args.deliveryDate)}):</p>
+        <p style="margin:12px 0;">We still have kegs out from your order <strong>${escapeHtml(args.orderId)}</strong> (delivery ${escapeHtml(args.deliveryDate)}):</p>
         <ul style="margin:8px 0 16px 18px;font-size:14px;">${kegRows}</ul>
         <p style="margin:12px 0;">When you&rsquo;re ready, log into the portal and submit a return request so we can pick them up on your next delivery and credit the deposits back.</p>
         ${

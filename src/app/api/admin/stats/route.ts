@@ -22,7 +22,7 @@ export async function GET() {
   const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'confirmed').length;
 
   const totalRevenue = orders
-    .filter(o => o.status === 'delivered' || o.status === 'completed')
+    .filter(o => o.status === 'confirmed' || o.status === 'completed')
     .reduce((sum, o) => sum + o.total, 0);
 
   const pendingApplications = applications.filter(

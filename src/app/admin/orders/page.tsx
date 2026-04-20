@@ -6,12 +6,11 @@ import { Order, OrderStatus, Customer, Invoice } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
-const STATUS_FLOW: OrderStatus[] = ['pending', 'confirmed', 'delivered', 'completed'];
+const STATUS_FLOW: OrderStatus[] = ['pending', 'confirmed', 'completed'];
 
 const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
   pending: 'Customer placed the order. Awaiting admin review — inventory is not yet reserved.',
-  confirmed: 'Admin has committed to delivering this order. Inventory is now reserved (kegs subtract from stock).',
-  delivered: 'Kegs left the brewery and reached the customer. Keg deposits post to the customer\u2019s ledger; invoice becomes sendable.',
+  confirmed: 'Admin has committed to the order. Inventory is reserved, keg deposits post to the customer\u2019s ledger, and the invoice becomes sendable.',
   completed: 'Order fully paid + kegs either returned or written off. Closed out.',
   cancelled: 'Order voided before delivery. Inventory was restored if it had been reserved. Invoice is left in draft for the admin to clean up.',
 };
@@ -19,8 +18,7 @@ const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
 // What the next status action looks like on a button
 const STATUS_ACTION: Record<OrderStatus, { next?: OrderStatus; label: string; color: string }> = {
   pending: { next: 'confirmed', label: 'Confirm order', color: 'var(--brass)' },
-  confirmed: { next: 'delivered', label: 'Mark delivered', color: 'var(--pine)' },
-  delivered: { next: 'completed', label: 'Mark completed', color: 'var(--olive)' },
+  confirmed: { next: 'completed', label: 'Mark completed', color: 'var(--olive)' },
   completed: { label: 'Completed', color: 'var(--muted)' },
   cancelled: { label: 'Cancelled', color: 'var(--muted)' },
 };
@@ -356,7 +354,7 @@ function TableView({
                     const dd = new Date(order.deliveryDate);
                     const overdue = (order.status === 'pending' || order.status === 'confirmed') && dd < now;
                     return (
-                      <span style={{ color: overdue ? 'var(--ruby)' : undefined }} title={overdue ? 'Past delivery date without being marked delivered' : undefined}>
+                      <span style={{ color: overdue ? 'var(--ruby)' : undefined }} title={overdue ? 'Past delivery date without being marked completed' : undefined}>
                         {formatDate(order.deliveryDate)}
                         {overdue && <span className="ml-1 text-[9px] uppercase tracking-wider">· late</span>}
                       </span>
@@ -458,7 +456,7 @@ function TableView({
                       )}
                       {/* Inline delivery-date edit for pending/confirmed orders.
                           Customer calls to push back delivery — admin can adjust
-                          without touching Supabase. Disabled once delivered. */}
+                          without touching Supabase. Disabled once completed. */}
                       {(order.status === 'pending' || order.status === 'confirmed') && (
                         <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
                           <span className="section-label" style={{ color: 'var(--muted)' }}>Delivery date</span>
@@ -520,7 +518,7 @@ function TableView({
                           </span>
                         </div>
                       )}
-                      {(order.status === 'delivered' || order.status === 'completed') && (
+                      {(order.status === 'confirmed' || order.status === 'completed') && (
                         <div className="flex items-center gap-3 pt-2 border-t border-divider">
                           <button
                             onClick={() => sendReminder(order)}

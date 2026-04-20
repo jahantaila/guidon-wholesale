@@ -146,10 +146,10 @@ export default function AdminDashboard() {
   // client-side means numbers always match what the orders page shows.
   const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length;
   const pendingApplications = applications.filter((a) => !a.status || a.status === 'pending').length;
-  // Revenue this month: delivered + completed orders placed in the current calendar month.
+  // Revenue this month: confirmed + completed orders placed in the current calendar month.
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const totalRevenue = orders
-    .filter((o) => (o.status === 'delivered' || o.status === 'completed') && new Date(o.createdAt) >= monthStart)
+    .filter((o) => (o.status === 'confirmed' || o.status === 'completed') && new Date(o.createdAt) >= monthStart)
     .reduce((s, o) => s + o.total, 0);
   const totalCustomers = customers.filter((c) => !c.archivedAt).length;
 
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
       })),
   );
 
-  // Rolling 14-day revenue bucketed by day (delivered + completed orders only).
+  // Rolling 14-day revenue bucketed by day (confirmed + completed orders only).
   // Used as a sparkline so Mike sees the trend without opening a report.
   const revenue14d = (() => {
     const days: { date: string; total: number }[] = [];
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
     }
     const byDate = new Map(days.map((d, idx) => [d.date, idx] as const));
     for (const o of orders) {
-      if (o.status !== 'delivered' && o.status !== 'completed') continue;
+      if (o.status !== 'confirmed' && o.status !== 'completed') continue;
       const day = new Date(o.createdAt).toISOString().slice(0, 10);
       const idx = byDate.get(day);
       if (idx !== undefined) days[idx].total += o.total;

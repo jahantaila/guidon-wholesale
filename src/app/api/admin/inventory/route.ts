@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adjustProductInventory, setProductInventory } from '@/lib/data';
 import type { KegSize } from '@/lib/types';
 
-const VALID_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
-
 /**
  * PATCH /api/admin/inventory
  *
- * Body: { productId: string, size: "1/2bbl"|"1/4bbl"|"1/6bbl",
- *         count?: number, delta?: number }
+ * Body: { productId: string, size: string, count?: number, delta?: number }
  *
- * If `count` is provided, sets the absolute inventory. If `delta` is
- * provided, adjusts relative (positive = restock, negative = consume).
- * Returns { inventoryCount: number } on success.
+ * Size is arbitrary (admin-defined on the product). If `count` is provided,
+ * sets absolute inventory. If `delta` is provided, adjusts relative
+ * (positive = restock, negative = consume). Returns { inventoryCount }.
  */
 export async function PATCH(request: NextRequest) {
   const body = await request.json();
@@ -26,12 +23,6 @@ export async function PATCH(request: NextRequest) {
   if (!productId || !size) {
     return NextResponse.json(
       { error: 'productId and size are required.' },
-      { status: 400 },
-    );
-  }
-  if (!VALID_SIZES.includes(size as KegSize)) {
-    return NextResponse.json(
-      { error: `size must be one of ${VALID_SIZES.join(', ')}.` },
       { status: 400 },
     );
   }

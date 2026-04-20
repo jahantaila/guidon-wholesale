@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { getNotificationEmails, getSetting, setSetting } from '@/lib/data';
 
 /**
@@ -82,7 +83,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ notificationEmails, deliveryDays, deliveryLeadDays });
   } catch (err) {
     console.error('[api/admin/settings PUT] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

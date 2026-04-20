@@ -1,33 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminRequest } from '@/lib/auth-check';
+import { isAdminRequest, authContext } from '@/lib/auth-check';
+import { extractError } from '@/lib/extract-error';
 import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
-import { authContext } from '@/lib/auth-check';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
 
 const LOW_STOCK_THRESHOLD = 5;
-
-/**
- * Pull a human-readable string out of whatever the server threw. Supabase
- * PostgrestError isn't an Error instance, so `String(err)` on it returns
- * "[object Object]" and that leaked into the admin UI. This checks the
- * most common shapes and falls back to safe stringification.
- */
-function extractError(err: unknown): string {
-  if (!err) return 'Unknown error';
-  if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'object') {
-    const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    if (typeof e.message === 'string') {
-      const detail = typeof e.details === 'string' && e.details ? ` (${e.details})` : '';
-      return e.message + detail;
-    }
-    try { return JSON.stringify(err); } catch { return '[unserializable error]'; }
-  }
-  return String(err);
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -228,7 +207,7 @@ export async function PUT(request: NextRequest) {
 
   // Cancellation: restore inventory if it was confirmed, and void any draft
   // invoice so it doesn't sit around forever. Keg ledger entries shouldn't
-  // exist yet (those only fire on delivered), so nothing to roll back there.
+  // exist yet (those only fire on confirmed), so nothing to roll back there.
   if (updates.status === 'cancelled' && existingOrder.status !== 'cancelled') {
     if (existingOrder.status === 'confirmed') {
       for (const item of existingOrder.items) {
@@ -240,15 +219,11 @@ export async function PUT(request: NextRequest) {
     // and let admin delete it manually if needed. Keeping this simple.
   }
 
-  // pending/confirmed -> delivered: fire the auto-send-invoice path and
-  // invoice fallback. Keg ledger entries were already posted at the
-  // pending->confirmed transition; delivered just means the kegs physically
-  // shipped.
-  if (updates.status === 'delivered' && existingOrder.status !== 'delivered') {
-    // Auto-send invoice on delivery if the customer has autoSendInvoices=true.
-    // The draft invoice was created at order-placement time; here we promote
-    // it to 'unpaid' and fire the customer email. For customers without the
-    // flag, admin will still manually click Send on the Invoices page.
+  // pending -> confirmed: also run the auto-send-invoice path since
+  // confirmed is now the "brewery committed" signal (delivered state
+  // was removed). If the customer has autoSendInvoices on, the draft
+  // invoice flips to unpaid + emails.
+  if (updates.status === 'confirmed' && existingOrder.status === 'pending') {
     try {
       const allCustomers = await getCustomers();
       const customerRec = allCustomers.find((c) => c.id === existingOrder.customerId);
@@ -266,9 +241,7 @@ export async function PUT(request: NextRequest) {
     } catch (err) {
       console.error('[invoice auto-send] failed (non-fatal):', err);
     }
-
-    // Legacy: if somehow no invoice exists (shouldn't happen post-v2 since we
-    // create drafts on POST), create one as a fallback.
+    // Legacy fallback: if no invoice exists yet, create one as unpaid.
     const existingInvoices = await getInvoices();
     const alreadyInvoiced = existingInvoices.some(inv => inv.orderId === id);
     if (!alreadyInvoiced) {
@@ -290,17 +263,13 @@ export async function PUT(request: NextRequest) {
 
   const order = await updateOrder(id, updates);
 
-  // Email the customer on meaningful status transitions (confirmed, delivered,
-  // completed). Pending is internal. Fire-and-forget; errors are logged only.
-  const significantStatus: Array<'confirmed' | 'delivered' | 'completed'> = [
-    'confirmed',
-    'delivered',
-    'completed',
-  ];
+  // Email the customer on meaningful status transitions (confirmed, completed).
+  // Pending is internal. Await so Vercel doesn't kill the promise.
+  const significantStatus: Array<'confirmed' | 'completed'> = ['confirmed', 'completed'];
   if (
     order &&
     updates.status &&
-    significantStatus.includes(updates.status as 'confirmed' | 'delivered' | 'completed') &&
+    significantStatus.includes(updates.status as 'confirmed' | 'completed') &&
     updates.status !== existingOrder.status
   ) {
     try {
@@ -311,7 +280,7 @@ export async function PUT(request: NextRequest) {
           orderId: order.id,
           customerEmail: customer.email,
           customerName: customer.contactName,
-          newStatus: updates.status as 'confirmed' | 'delivered' | 'completed',
+          newStatus: updates.status as 'confirmed' | 'completed',
           deliveryDate: order.deliveryDate,
         });
       }
@@ -345,7 +314,7 @@ async function fireInvoiceEmail(invoice: Invoice, customer: Customer) {
   </td></tr>
   <tr><td style="padding:20px 28px;font-size:15px;">
     <p>${escapeHtml(customer.contactName)} at ${escapeHtml(customer.businessName)},</p>
-    <p style="margin:12px 0;">Your order was delivered. Invoice for <strong>${escapeHtml(invoice.orderId)}</strong> is below. Payment due on receipt.</p>
+    <p style="margin:12px 0;">Your order is confirmed. Invoice for <strong>${escapeHtml(invoice.orderId)}</strong> is below. Payment due on receipt.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:14px;margin:16px 0;">
       <thead><tr style="background:#EEE5CE;">
         <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6B5F48;text-transform:uppercase;letter-spacing:0.08em;">Beer</th>

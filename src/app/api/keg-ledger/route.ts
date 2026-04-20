@@ -58,9 +58,9 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!['1/2bbl', '1/4bbl', '1/6bbl'].includes(body.size)) {
+  if (typeof body.size !== 'string' || !body.size.trim()) {
     return NextResponse.json(
-      { error: 'size must be one of 1/2bbl, 1/4bbl, 1/6bbl.' },
+      { error: 'size is required.' },
       { status: 400 },
     );
   }
@@ -73,11 +73,13 @@ export async function POST(request: NextRequest) {
   }
 
   // Resolve deposit per keg: use explicit body value if given, otherwise
-  // fall back to the canonical KEG_DEPOSITS table.
+  // fall back to the legacy KEG_DEPOSITS table for the three original sizes.
+  // Custom sizes without an explicit deposit fall through to 0 — admin can
+  // adjust manually if deposit is applicable.
   const depositAmount: number =
     typeof body.depositAmount === 'number' && Number.isFinite(body.depositAmount)
       ? body.depositAmount
-      : KEG_DEPOSITS[body.size as KegSize];
+      : KEG_DEPOSITS[body.size as KegSize] ?? 0;
 
   // Stamp a default source on the notes field so the ledger reads as an audit
   // trail: order-delivery auto-posts say "Order xxx delivery" (written by

@@ -31,7 +31,7 @@ export default function DeliveriesPage() {
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-  // Group by delivery date — only pending + confirmed (not yet delivered)
+  // Group by delivery date — only pending + confirmed (not yet completed)
   const groups: DeliveryGroup[] = (() => {
     const byDate = new Map<string, Order[]>();
     for (const o of orders) {

@@ -72,7 +72,7 @@ export default function CustomerDetailPage() {
 
   const totalKegsOut = balance['1/2bbl'] + balance['1/4bbl'] + balance['1/6bbl'];
   const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
-  const deliveredOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'completed');
+  const shippedOrders = orders.filter((o) => o.status === 'confirmed' || o.status === 'completed');
   const outstandingInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue');
   const outstandingAmount = outstandingInvoices.reduce((s, i) => s + i.total, 0);
 
@@ -167,11 +167,11 @@ export default function CustomerDetailPage() {
   };
 
   const remindAboutKegs = async () => {
-    if (deliveredOrders.length === 0) return;
+    if (shippedOrders.length === 0) return;
     setSendingReminder(true);
     try {
-      // Send a reminder for the most recent delivered order that still has kegs
-      const target = deliveredOrders.sort(
+      // Send a reminder for the most recent confirmed/completed order that still has kegs.
+      const target = shippedOrders.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )[0];
       const res = await adminFetch('/api/admin/remind-kegs', {
@@ -267,7 +267,7 @@ export default function CustomerDetailPage() {
           {totalKegsOut > 0 && (
             <button
               onClick={remindAboutKegs}
-              disabled={sendingReminder || deliveredOrders.length === 0}
+              disabled={sendingReminder || shippedOrders.length === 0}
               className="btn-secondary text-sm"
             >
               {sendingReminder ? 'Sending…' : 'Remind about kegs'}
@@ -357,7 +357,7 @@ export default function CustomerDetailPage() {
             Auto-send invoices on delivery
           </label>
           <span className="text-xs italic flex-1" style={{ color: 'var(--muted)' }}>
-            When on, this customer gets their invoice emailed the moment their order is marked delivered. When off, admin reviews + clicks Send from the Invoices tab first.
+            When on, this customer gets their invoice emailed the moment their order is confirmed. When off, admin reviews + clicks Send from the Invoices tab first.
           </span>
         </div>
         {customer.tags && customer.tags.length > 0 && (

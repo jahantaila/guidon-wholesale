@@ -170,9 +170,15 @@ create table if not exists invoices (
 alter table invoices drop constraint if exists invoices_status_check;
 alter table invoices add constraint invoices_status_check check (status in ('draft', 'unpaid', 'paid', 'overdue'));
 
--- Orders now support a 'cancelled' status for orders voided before delivery.
+-- Orders lifecycle simplified: pending → confirmed → completed (+ cancelled).
+-- 'delivered' was a redundant middle state and is dropped; any existing
+-- 'delivered' rows need to be migrated to 'confirmed' or 'completed' out
+-- of band.
 alter table orders drop constraint if exists orders_status_check;
-alter table orders add constraint orders_status_check check (status in ('pending', 'confirmed', 'delivered', 'completed', 'cancelled'));
+alter table orders add constraint orders_status_check check (status in ('pending', 'confirmed', 'completed', 'cancelled'));
+-- Migrate any leftover 'delivered' rows forward to 'completed' so they
+-- don't violate the new check constraint.
+update orders set status = 'completed' where status = 'delivered';
 alter table invoices add column if not exists sent_at timestamptz;
 
 -- Customer-level notes for brewery staff context ("prefers Thursday

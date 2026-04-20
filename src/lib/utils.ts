@@ -28,10 +28,8 @@ export function getStatusColor(status: string): string {
       return 'bg-gold/20 text-gold border border-gold/30';
     case 'confirmed':
       return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
-    case 'delivered':
-      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     case 'completed':
-      return 'bg-olive/30 text-olive-300 border border-olive/40';
+      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     case 'paid':
       return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     case 'unpaid':

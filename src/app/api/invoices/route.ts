@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractError } from '@/lib/extract-error';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getInvoices, createInvoice, updateInvoice, getCustomers, getOrder } from '@/lib/data';
 import { send, formatCurrencyForEmail } from '@/lib/email';
@@ -138,7 +139,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(invoice);
   } catch (err) {
     console.error('[api/invoices PUT] failed:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

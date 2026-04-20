@@ -10,7 +10,7 @@ export interface Customer {
   notes?: string;
   /** Free-form tags like "priority", "net-30", "tasting-room". */
   tags?: string[];
-  /** When true, invoice auto-sends on order-delivered transition. */
+  /** When true, invoice auto-sends when order is confirmed. */
   autoSendInvoices?: boolean;
   /** Soft-delete timestamp; archived customers are hidden from default lists. */
   archivedAt?: string | null;
@@ -81,7 +81,11 @@ export type KegSize = string;
 /** Legacy defaults kept for backward compat + keg-return fallbacks. */
 export const LEGACY_KEG_SIZES = ['1/2bbl', '1/4bbl', '1/6bbl'] as const;
 
-export type OrderStatus = 'pending' | 'confirmed' | 'delivered' | 'completed' | 'cancelled';
+// Order lifecycle: pending (customer placed) → confirmed (brewery committed,
+// inventory reserved, kegs posted to ledger, invoice ready) → completed
+// (closed out, paid + kegs returned or written off). cancelled is the
+// out-of-band path; admin voids before the order ships.
+export type OrderStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   productId: string;
