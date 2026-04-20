@@ -7,12 +7,13 @@ import type { Invoice } from '@/lib/types';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
-  // Unfiltered: admin-only. Scoped by customerId: allowed for portal users.
-  if (!customerId) {
-    const session = request.cookies.get('admin_session');
-    if (session?.value !== 'authenticated') {
-      return NextResponse.json([], { status: 200 });
-    }
+  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+  if (!customerId && !admin) {
+    return NextResponse.json([], { status: 200 });
+  }
+  if (customerId && !admin && portalCustomerId !== customerId) {
+    return NextResponse.json([], { status: 200 });
   }
   let invoices = await getInvoices();
   if (customerId) {

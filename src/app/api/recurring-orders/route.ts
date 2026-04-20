@@ -7,6 +7,14 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId') || undefined;
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    // Unfiltered: admin-only.
+    if (!customerId && !admin) return NextResponse.json([], { status: 200 });
+    // Scoped: admin or owning customer.
+    if (customerId && !admin && portalCustomerId !== customerId) {
+      return NextResponse.json([], { status: 200 });
+    }
     const rows = await getRecurringOrders(customerId);
     return NextResponse.json(rows);
   } catch (err) {
@@ -24,6 +32,12 @@ export async function POST(request: NextRequest) {
         { error: 'customerId, name, and non-empty items[] are required' },
         { status: 400 },
       );
+    }
+    // Admin-only: creating a recurring order is a scheduled-billing commitment
+    // the brewery owns. Portal users can pause/resume via PUT but not create.
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    if (!admin) {
+      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
     const intervalDays = Number(body.intervalDays);
     if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 365) {
@@ -61,8 +75,27 @@ export async function PUT(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    // Whitelist mutable fields so a crafted PUT can't overwrite created_at,
-    // customer_id, etc.
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    // Portal user: can only toggle active on their own recurring order.
+    // Admin: full control.
+    if (!admin) {
+      const existing = await getRecurringOrders(portalCustomerId);
+      if (!existing.some((r) => r.id === id)) {
+        return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+      }
+      // Constrain portal fields to active only. Name / items / schedule are
+      // the brewery's commitment.
+      const updates: Parameters<typeof updateRecurringOrder>[1] = {};
+      if (typeof body.active === 'boolean') updates.active = body.active;
+      const updated = await updateRecurringOrder(id, updates);
+      if (!updated) {
+        return NextResponse.json({ error: 'Recurring order not found' }, { status: 404 });
+      }
+      return NextResponse.json(updated);
+    }
+    // Admin path: whitelist mutable fields so a crafted PUT can't overwrite
+    // created_at, customer_id, etc.
     const updates: Parameters<typeof updateRecurringOrder>[1] = {};
     if (typeof body.name === 'string') updates.name = body.name;
     if (Array.isArray(body.items) && body.items.length > 0) updates.items = body.items;
@@ -91,6 +124,11 @@ export async function DELETE(request: NextRequest) {
     const body = await request.json();
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    // Admin-only: deleting a recurring schedule is a management decision.
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    if (!admin) {
+      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
     const ok = await deleteRecurringOrder(body.id);
     if (!ok) {

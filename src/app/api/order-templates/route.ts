@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ error: 'customerId is required' }, { status: 400 });
     }
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    if (!admin && portalCustomerId !== customerId) {
+      return NextResponse.json([], { status: 200 });
+    }
     const templates = await getOrderTemplates(customerId);
     return NextResponse.json(templates);
   } catch (err) {
@@ -27,6 +32,11 @@ export async function POST(request: NextRequest) {
         { error: 'customerId, name, and items[] are required' },
         { status: 400 },
       );
+    }
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    if (!admin && portalCustomerId !== body.customerId) {
+      return NextResponse.json({ error: 'Not authorized for this customer' }, { status: 403 });
     }
     const name = String(body.name).trim();
     if (!name) {
@@ -56,6 +66,15 @@ export async function DELETE(request: NextRequest) {
     const body = await request.json();
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+    const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    if (!admin) {
+      // Portal user can only delete their own templates.
+      const mine = await getOrderTemplates(portalCustomerId);
+      if (!mine.some((t) => t.id === body.id)) {
+        return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+      }
     }
     const ok = await deleteOrderTemplate(body.id);
     if (!ok) {

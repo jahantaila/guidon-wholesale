@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
+import { authContext } from '@/lib/auth-check';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
@@ -10,16 +11,16 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
-    // Unfiltered (no customerId): admin-only. Scoped (with customerId):
-    // allowed for portal users querying their own history. The portal UI
-    // always passes the logged-in customer's id; for now we trust that
-    // envelope. A future tightening can enforce the id matches the
-    // authenticated email's customer row.
-    if (!customerId) {
-      const session = request.cookies.get('admin_session');
-      if (session?.value !== 'authenticated') {
-        return NextResponse.json([], { status: 200 });
-      }
+    const { admin, portalCustomerId } = authContext(request);
+    // Unfiltered (no customerId): admin-only.
+    if (!customerId && !admin) {
+      return NextResponse.json([], { status: 200 });
+    }
+    // Scoped by customerId: admin can query anyone; portal customer can
+    // only query their own. Prevents enumerating other customers' orders
+    // by guessing ids.
+    if (customerId && !admin && portalCustomerId !== customerId) {
+      return NextResponse.json([], { status: 200 });
     }
     let orders = await getOrders();
     if (customerId) {

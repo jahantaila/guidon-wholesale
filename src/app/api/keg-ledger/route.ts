@@ -8,20 +8,38 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
   const balances = searchParams.get('balances');
+  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const portalCustomerId = request.cookies.get('portal_session')?.value || '';
 
+  // Balances and unfiltered ledger: admin-only.
   if (balances === 'true') {
+    if (!admin) return NextResponse.json([], { status: 200 });
     return NextResponse.json(await getAllKegBalances());
   }
 
   if (customerId) {
+    // Admin can query anyone; portal user only themselves.
+    if (!admin && portalCustomerId !== customerId) {
+      return NextResponse.json([], { status: 200 });
+    }
     return NextResponse.json(await getKegLedgerByCustomer(customerId));
   }
 
+  if (!admin) return NextResponse.json([], { status: 200 });
   return NextResponse.json(await getKegLedger());
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
+
+  // Authz: admin can log any customer's keg movement; portal user can
+  // only log their own (e.g. request a return). Prevents a logged-in
+  // customer from crediting arbitrary accounts.
+  const admin = request.cookies.get('admin_session')?.value === 'authenticated';
+  const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+  if (!admin && portalCustomerId !== body.customerId) {
+    return NextResponse.json({ error: 'Not authorized for this customer' }, { status: 403 });
+  }
 
   // Validate required fields. Previously the API multiplied an undefined
   // depositAmount by quantity, producing NaN and a schema violation on
