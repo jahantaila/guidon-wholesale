@@ -91,11 +91,29 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const admin = request.cookies.get('admin_session')?.value === 'authenticated';
-    if (!admin) {
-      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
-    }
+    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     const body = await request.json();
-    const { id, ...updates } = body;
+    const { id, ...rawUpdates } = body;
+    if (!id) {
+      return NextResponse.json({ error: 'ID required' }, { status: 400 });
+    }
+    // Portal customers can edit only their own row, and only a safe subset
+    // of fields (contact/phone/address/password). Admin can edit anything.
+    let updates = rawUpdates;
+    if (!admin) {
+      if (portalCustomerId !== id) {
+        return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+      }
+      updates = {
+        contactName: rawUpdates.contactName,
+        phone: rawUpdates.phone,
+        address: rawUpdates.address,
+        password: rawUpdates.password,
+        email: rawUpdates.email,
+      };
+      // Strip undefined keys so we don't overwrite with nulls.
+      Object.keys(updates).forEach((k) => updates[k] === undefined && delete updates[k]);
+    }
     const customer = await updateCustomer(id, updates);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
