@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, addKegLedgerEntry, adjustProductInventory } from '@/lib/data';
+import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry } from '@/lib/types';
+import { notifyOrderPlaced, notifyOrderStatusChanged } from '@/lib/email';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -29,6 +30,32 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
   };
   await createOrder(order);
+
+  // Fire-and-forget email notifications. Never block order creation on email
+  // delivery, and never surface email errors to the client.
+  (async () => {
+    try {
+      const customers = await getCustomers();
+      const customer = customers.find((c) => c.id === order.customerId);
+      if (customer) {
+        await notifyOrderPlaced({
+          orderId: order.id,
+          customerEmail: customer.email,
+          customerName: customer.contactName,
+          businessName: customer.businessName,
+          items: order.items,
+          subtotal: order.subtotal,
+          totalDeposit: order.totalDeposit,
+          total: order.total,
+          deliveryDate: order.deliveryDate,
+          notes: order.notes,
+        });
+      }
+    } catch (err) {
+      console.error('[email] notifyOrderPlaced failed (non-fatal):', err);
+    }
+  })();
+
   return NextResponse.json(order, { status: 201 });
 }
 
@@ -120,5 +147,38 @@ export async function PUT(request: NextRequest) {
   }
 
   const order = await updateOrder(id, updates);
+
+  // Email the customer on meaningful status transitions (confirmed, delivered,
+  // completed). Pending is internal. Fire-and-forget; errors are logged only.
+  const significantStatus: Array<'confirmed' | 'delivered' | 'completed'> = [
+    'confirmed',
+    'delivered',
+    'completed',
+  ];
+  if (
+    order &&
+    updates.status &&
+    significantStatus.includes(updates.status as 'confirmed' | 'delivered' | 'completed') &&
+    updates.status !== existingOrder.status
+  ) {
+    (async () => {
+      try {
+        const customers = await getCustomers();
+        const customer = customers.find((c) => c.id === order.customerId);
+        if (customer) {
+          await notifyOrderStatusChanged({
+            orderId: order.id,
+            customerEmail: customer.email,
+            customerName: customer.contactName,
+            newStatus: updates.status as 'confirmed' | 'delivered' | 'completed',
+            deliveryDate: order.deliveryDate,
+          });
+        }
+      } catch (err) {
+        console.error('[email] notifyOrderStatusChanged failed (non-fatal):', err);
+      }
+    })();
+  }
+
   return NextResponse.json(order);
 }
