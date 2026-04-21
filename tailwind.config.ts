@@ -12,6 +12,24 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  // Status badge classes are built dynamically in getStatusColor
+  // (`badge-status-${status}`). Tailwind's purge can't see the concatenation
+  // so it strips these from the production CSS and badges render with
+  // only .badge-sm base styling — invisible text on cream. Explicit
+  // safelist keeps every valid status variant.
+  safelist: [
+    'badge-status-pending',
+    'badge-status-confirmed',
+    'badge-status-completed',
+    'badge-status-cancelled',
+    'badge-status-draft',
+    'badge-status-paid',
+    'badge-status-unpaid',
+    'badge-status-overdue',
+    'badge-status-approved',
+    'badge-status-rejected',
+    'badge-status-default',
+  ],
   theme: {
     extend: {
       colors: {
