@@ -22,21 +22,18 @@ export function generateId(prefix: string): string {
   return `${prefix}-${num}`;
 }
 
+// Returns the class name for a status badge. Legible variants live in
+// globals.css under `.badge-status-*` — they use design tokens so colors
+// stay readable on the cream paper theme. Unknown statuses fall through
+// to a quiet default pill.
+const KNOWN_STATUSES = new Set([
+  'pending', 'confirmed', 'completed', 'cancelled',
+  'draft', 'paid', 'unpaid', 'overdue',
+  'approved', 'rejected',
+]);
+
 export function getStatusColor(status: string): string {
-  switch (status) {
-    case 'pending':
-      return 'bg-gold/20 text-gold border border-gold/30';
-    case 'confirmed':
-      return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
-    case 'completed':
-      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-    case 'paid':
-      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-    case 'unpaid':
-      return 'bg-red-500/20 text-red-300 border border-red-500/30';
-    case 'overdue':
-      return 'bg-orange-500/20 text-orange-300 border border-orange-500/30';
-    default:
-      return 'bg-white/10 text-cream/60 border border-white/10';
-  }
+  return KNOWN_STATUSES.has(status)
+    ? `badge-status-${status}`
+    : 'badge-status-default';
 }

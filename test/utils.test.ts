@@ -54,22 +54,20 @@ describe("generateId", () => {
 });
 
 describe("getStatusColor", () => {
-  it("returns amber/gold for pending", () => {
-    expect(getStatusColor("pending")).toContain("gold");
+  it("returns the pending status class for pending", () => {
+    expect(getStatusColor("pending")).toBe("badge-status-pending");
   });
 
-  it("returns emerald for completed", () => {
-    expect(getStatusColor("completed")).toContain("emerald");
+  it("returns the completed status class for completed", () => {
+    expect(getStatusColor("completed")).toBe("badge-status-completed");
   });
 
-  it("returns red for unpaid", () => {
-    expect(getStatusColor("unpaid")).toContain("red");
+  it("returns the unpaid status class for unpaid", () => {
+    expect(getStatusColor("unpaid")).toBe("badge-status-unpaid");
   });
 
-  it("returns default cream/white classes for unknown status", () => {
-    const result = getStatusColor("bogus-status");
-    expect(result).toContain("cream");
-    expect(result).toContain("white");
+  it("returns the default badge class for unknown status", () => {
+    expect(getStatusColor("bogus-status")).toBe("badge-status-default");
   });
 });
 

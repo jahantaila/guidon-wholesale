@@ -285,6 +285,23 @@ body {
     letter-spacing: 0.08em;
   }
 
+  /* Status-colored badges — tokenized so they stay legible on the cream
+     paper bg. Previous Tailwind utilities (text-emerald-300 etc.) were
+     designed for a dark theme and read as nearly-invisible ghost text
+     on paper. Text uses the *dim* variant of each token for proper
+     contrast; background is a soft tint (15% opacity) of the same hue. */
+  .badge-status-pending    { color: var(--brass-dim);   background: color-mix(in srgb, var(--brass) 18%, transparent);   border-color: color-mix(in srgb, var(--brass) 40%, transparent); }
+  .badge-status-confirmed  { color: var(--pine);        background: color-mix(in srgb, var(--pine)  14%, transparent);   border-color: color-mix(in srgb, var(--pine)  45%, transparent); }
+  .badge-status-completed  { color: var(--olive-dim);   background: color-mix(in srgb, var(--olive) 18%, transparent);   border-color: color-mix(in srgb, var(--olive) 45%, transparent); }
+  .badge-status-cancelled  { color: var(--muted);       background: color-mix(in srgb, var(--muted) 14%, transparent);   border-color: color-mix(in srgb, var(--muted) 40%, transparent); }
+  .badge-status-draft      { color: var(--muted);       background: color-mix(in srgb, var(--muted) 10%, transparent);   border-color: color-mix(in srgb, var(--muted) 35%, transparent); }
+  .badge-status-paid       { color: var(--pine);        background: color-mix(in srgb, var(--pine)  14%, transparent);   border-color: color-mix(in srgb, var(--pine)  45%, transparent); }
+  .badge-status-unpaid     { color: var(--ruby);        background: color-mix(in srgb, var(--ruby)  12%, transparent);   border-color: color-mix(in srgb, var(--ruby)  45%, transparent); }
+  .badge-status-overdue    { color: var(--ruby);        background: color-mix(in srgb, var(--ruby)  14%, transparent);   border-color: color-mix(in srgb, var(--ruby)  55%, transparent); }
+  .badge-status-approved   { color: var(--pine);        background: color-mix(in srgb, var(--pine)  14%, transparent);   border-color: color-mix(in srgb, var(--pine)  45%, transparent); }
+  .badge-status-rejected   { color: var(--ruby);        background: color-mix(in srgb, var(--ruby)  12%, transparent);   border-color: color-mix(in srgb, var(--ruby)  45%, transparent); }
+  .badge-status-default    { color: var(--muted);       background: transparent;                                         border-color: var(--divider); }
+
   /* Tables — typographic, tabular, hairline rules. No card backgrounds on rows. */
   .table-header {
     padding: 0.625rem 0.75rem;
