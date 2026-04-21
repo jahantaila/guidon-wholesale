@@ -39,7 +39,12 @@ export async function adminFetch(input: RequestInfo | URL, init?: RequestInit): 
     headers.set('Authorization', `Bearer ${token}`);
   }
   const res = await fetch(input, { ...init, headers });
-  if (res.status === 401 && typeof window !== 'undefined') {
+  // Only treat 401 as a session-expiry event if we *sent* auth. With no
+  // token, a 401 is the expected "not logged in" response that the admin
+  // layout's initial probe relies on to show the login form. If we
+  // redirect/reload here on a token-less 401, the layout remounts,
+  // re-probes, gets another 401, and loops forever.
+  if (res.status === 401 && token && typeof window !== 'undefined') {
     setAdminToken(null);
     try {
       await fetch('/api/admin/login', { method: 'DELETE' });
