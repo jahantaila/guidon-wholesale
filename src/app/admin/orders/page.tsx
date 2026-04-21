@@ -78,6 +78,12 @@ export default function OrdersPage() {
       if (res.ok) {
         const updated = await res.json().catch(() => null);
         setOrders((prev) => prev.map((o) => (o.id === order.id ? (updated ?? { ...o, status: newStatus }) : o)));
+        // Trigger instant sidebar badge refresh (pending + confirmed count
+        // changes when an order transitions). Event is picked up by the
+        // admin layout's listener; see admin/layout.tsx.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('guidon:nav-refresh'));
+        }
       } else {
         // Surface the server's error so the user doesn't stare at a button
         // that silently does nothing. Most common causes: FK / keg_ledger

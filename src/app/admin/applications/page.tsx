@@ -46,6 +46,14 @@ export default function ApplicationsPage() {
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
+  // Dispatched after approve/reject so the sidebar badge count refreshes
+  // immediately instead of waiting up to 60s for the layout's poll.
+  const notifyNavRefresh = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('guidon:nav-refresh'));
+    }
+  };
+
   const handleApprove = async (app: WholesaleApplication & { status?: string }) => {
     setUpdating(app.id);
     try {
@@ -56,6 +64,7 @@ export default function ApplicationsPage() {
       });
       if (res.ok) {
         setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'approved' } : a));
+        notifyNavRefresh();
         // Pre-fill customer creation form
         setCustomerForm({
           businessName: app.businessName,
@@ -88,6 +97,7 @@ export default function ApplicationsPage() {
       });
       if (res.ok) {
         setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'rejected' } : a));
+        notifyNavRefresh();
         setRejectConfirm(null);
       }
     } catch (err) { console.error('Failed to reject application', err); }

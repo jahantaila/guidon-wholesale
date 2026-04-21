@@ -110,9 +110,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [navCounts, setNavCounts] = useState<{ pendingOrders: number; pendingApps: number }>({ pendingOrders: 0, pendingApps: 0 });
   const pathname = usePathname();
 
-  // Poll nav badge counts every 60s from the same raw endpoints the list
-  // pages use, so the sidebar badges stay in sync with the content you
-  // navigate to. Previously used /api/admin/stats which could drift.
+  // Poll nav badge counts from the same raw endpoints the list pages use,
+  // so the sidebar badges stay in sync with the content you navigate to.
+  // Previously used /api/admin/stats which could drift.
+  //
+  // Refresh triggers:
+  //  - 60s interval (catches out-of-band DB changes — e.g., a cron fires)
+  //  - Window focus (admin tabs back into the brewery's browser)
+  //  - 'guidon:nav-refresh' custom event (any page can dispatch this after
+  //    mutating an order / application so the badge updates instantly
+  //    instead of waiting up to 60s).
   useEffect(() => {
     if (!authenticated) return;
     let stop = false;
@@ -137,7 +144,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
     refresh();
     const t = setInterval(refresh, 60_000);
-    return () => { stop = true; clearInterval(t); };
+    const onFocus = () => refresh();
+    const onCustom = () => refresh();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('guidon:nav-refresh', onCustom);
+    return () => {
+      stop = true;
+      clearInterval(t);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('guidon:nav-refresh', onCustom);
+    };
   }, [authenticated]);
 
   useEffect(() => {
