@@ -76,13 +76,19 @@ async function adminRecipients(): Promise<string[]> {
 }
 
 /**
- * Canonical portal URL for email CTAs. Reads NEXT_PUBLIC_APP_URL which we
- * set in Vercel; falls back to the known prod URL so emails still link
- * somewhere reasonable if the env var is missing. Strips trailing slash.
+ * Canonical portal URL for email CTAs. Points customers at the brewery's
+ * own marketing site (guidonbrewing.com/wholesale), which embeds the
+ * wholesale portal via iframe. Overridable with NEXT_PUBLIC_PORTAL_URL
+ * for staging/alt environments. Strips trailing slash.
+ *
+ * Previously built from NEXT_PUBLIC_APP_URL + /portal which pointed at
+ * the raw Vercel URL — but the brewery's customers should only ever see
+ * the guidonbrewing.com domain.
  */
 export function portalUrl(): string {
-  const base = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app';
-  return `${base.replace(/\/$/, '')}/portal`;
+  const override = cleanEnvString(process.env.NEXT_PUBLIC_PORTAL_URL);
+  const base = override || 'https://guidonbrewing.com/wholesale';
+  return base.replace(/\/$/, '');
 }
 
 let _client: Resend | null | undefined;
