@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { WholesaleApplication, Customer } from '@/lib/types';
-import { formatDate, cn } from '@/lib/utils';
+import { formatDate, cn, getStatusColor } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
-function statusColor(status: string): string {
-  switch (status) {
-    case 'approved': return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-    case 'rejected': return 'bg-red-500/20 text-red-400 border border-red-500/30';
-    default: return 'bg-gold/20 text-gold border border-gold/30';
-  }
+// Use the shared badge-status-* classes so the paper-theme colors match
+// everywhere (orders, invoices, keg ledger, applications). Unknown status
+// (rare — a fresh application row with null status) reads as 'pending'.
+function statusColor(status: string | undefined): string {
+  return getStatusColor(status || 'pending');
 }
 
 interface CustomerForm {
@@ -161,20 +160,42 @@ export default function ApplicationsPage() {
                     <button
                       onClick={() => handleApprove(app)}
                       disabled={updating === app.id}
-                      className="text-xs font-heading font-bold px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
+                      className="text-xs font-heading font-bold px-3 py-1.5 rounded transition-all disabled:opacity-50"
+                      style={{
+                        color: 'var(--pine)',
+                        background: 'color-mix(in srgb, var(--pine) 10%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--pine) 45%, transparent)',
+                      }}
                     >
                       Approve
                     </button>
                     {rejectConfirm === app.id ? (
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleReject(app.id)} disabled={updating === app.id}
-                          className="text-xs font-bold text-red-400 px-2 py-1">Confirm</button>
-                        <button onClick={() => setRejectConfirm(null)} className="text-xs text-cream/30 px-2 py-1">Cancel</button>
+                        <button
+                          onClick={() => handleReject(app.id)}
+                          disabled={updating === app.id}
+                          className="text-xs font-bold px-2 py-1"
+                          style={{ color: 'var(--ruby)' }}
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setRejectConfirm(null)}
+                          className="text-xs px-2 py-1"
+                          style={{ color: 'var(--muted)' }}
+                        >
+                          Cancel
+                        </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => setRejectConfirm(app.id)}
-                        className="text-xs font-heading font-bold px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-all"
+                        className="text-xs font-heading font-bold px-3 py-1.5 rounded transition-all"
+                        style={{
+                          color: 'var(--ruby)',
+                          background: 'color-mix(in srgb, var(--ruby) 10%, transparent)',
+                          border: '1px solid color-mix(in srgb, var(--ruby) 45%, transparent)',
+                        }}
                       >
                         Reject
                       </button>
@@ -246,12 +267,18 @@ export default function ApplicationsPage() {
 
             {customerSuccess ? (
               <div className="text-center py-6">
-                <div className="w-12 h-12 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div
+                  className="w-12 h-12 flex items-center justify-center mx-auto mb-3 rounded"
+                  style={{
+                    background: 'color-mix(in srgb, var(--pine) 12%, transparent)',
+                    border: '2px solid color-mix(in srgb, var(--pine) 45%, transparent)',
+                  }}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--pine)' }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <p className="text-sm text-emerald-400 font-heading font-bold">{customerSuccess}</p>
+                <p className="text-sm font-heading font-bold" style={{ color: 'var(--pine)' }}>{customerSuccess}</p>
               </div>
             ) : (
               <form onSubmit={handleCreateCustomer} className="space-y-4">
