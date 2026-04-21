@@ -785,6 +785,11 @@ export async function getApplications(): Promise<WholesaleApplication[]> {
       address: row.address as string,
       businessType: (row.business_type as string) || '',
       expectedMonthlyVolume: (row.expected_monthly_volume as string) || '',
+      // CRITICAL: without this, the admin applications page sees every row
+      // as having no status and treats them all as pending, so approved /
+      // rejected apps never leave the Pending (N) section — the bug users
+      // kept flagging as "approve doesn't work".
+      status: (row.status as 'pending' | 'approved' | 'rejected') || 'pending',
       createdAt: row.created_at as string,
     }));
   }
