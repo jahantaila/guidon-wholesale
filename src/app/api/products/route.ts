@@ -11,9 +11,8 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get('all');
 
     if (all === 'true') {
-      // Unfiltered "all" list is for admin; scoped to admin session.
-      const session = request.cookies.get('admin_session');
-      if (session?.value !== 'authenticated') {
+      // Unfiltered "all" list is for admin; accepts cookie OR Bearer.
+      if (!isAdminRequest(request)) {
         return NextResponse.json([], { status: 200 });
       }
       const products = await getAllProducts();

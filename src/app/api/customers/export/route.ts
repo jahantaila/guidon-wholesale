@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getCustomers, getOrders, getInvoices } from '@/lib/data';
 
 /**
@@ -9,8 +10,7 @@ import { getCustomers, getOrders, getInvoices } from '@/lib/data';
  * campaigns.
  */
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('admin_session');
-  if (session?.value !== 'authenticated') {
+  if (!isAdminRequest(request)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

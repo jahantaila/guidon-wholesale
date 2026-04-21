@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getOrders, getCustomers } from '@/lib/data';
 
 /**
@@ -7,8 +8,7 @@ import { getOrders, getCustomers } from '@/lib/data';
  * One row per line item so it's straightforward to pivot in a spreadsheet.
  */
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('admin_session');
-  if (session?.value !== 'authenticated') {
+  if (!isAdminRequest(request)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

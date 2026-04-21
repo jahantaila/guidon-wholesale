@@ -16,8 +16,7 @@ import type { Customer } from '@/lib/types';
  * an empty list and fall through to the "New Customer" form.
  */
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('admin_session');
-  if (session?.value !== 'authenticated') {
+  if (!isAdminRequest(request)) {
     return NextResponse.json([], { status: 200 });
   }
   const { searchParams } = new URL(request.url);

@@ -561,45 +561,45 @@ export default function OrderPage() {
                         not explicitly false. Unavailable sizes stay in the
                         row so the full 3-slot grid is always visible, but are
                         grayed/struck with a hover tooltip per the admin request. */}
-                    <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
-                      {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
-                        const sizeData = product.sizes.find((s) => s.size === kegSize);
-                        const offered = !!sizeData && sizeData.available !== false;
-                        const existsButUnavailable = !!sizeData && sizeData.available === false;
-                        const title = existsButUnavailable
-                          ? `Not currently offered for ${product.name}`
-                          : !sizeData
-                          ? `Not available for ${product.name}`
-                          : undefined;
-                        return (
-                          <button
-                            key={kegSize}
-                            onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
-                            disabled={!offered}
-                            title={title}
-                            className="flex-1 py-2 text-xs font-semibold font-ui transition-colors"
-                            style={{
-                              background:
-                                sel.size === kegSize && offered
-                                  ? 'var(--brass)'
-                                  : !offered
-                                  ? 'transparent'
-                                  : 'var(--paper)',
-                              color:
-                                sel.size === kegSize && offered
-                                  ? 'var(--paper)'
-                                  : !offered
-                                  ? 'var(--faint)'
-                                  : 'var(--ink)',
-                              cursor: offered ? 'pointer' : 'not-allowed',
-                              opacity: offered ? 1 : 0.4,
-                              textDecoration: existsButUnavailable ? 'line-through' : 'none',
-                            }}
-                          >
-                            {SIZE_SHORT[kegSize]}
-                          </button>
-                        );
-                      })}
+                    <div className="flex gap-0 mb-3 border border-divider flex-wrap" style={{ borderRadius: '3px', overflow: 'hidden' }}>
+                      {[...product.sizes]
+                        .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+                        .map((sizeData) => {
+                          const kegSize = sizeData.size;
+                          const offered = sizeData.available !== false;
+                          const existsButUnavailable = sizeData.available === false;
+                          const title = existsButUnavailable
+                            ? `Not currently offered for ${product.name}`
+                            : undefined;
+                          return (
+                            <button
+                              key={kegSize}
+                              onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
+                              disabled={!offered}
+                              title={title}
+                              className="flex-1 py-2 text-xs font-semibold font-ui transition-colors"
+                              style={{
+                                background:
+                                  sel.size === kegSize && offered
+                                    ? 'var(--brass)'
+                                    : !offered
+                                    ? 'transparent'
+                                    : 'var(--paper)',
+                                color:
+                                  sel.size === kegSize && offered
+                                    ? 'var(--paper)'
+                                    : !offered
+                                    ? 'var(--faint)'
+                                    : 'var(--ink)',
+                                cursor: offered ? 'pointer' : 'not-allowed',
+                                opacity: offered ? 1 : 0.4,
+                                textDecoration: existsButUnavailable ? 'line-through' : 'none',
+                              }}
+                            >
+                              {SIZE_SHORT[kegSize] ?? kegSize}
+                            </button>
+                          );
+                        })}
                     </div>
 
                     {/* Qty + Add */}

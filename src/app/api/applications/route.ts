@@ -8,8 +8,9 @@ import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   // Admin-only: applications contain applicant PII and business context.
-  const session = request.cookies.get('admin_session');
-  if (session?.value !== 'authenticated') {
+  // isAdminRequest accepts cookie OR Bearer header so iframe-embedded
+  // admins (where 3rd-party cookies are blocked) still see their data.
+  if (!isAdminRequest(request)) {
     return NextResponse.json([], { status: 200 });
   }
   const applications = await getApplications();

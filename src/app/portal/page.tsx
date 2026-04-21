@@ -8,11 +8,23 @@ import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
-const KEG_LABELS: Record<KegSize, string> = {
+const KEG_LABELS: Record<string, string> = {
   '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel',
 };
 
-const SIZE_SHORT: Record<KegSize, string> = { '1/2bbl': 'Half', '1/4bbl': 'Quarter', '1/6bbl': 'Sixth' };
+const SIZE_SHORT_LEGACY: Record<string, string> = { '1/2bbl': 'Half', '1/4bbl': 'Quarter', '1/6bbl': 'Sixth' };
+
+// Admin-defined custom sizes ("Mixed Case", "1 Barrel", etc.) show the raw
+// name; the three legacy kegs show friendly shortnames for density.
+function sizeShort(size: KegSize): string {
+  return SIZE_SHORT_LEGACY[size] ?? size;
+}
+
+// Back-compat alias so existing call sites work — legacy keys hit the lookup
+// table, unknown keys fall through to the raw size string.
+const SIZE_SHORT = new Proxy({} as Record<string, string>, {
+  get: (_t, prop: string) => sizeShort(prop),
+});
 
 function balanceColor(n: number): string {
   if (n <= 5) return 'border-emerald-500/30 bg-emerald-500/5';
@@ -1077,34 +1089,34 @@ function ProductsTab({
                       visible but disabled with native tooltip + strike-
                       through, per admin-side availability flag. */}
                   <div className="flex gap-0 mb-3 border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
-                    {(['1/2bbl', '1/4bbl', '1/6bbl'] as const).map((kegSize) => {
-                      const sizeData = product.sizes.find((s) => s.size === kegSize);
-                      const offered = !!sizeData && sizeData.available !== false;
-                      const existsButUnavailable = !!sizeData && sizeData.available === false;
-                      const title = existsButUnavailable
-                        ? `Not currently offered for ${product.name}`
-                        : !sizeData
-                        ? `Not available for ${product.name}`
-                        : undefined;
-                      return (
-                        <button
-                          key={kegSize}
-                          onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
-                          disabled={!offered}
-                          title={title}
-                          className="flex-1 py-1.5 text-xs font-semibold font-ui transition-colors"
-                          style={{
-                            background: sel.size === kegSize && offered ? 'var(--brass)' : 'transparent',
-                            color: sel.size === kegSize && offered ? 'var(--paper)' : !offered ? 'var(--faint)' : 'var(--ink)',
-                            cursor: offered ? 'pointer' : 'not-allowed',
-                            opacity: offered ? 1 : 0.4,
-                            textDecoration: existsButUnavailable ? 'line-through' : 'none',
-                          }}
-                        >
-                          {SIZE_SHORT[kegSize]}
-                        </button>
-                      );
-                    })}
+                    {[...product.sizes]
+                      .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+                      .map((sizeData) => {
+                        const kegSize = sizeData.size;
+                        const offered = sizeData.available !== false;
+                        const existsButUnavailable = sizeData.available === false;
+                        const title = existsButUnavailable
+                          ? `Not currently offered for ${product.name}`
+                          : undefined;
+                        return (
+                          <button
+                            key={kegSize}
+                            onClick={() => offered && updateSelection(product.id, 'size', kegSize)}
+                            disabled={!offered}
+                            title={title}
+                            className="flex-1 py-1.5 text-xs font-semibold font-ui transition-colors"
+                            style={{
+                              background: sel.size === kegSize && offered ? 'var(--brass)' : 'transparent',
+                              color: sel.size === kegSize && offered ? 'var(--paper)' : !offered ? 'var(--faint)' : 'var(--ink)',
+                              cursor: offered ? 'pointer' : 'not-allowed',
+                              opacity: offered ? 1 : 0.4,
+                              textDecoration: existsButUnavailable ? 'line-through' : 'none',
+                            }}
+                          >
+                            {sizeShort(kegSize)}
+                          </button>
+                        );
+                      })}
                   </div>
                   <div className="flex gap-2 items-stretch">
                     <div className="flex items-center border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
