@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
       email: customerRow.email,
       phone: customerRow.phone,
       address: customerRow.address,
+      // Expose the temp-password flag so the portal UI can force a
+      // change-password modal on first login after approval.
+      mustChangePassword: customerRow.must_change_password === true,
       createdAt: customerRow.created_at,
     };
 

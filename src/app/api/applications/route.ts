@@ -116,6 +116,10 @@ export async function PUT(request: NextRequest) {
           phone: app.phone,
           address: app.address,
           password: tempPassword, // only used by file-based fallback auth
+          // Force the customer to change their password on first login —
+          // the auto-generated temp is emailed in plaintext and shouldn't
+          // stay in use.
+          mustChangePassword: true,
           createdAt: new Date().toISOString(),
         };
         await createCustomer(newCustomer);

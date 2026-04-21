@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Guidon Brewing Wholesale',
+  title: 'Guidon Brewing Co. Wholesale',
   robots: 'noindex',
 };
 

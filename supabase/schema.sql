@@ -204,6 +204,33 @@ alter table customers add column if not exists auto_send_invoices boolean not nu
 -- Archived customers are hidden from dropdowns + listings by default but
 -- their history stays intact for reporting.
 alter table customers add column if not exists archived_at timestamptz;
+-- True when the customer is on a temp password (admin generated it during
+-- approval). Portal forces a change-password modal on login until cleared.
+alter table customers add column if not exists must_change_password boolean not null default false;
+
+-- Brewing schedule: admin records "I'm brewing Bandera 1/2bbl on Apr 25,
+-- expected yield 20 kegs". Production page shows the earliest scheduled
+-- brew date per product+size as "back in stock by" so customers + sales
+-- know when deficits clear. completed_at is set when the brew lands
+-- (admin marks it done), at which point inventory is added.
+create table if not exists brew_schedule (
+  id text primary key,
+  product_id text not null references products(id) on delete cascade,
+  size text not null,
+  brew_date date not null,
+  expected_yield integer not null default 0,
+  completed_at timestamptz,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists brew_schedule_product_size_idx on brew_schedule (product_id, size) where completed_at is null;
+create index if not exists brew_schedule_brew_date_idx on brew_schedule (brew_date) where completed_at is null;
+alter table brew_schedule enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname = 'Service role full access on brew_schedule') then
+    create policy "Service role full access on brew_schedule" on brew_schedule for all to public using (true) with check (true);
+  end if;
+end $$;
 
 -- Order templates: customers save a cart as a reusable template (e.g.
 -- "Tuesday Regular"). One-click reload populates their cart next time.

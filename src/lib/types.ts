@@ -14,6 +14,10 @@ export interface Customer {
   autoSendInvoices?: boolean;
   /** Soft-delete timestamp; archived customers are hidden from default lists. */
   archivedAt?: string | null;
+  /** Set to true when admin approves an application and a temp password is
+   * generated. Portal shows a forced change-password prompt on login until
+   * the customer sets their own password (which clears this flag). */
+  mustChangePassword?: boolean;
   createdAt: string;
 }
 
@@ -186,6 +190,23 @@ export interface CartItem {
 export type KegBalance = Record<string, number>;
 
 export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+/** A scheduled brew — admin tells the system "I'm brewing this product/size
+ * on this date, expected yield N kegs." The production page uses the
+ * earliest uncompleted brewDate per product+size as the "back in stock by"
+ * projection so customers and sales know when a deficit clears. */
+export interface BrewSchedule {
+  id: string;
+  productId: string;
+  size: KegSize;
+  brewDate: string; // YYYY-MM-DD
+  expectedYield: number;
+  /** Set when the brew actually lands; null = still scheduled. Marking
+   * complete also bumps inventory by expectedYield. */
+  completedAt?: string | null;
+  notes?: string;
+  createdAt: string;
+}
 
 export interface AdminStats {
   kegsOut: number;

@@ -8,9 +8,9 @@
  *
  * Environment variables (all optional; all default to safe no-op behavior):
  *   RESEND_API_KEY    — secret Resend API key. Get at https://resend.com/api-keys
- *   EMAIL_FROM        — "Guidon Brewing <orders@guidonbrewing.com>"
+ *   EMAIL_FROM        — "Guidon Brewing Co. <orders@guidonbrewing.com>"
  *                       Must be on a domain verified in Resend. Default:
- *                       "Guidon Brewing <onboarding@resend.dev>" for dev.
+ *                       "Guidon Brewing Co. <onboarding@resend.dev>" for dev.
  *   EMAIL_ADMIN       — where brewery-side notifications go (new orders,
  *                       applications). Default: env EMAIL_FROM recipient.
  *   EMAIL_DISABLED    — set to "true" to completely silence all emails,
@@ -28,7 +28,7 @@ type SendArgs = {
   replyTo?: string;
 };
 
-const FROM_FALLBACK = 'Guidon Brewing <onboarding@resend.dev>';
+const FROM_FALLBACK = 'Guidon Brewing Co. <onboarding@resend.dev>';
 
 /**
  * Strip surrounding quotes that users commonly paste into Vercel env UI.
@@ -248,10 +248,10 @@ export async function notifyOrderPlaced(args: {
   const portalCta = portalUrl();
   const customerHtml = emailShell({
     title: `Order ${args.orderId} received`,
-    preheader: `We received your wholesale order. Delivery scheduled ${args.deliveryDate}.`,
+    preheader: `We received your wholesale order. You'll get an email when it's confirmed.`,
     body: `
       <p>${escapeHtml(args.customerName)} &mdash; thank you for the order.</p>
-      <p style="margin:12px 0;">We've scheduled delivery for <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>. You'll get another email when it leaves the brewery.</p>
+      <p style="margin:12px 0;">We've received it and will review shortly. You'll get another email when your order is confirmed.</p>
       ${itemsTable}
       ${args.notes ? `<p style="margin-top:12px;font-size:13px;color:#6B5F48;font-style:italic;">Your note: ${escapeHtml(args.notes)}</p>` : ''}
       <p style="margin:16px 0;">
@@ -275,7 +275,7 @@ export async function notifyOrderPlaced(args: {
   await Promise.all([
     send({
       to: args.customerEmail,
-      subject: `Order ${args.orderId} received — delivery ${args.deliveryDate}`,
+      subject: `Order ${args.orderId} received`,
       html: customerHtml,
     }),
     (async () => {
@@ -372,7 +372,7 @@ export async function notifyApplicationSubmitted(args: {
   await Promise.all([
     send({
       to: args.applicantEmail,
-      subject: 'Guidon Brewing — Application received',
+      subject: 'Guidon Brewing Co. — Application received',
       html: applicantHtml,
     }),
     (async () => {
@@ -523,7 +523,7 @@ export async function notifyApplicationDecision(args: {
   if (args.decision === 'approved') {
     await send({
       to: args.applicantEmail,
-      subject: `Guidon Brewing — ${args.businessName} is approved`,
+      subject: `Guidon Brewing Co. — ${args.businessName} is approved`,
       html: emailShell({
         title: 'Welcome to Guidon wholesale',
         preheader: 'Your wholesale account is live.',
@@ -546,7 +546,7 @@ export async function notifyApplicationDecision(args: {
   } else {
     await send({
       to: args.applicantEmail,
-      subject: `Guidon Brewing — ${args.businessName} application update`,
+      subject: `Guidon Brewing Co. — ${args.businessName} application update`,
       html: emailShell({
         title: 'Application update',
         body: `

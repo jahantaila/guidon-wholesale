@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         if (res?.data?.properties?.action_link) {
           await send({
             to: email,
-            subject: 'Guidon Brewing — Reset your portal password',
+            subject: 'Guidon Brewing Co. — Reset your portal password',
             html: `<!doctype html><html><body style="margin:0;padding:24px 16px;background:#F5EFDF;font-family:Georgia,serif;color:#2A2416;">
 <table cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;margin:0 auto;border:1px solid #D8CDA8;background:#FBF7EA;">
   <tr><td style="padding:24px 28px;">
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       // File-based fallback: email the stored password. Dev only.
       await send({
         to: email,
-        subject: 'Guidon Brewing — Your portal password',
+        subject: 'Guidon Brewing Co. — Your portal password',
         html: `<!doctype html><html><body style="background:#F5EFDF;font-family:Georgia,serif;padding:24px 16px;">
 <p>Your portal password is: <code style="background:#EEE5CE;padding:2px 6px;">${customer.password ?? '(not set)'}</code></p>
 <p>This reset flow is in dev/file-fallback mode. In production, Supabase will send a proper reset link.</p>

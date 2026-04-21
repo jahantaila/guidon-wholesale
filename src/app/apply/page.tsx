@@ -58,7 +58,7 @@ export default function ApplyPage() {
           </div>
           <h1 className="text-display-sm font-heading text-cream mb-3">Application Received</h1>
           <p className="text-cream/40 text-base mb-8 leading-relaxed">
-            Thank you for your interest in becoming a Guidon Brewing wholesale member.
+            Thank you for your interest in becoming a Guidon Brewing Co. wholesale member.
             We&apos;ll be in touch within 24 hours.
           </p>
           <Link href="/" className="btn-primary py-3 px-8">
@@ -74,8 +74,8 @@ export default function ApplyPage() {
       {/* Header */}
       <header className="max-w-lg mx-auto mb-8">
         <Link href="/" className="flex items-center gap-3 mb-8">
-          <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
-          <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
+          <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg" />
+          <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING CO.</span>
         </Link>
 
         <span className="section-label mb-2 block">Wholesale Application</span>
@@ -147,7 +147,7 @@ export default function ApplyPage() {
       </form>
 
       <p className="text-center mt-8 text-cream/15 text-xs">
-        <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing</Link>
+        <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing Co.</Link>
       </p>
     </div>
   );

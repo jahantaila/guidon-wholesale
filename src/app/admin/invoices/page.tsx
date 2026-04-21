@@ -188,9 +188,9 @@ export default function InvoicesPage() {
           <div className="flex justify-between items-start mb-10">
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-10 w-auto rounded-lg" />
+                <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-10 w-auto rounded-lg" />
                 <div>
-                  <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
+                  <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING CO.</h1>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
                 </div>
               </div>

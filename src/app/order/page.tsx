@@ -11,7 +11,7 @@ import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
 const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
-const SIZE_SHORT: Record<KegSize, string> = { '1/2bbl': 'Half', '1/4bbl': 'Quarter', '1/6bbl': 'Sixth' };
+const SIZE_SHORT: Record<KegSize, string> = { '1/2bbl': 'Half Barrel', '1/4bbl': 'Quarter Barrel', '1/6bbl': 'Sixth Barrel' };
 const SIZE_FILTERS = ['All', ...KEG_SIZES] as const;
 
 const BEER_COLORS: Record<string, string> = {
@@ -187,7 +187,13 @@ export default function OrderPage() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const getSelection = useCallback((productId: string, sizes: ProductSize[]) => {
-    return selections[productId] || { size: sizes[0]?.size || '1/2bbl', quantity: 1 };
+    if (selections[productId]) return selections[productId];
+    const sorted = [...sizes].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+    const firstOrderable =
+      sorted.find((s) => s.available !== false && (s.inventoryCount ?? 0) > 0) ||
+      sorted.find((s) => s.available !== false) ||
+      sorted[0];
+    return { size: firstOrderable?.size || '1/2bbl', quantity: 1 };
   }, [selections]);
 
   const updateSelection = (productId: string, field: 'size' | 'quantity', value: string | number) => {
@@ -296,9 +302,9 @@ export default function OrderPage() {
       <header className="sticky top-0 z-30 bg-charcoal/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3 group">
-            <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
+            <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg" />
             <div className="hidden sm:block">
-              <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING</h1>
+              <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING CO.</h1>
               <p className="text-[10px] uppercase tracking-[0.15em] text-cream/30 font-medium -mt-0.5">Wholesale Orders</p>
             </div>
           </Link>

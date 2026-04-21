@@ -343,7 +343,7 @@ async function fireInvoiceEmail(invoice: Invoice, customer: Customer) {
 </table></body></html>`;
   await send({
     to: customer.email,
-    subject: `Invoice ${invoice.id} from Guidon Brewing`,
+    subject: `Invoice ${invoice.id} from Guidon Brewing Co.`,
     html,
   });
 }

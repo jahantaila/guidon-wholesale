@@ -12,7 +12,7 @@ const KEG_LABELS: Record<string, string> = {
   '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel',
 };
 
-const SIZE_SHORT_LEGACY: Record<string, string> = { '1/2bbl': 'Half', '1/4bbl': 'Quarter', '1/6bbl': 'Sixth' };
+const SIZE_SHORT_LEGACY: Record<string, string> = { '1/2bbl': 'Half Barrel', '1/4bbl': 'Quarter Barrel', '1/6bbl': 'Sixth Barrel' };
 
 // Admin-defined custom sizes ("Mixed Case", "1 Barrel", etc.) show the raw
 // name; the three legacy kegs show friendly shortnames for density.
@@ -58,15 +58,137 @@ export default function PortalPage() {
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-charcoal">
-        <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} priority className="h-10 w-auto rounded-xl animate-pulse-slow" />
+        <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} priority className="h-10 w-auto rounded-xl animate-pulse-slow" />
       </div>
     );
   }
 
-  return customer ? (
-    <Dashboard customer={customer} onLogout={handleLogout} />
-  ) : (
-    <LoginScreen onLogin={setCustomer} />
+  if (!customer) return <LoginScreen onLogin={setCustomer} />;
+  // Approval flow issues a temp password + emails it in plaintext. Force
+  // a change-password modal on first login until they set their own.
+  if (customer.mustChangePassword) {
+    return (
+      <ForceChangePassword
+        customer={customer}
+        onDone={(updated) => setCustomer(updated)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+  return <Dashboard customer={customer} onLogout={handleLogout} />;
+}
+
+/* ================================================================== */
+/*  FORCE CHANGE PASSWORD (first-login modal after approval)          */
+/* ================================================================== */
+
+function ForceChangePassword({
+  customer,
+  onDone,
+  onLogout,
+}: {
+  customer: Customer;
+  onDone: (c: Customer) => void;
+  onLogout: () => void;
+}) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (newPassword !== confirm) { setError('Passwords do not match.'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id, password: newPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(typeof data?.error === 'string' ? data.error : 'Could not update password.');
+        return;
+      }
+      // Server auto-clears mustChangePassword when a password update lands.
+      // Flip local state so the dashboard renders instead of this modal.
+      onDone({ ...customer, mustChangePassword: false });
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-charcoal px-4 animate-fade-in">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg mx-auto mb-6" />
+          <h1 className="text-display-sm font-heading text-cream">Set your password</h1>
+          <p className="mt-3 text-cream/40 text-sm leading-relaxed">
+            You&rsquo;re currently using a temporary password from your approval email.
+            Please choose a permanent one to continue.
+          </p>
+        </div>
+        <form onSubmit={submit} className="card space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">New password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="input pr-11"
+                placeholder="Min 6 characters"
+                autoFocus
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-cream/40 hover:text-cream/70"
+              >
+                {showPassword ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Confirm password</label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="input"
+              placeholder="Re-enter new password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+            />
+          </div>
+          {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
+          <button type="submit" disabled={saving} className="btn-primary w-full py-3">
+            {saving ? 'Saving...' : 'Set password'}
+          </button>
+          <button type="button" onClick={onLogout} className="w-full text-xs text-cream/40 hover:text-cream/70">
+            Log out instead
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -75,8 +197,17 @@ export default function PortalPage() {
 /* ================================================================== */
 
 function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
+  // Two-step login flow:
+  //   mode='choose'  → landing screen with Sign In / Become a customer buttons
+  //   mode='signin'  → email + password form (revealed after clicking Sign In)
+  // Changed from a direct-to-form screen per brewery feedback — customers
+  // didn't realize there was an apply-for-wholesale path from the portal
+  // screen. Surfacing both options equally fixes the "how do I sign up?"
+  // cold-visitor drop-off.
+  const [mode, setMode] = useState<'choose' | 'signin'>('choose');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -112,70 +243,120 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
-            <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
+            <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg" />
+            <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING CO.</span>
           </Link>
-          <h1 className="text-display-sm font-heading text-cream">Sign In</h1>
-          <p className="mt-2 text-cream/30 text-sm">Access your wholesale account.</p>
+          <h1 className="text-display-sm font-heading text-cream">Guidon Brewing Co.</h1>
+          <p className="mt-3 text-cream/40 text-sm leading-relaxed">
+            Wholesale ordering and management. Sign in, or submit a request to become a
+            wholesale customer, or to receive information about wholesale.
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="card space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
-            <input id="email" type="email" autoComplete="username" autoFocus className="input" placeholder="you@example.com"
-              value={email} onChange={(e) => setEmail(e.target.value)} />
+        {mode === 'choose' ? (
+          <div className="card space-y-3">
+            <button type="button" onClick={() => setMode('signin')} className="btn-primary w-full py-3">
+              Sign In
+            </button>
+            <Link href="/apply" className="btn-secondary w-full py-3 block text-center">
+              Become a customer, or receive info
+            </Link>
           </div>
-
-          <div>
-            <div className="flex items-baseline justify-between mb-1.5">
-              <label htmlFor="password" className="block text-sm font-medium text-cream/40">Password</label>
-              <button
-                type="button"
-                onClick={async () => {
-                  const addr = email.trim();
-                  if (!addr) {
-                    setError('Enter your email above first, then click Forgot password.');
-                    return;
-                  }
-                  setError('');
-                  try {
-                    await fetch('/api/portal/reset-password', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: addr }),
-                    });
-                    setResetSent(true);
-                    window.setTimeout(() => setResetSent(false), 6000);
-                  } catch {
-                    setError('Could not send reset email. Please try again.');
-                  }
-                }}
-                className="text-xs italic underline-offset-2"
-                style={{ color: 'var(--brass)' }}
-              >
-                Forgot password?
-              </button>
+        ) : (
+          <form onSubmit={handleSubmit} className="card space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
+              <input id="email" type="email" autoComplete="username" autoFocus className="input" placeholder="you@example.com"
+                value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            <input id="password" type="password" autoComplete="current-password" className="input" placeholder="Enter your password"
-              value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
 
-          {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
-          {resetSent && (
-            <p className="text-sm" style={{ color: 'var(--pine)', background: 'color-mix(in srgb, var(--pine) 8%, transparent)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--pine)' }}>
-              If an account exists for <strong>{email.trim()}</strong>, a reset email is on the way. Check your inbox.
-            </p>
-          )}
+            <div>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-cream/40">Password</label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const addr = email.trim();
+                    if (!addr) {
+                      setError('Enter your email above first, then click Forgot password.');
+                      return;
+                    }
+                    setError('');
+                    try {
+                      await fetch('/api/portal/reset-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: addr }),
+                      });
+                      setResetSent(true);
+                      window.setTimeout(() => setResetSent(false), 6000);
+                    } catch {
+                      setError('Could not send reset email. Please try again.');
+                    }
+                  }}
+                  className="text-xs italic underline-offset-2"
+                  style={{ color: 'var(--brass)' }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  className="input pr-11"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-cream/40 hover:text-cream/70 transition-colors"
+                >
+                  {showPassword ? (
+                    // Eye-off icon
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    // Eye icon
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
 
-          <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
-            {submitting ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+            {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
+            {resetSent && (
+              <p className="text-sm" style={{ color: 'var(--pine)', background: 'color-mix(in srgb, var(--pine) 8%, transparent)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--pine)' }}>
+                If an account exists for <strong>{email.trim()}</strong>, a reset email is on the way. Check your inbox.
+              </p>
+            )}
+
+            <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
+              {submitting ? 'Signing in...' : 'Sign In'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('choose'); setError(''); setPassword(''); }}
+              className="w-full text-xs text-cream/40 hover:text-cream/70 transition-colors"
+            >
+              &larr; Back
+            </button>
+          </form>
+        )}
 
         <p className="text-center mt-6 text-cream/15 text-xs">
-          <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing</Link>
-          {' '}&bull;{' '}
-          <Link href="/apply" className="hover:text-cream/30 transition-colors">Apply for Account</Link>
+          <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing Co.</Link>
         </p>
       </div>
     </div>
@@ -319,10 +500,10 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-3">
-              <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-10 w-auto" />
+              <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-10 w-auto" />
               <div>
                 <h1 className="font-display text-lg sm:text-xl" style={{ fontVariationSettings: "'opsz' 24", color: 'var(--ink)', fontWeight: 500, letterSpacing: '-0.01em' }}>
-                  Guidon Brewing
+                  Guidon Brewing Co.
                 </h1>
                 <p className="section-label">Wholesale Portal</p>
               </div>
@@ -448,15 +629,12 @@ function OverviewTab({
 
   return (
     <div className="space-y-8">
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Quick stats — Total Spent removed per brewery request (customer
+          doesn't need a running-total on their overview). */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="card">
           <span className="section-label">Total Orders</span>
           <p className="text-2xl font-heading font-black text-cream mt-1">{orders.length}</p>
-        </div>
-        <div className="card">
-          <span className="section-label">Total Spent</span>
-          <p className="text-2xl font-heading font-black text-gold mt-1">{formatCurrency(totalSpent)}</p>
         </div>
         <div className="card">
           <span className="section-label">Kegs Outstanding</span>
@@ -786,7 +964,19 @@ function ProductsTab({
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const getSelection = useCallback((productId: string, sizes: ProductSize[]) => {
-    return selections[productId] || { size: sizes[0]?.size || '1/2bbl', quantity: 1 };
+    if (selections[productId]) return selections[productId];
+    // Default to the first AVAILABLE + in-stock size. Otherwise customers
+    // land on a disabled size (especially when sizes[0] is a size the
+    // admin marked unavailable, or a custom size with 0 inventory) and
+    // Add to Cart is greyed out with no indication why — which reads as
+    // "custom size ordering doesn't work" even though it does, the
+    // default selection was just blocked.
+    const sorted = [...sizes].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+    const firstOrderable =
+      sorted.find((s) => s.available !== false && (s.inventoryCount ?? 0) > 0) ||
+      sorted.find((s) => s.available !== false) ||
+      sorted[0];
+    return { size: firstOrderable?.size || '1/2bbl', quantity: 1 };
   }, [selections]);
 
   const updateSelection = (productId: string, field: 'size' | 'quantity', value: string | number) => {
@@ -1079,7 +1269,9 @@ function ProductsTab({
                       <span className="font-display font-variant-tabular" style={{ fontSize: '1.375rem', color: 'var(--ink)', fontVariationSettings: "'opsz' 24", fontWeight: 500 }}>
                         {formatCurrency(currentSizeInfo.price)}
                       </span>
-                      <span className="text-xs" style={{ color: 'var(--muted)' }}>per keg</span>
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                        per {(SIZE_SHORT_LEGACY[currentSizeInfo.size] || currentSizeInfo.size).toLowerCase()}
+                      </span>
                       <span className="text-xs ml-auto font-variant-tabular" style={{ color: 'var(--muted)' }}>
                         +{formatCurrency(currentSizeInfo.deposit)} dep.
                       </span>
@@ -1254,7 +1446,7 @@ function ProductsTab({
                   style={{ borderColor: 'var(--divider)', background: 'color-mix(in srgb, var(--brass) 4%, transparent)' }}
                 >
                   <p style={{ color: 'var(--ink)' }}>
-                    Guidon Brewing delivers on <strong>Thursdays and Fridays</strong>.
+                    Guidon Brewing Co. delivers on <strong>Thursdays and Fridays</strong>.
                   </p>
                   <p className="text-xs italic mt-1" style={{ color: 'var(--muted)' }}>
                     We&rsquo;ll schedule your order for the next available delivery day and email you confirmation.
@@ -1504,7 +1696,7 @@ function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loa
         <div className="bg-white max-w-3xl mx-auto p-8 sm:p-12 rounded-xl shadow-dark-lg print:shadow-none print:rounded-none">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING</h1>
+              <h1 className="font-heading text-2xl font-black text-gray-900">GUIDON BREWING CO.</h1>
               <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-semibold">Veteran-Owned Craft Brewery</p>
               <div className="text-sm text-gray-500 space-y-0.5 mt-3">
                 <p>415 8th Ave. E., Hendersonville, NC 28792</p>
@@ -1750,25 +1942,53 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
 /*  KEG RETURN MODAL                                                  */
 /* ================================================================== */
 
+// Per-size row for the keg return modal. Customer can request a return
+// for multiple sizes in one submission — previously the form was one
+// size + one quantity and had to be submitted multiple times to return
+// a mixed load.
+type ReturnRow = { size: KegSize; quantity: number };
+
 function KegReturnModal({ customerId, onClose, onSuccess }: { customerId: string; onClose: () => void; onSuccess: () => void }) {
-  const [size, setSize] = useState<KegSize>('1/2bbl');
-  const [quantity, setQuantity] = useState(1);
+  const [rows, setRows] = useState<ReturnRow[]>([
+    { size: '1/2bbl', quantity: 0 },
+    { size: '1/4bbl', quantity: 0 },
+    { size: '1/6bbl', quantity: 0 },
+  ]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const updateQty = (idx: number, qty: number) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Math.max(0, qty) } : r)));
+  };
+  const updateSize = (idx: number, size: KegSize) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, size } : r)));
+  };
+  const addRow = () => setRows((prev) => [...prev, { size: '1/2bbl', quantity: 1 }]);
+  const removeRow = (idx: number) => setRows((prev) => prev.filter((_, i) => i !== idx));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (quantity < 1) { setError('Quantity must be at least 1.'); return; }
+    const toSubmit = rows.filter((r) => r.quantity > 0);
+    if (toSubmit.length === 0) {
+      setError('Enter a quantity for at least one size.');
+      return;
+    }
     setSubmitting(true); setError('');
     try {
-      const res = await fetch('/api/keg-ledger', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, type: 'return', size, quantity, notes }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || `Request failed with status ${res.status}`);
+      // Submit one ledger entry per size. If any fails, surface the first
+      // error message but don't try to roll back — the partial inserts
+      // still represent real return requests the brewery should see.
+      for (const row of toSubmit) {
+        const res = await fetch('/api/keg-ledger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerId, type: 'return', size: row.size, quantity: row.quantity, notes }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error || `Request failed with status ${res.status}`);
+        }
       }
       onSuccess();
     } catch (err) {
@@ -1782,20 +2002,50 @@ function KegReturnModal({ customerId, onClose, onSuccess }: { customerId: string
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <form onSubmit={handleSubmit}
         className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
-        <h3 className="text-lg font-heading font-bold text-cream">Request Keg Return</h3>
-
         <div>
-          <span className="section-label mb-2 block">Keg Size</span>
-          <select id="return-size" className="input" value={size} onChange={(e) => setSize(e.target.value as KegSize)}>
-            <option value="1/2bbl">1/2 Barrel</option>
-            <option value="1/4bbl">1/4 Barrel</option>
-            <option value="1/6bbl">1/6 Barrel</option>
-          </select>
+          <h3 className="text-lg font-heading font-bold text-cream">Request Keg Return</h3>
+          <p className="text-xs text-cream/35 mt-1">Enter the quantity you&rsquo;re returning for each size.</p>
         </div>
 
-        <div>
-          <span className="section-label mb-2 block">Quantity</span>
-          <input id="return-qty" type="number" className="input" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+        <div className="space-y-2">
+          {rows.map((row, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <select
+                className="input flex-1"
+                value={row.size}
+                onChange={(e) => updateSize(idx, e.target.value as KegSize)}
+              >
+                <option value="1/2bbl">1/2 Barrel</option>
+                <option value="1/4bbl">1/4 Barrel</option>
+                <option value="1/6bbl">1/6 Barrel</option>
+              </select>
+              <input
+                type="number"
+                className="input w-20 text-center"
+                min={0}
+                value={row.quantity}
+                onChange={(e) => updateQty(idx, Number(e.target.value))}
+              />
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeRow(idx)}
+                  aria-label="Remove row"
+                  className="text-cream/25 hover:text-red-400 px-2 py-1"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addRow}
+            className="text-xs italic"
+            style={{ color: 'var(--brass)' }}
+          >
+            + Add another size
+          </button>
         </div>
 
         <div>

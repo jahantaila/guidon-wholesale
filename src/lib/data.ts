@@ -1,5 +1,5 @@
 /**
- * Data access layer for Guidon Brewing Wholesale.
+ * Data access layer for Guidon Brewing Co. Wholesale.
  *
  * When NEXT_PUBLIC_SUPABASE_URL is configured (not a placeholder), all reads and
  * writes go to Supabase.  Otherwise the app falls back to local JSON files so
@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize } from './types';
+import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ function rowToCustomer(row: any): Customer {
     tags: Array.isArray(row.tags) ? row.tags : [],
     autoSendInvoices: row.auto_send_invoices === true,
     archivedAt: row.archived_at ?? null,
+    mustChangePassword: row.must_change_password === true,
     createdAt: row.created_at,
   };
 }
@@ -179,6 +180,10 @@ export async function createCustomer(customer: Customer): Promise<Customer> {
       email: customer.email,
       phone: customer.phone,
       address: customer.address,
+      // Persist the force-change-password flag when the approval flow sets
+      // it. Default of false in the DB handles the admin-creates-customer
+      // path where no temp password is involved.
+      must_change_password: customer.mustChangePassword === true,
     }).select().single();
     if (error) throw error;
     return rowToCustomer(data);
@@ -202,6 +207,25 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.tags !== undefined) row.tags = updates.tags;
     if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;
     if (updates.archivedAt !== undefined) row.archived_at = updates.archivedAt;
+    // must_change_password is tracked on the customer row so we can prompt
+    // the user on login. Approval flow sets it true (temp password issued);
+    // the change-password flow clears it.
+    if (updates.mustChangePassword !== undefined) row.must_change_password = updates.mustChangePassword;
+    // If the ONLY thing being updated is password (which lives in Supabase
+    // Auth, not the customers table), `row` is empty and `.update({}).single()`
+    // returns no rows — causing the route to 404 even though the caller
+    // just wanted to rotate their password. Handle that by fetching the
+    // existing row and returning it unchanged. The Supabase Auth sync in
+    // the PUT route is what actually rotates the password.
+    if (Object.keys(row).length === 0) {
+      const { data: existing, error: fetchErr } = await sb
+        .from('customers')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !existing) return undefined;
+      return rowToCustomer(existing);
+    }
     const { data, error } = await sb.from('customers').update(row).eq('id', id).select().single();
     if (error) return undefined;
     return rowToCustomer(data);
@@ -1011,4 +1035,77 @@ export async function deleteRecurringOrder(id: string): Promise<boolean> {
   if (next.length === all.length) return false;
   writeJSON('recurring-orders.json', next);
   return true;
+}
+
+// ─── Brew Schedule ─────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToBrew(row: any): BrewSchedule {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    size: row.size,
+    brewDate: row.brew_date,
+    expectedYield: row.expected_yield ?? 0,
+    completedAt: row.completed_at ?? null,
+    notes: row.notes ?? '',
+    createdAt: row.created_at,
+  };
+}
+
+/** @param includeCompleted defaults to false. Omits past brews by default. */
+export async function getBrewSchedule(includeCompleted = false): Promise<BrewSchedule[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const query = sb.from('brew_schedule').select('*').order('brew_date', { ascending: true });
+    if (!includeCompleted) query.is('completed_at', null);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(rowToBrew);
+  }
+  return [];
+}
+
+export async function createBrewSchedule(entry: BrewSchedule): Promise<BrewSchedule> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb.from('brew_schedule').insert({
+      id: entry.id,
+      product_id: entry.productId,
+      size: entry.size,
+      brew_date: entry.brewDate,
+      expected_yield: entry.expectedYield,
+      notes: entry.notes ?? '',
+    }).select().single();
+    if (error) throw error;
+    return rowToBrew(data);
+  }
+  return entry;
+}
+
+export async function updateBrewSchedule(id: string, updates: Partial<BrewSchedule>): Promise<BrewSchedule | undefined> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const row: Record<string, unknown> = {};
+    if (updates.productId !== undefined) row.product_id = updates.productId;
+    if (updates.size !== undefined) row.size = updates.size;
+    if (updates.brewDate !== undefined) row.brew_date = updates.brewDate;
+    if (updates.expectedYield !== undefined) row.expected_yield = updates.expectedYield;
+    if (updates.completedAt !== undefined) row.completed_at = updates.completedAt;
+    if (updates.notes !== undefined) row.notes = updates.notes;
+    if (Object.keys(row).length === 0) return undefined;
+    const { data, error } = await sb.from('brew_schedule').update(row).eq('id', id).select().single();
+    if (error) return undefined;
+    return rowToBrew(data);
+  }
+  return undefined;
+}
+
+export async function deleteBrewSchedule(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('brew_schedule').delete().eq('id', id);
+    return !error;
+  }
+  return false;
 }

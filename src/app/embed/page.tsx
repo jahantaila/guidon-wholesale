@@ -24,7 +24,7 @@ export default function EmbedPage() {
   const selected = EMBED_OPTIONS.find((o) => o.key === selectedType)!;
   const embedUrl = `${baseUrl}${selected.path}`;
 
-  const iframeCode = `<!-- Guidon Brewing Wholesale ${selected.label} -->
+  const iframeCode = `<!-- Guidon Brewing Co. Wholesale ${selected.label} -->
 <div id="guidon-wholesale-embed">
   <iframe
     src="${embedUrl}"
@@ -68,14 +68,14 @@ ${iframeCode}`;
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <Link href="/" className="flex items-center gap-3 mb-8">
-          <Image src="/logo.png" alt="Guidon Brewing" width={350} height={194} className="h-8 w-auto rounded-lg" />
-          <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING</span>
+          <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg" />
+          <span className="font-heading font-bold text-sm text-cream tracking-wide">GUIDON BREWING CO.</span>
         </Link>
 
         <span className="section-label mb-2 block">Website Integration</span>
         <h1 className="text-display-sm font-heading text-cream mb-3">Embed Code</h1>
         <p className="text-cream/40 text-base leading-relaxed mb-10 max-w-xl">
-          Add the Guidon Brewing wholesale ordering experience directly to your website.
+          Add the Guidon Brewing Co. wholesale ordering experience directly to your website.
           Choose a widget type below and copy the embed code.
         </p>
 
@@ -194,7 +194,7 @@ ${iframeCode}`;
         </div>
 
         <p className="text-center mt-8 text-cream/15 text-xs">
-          <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing</Link>
+          <Link href="/" className="hover:text-cream/30 transition-colors">&larr; Back to Guidon Brewing Co.</Link>
         </p>
       </div>
     </div>

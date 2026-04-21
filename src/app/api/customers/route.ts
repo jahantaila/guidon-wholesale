@@ -144,6 +144,14 @@ export async function PUT(request: NextRequest) {
       // Strip undefined keys so we don't overwrite with nulls.
       Object.keys(updates).forEach((k) => updates[k] === undefined && delete updates[k]);
     }
+    // Auto-clear the must-change-password flag whenever a password is set.
+    // The approval flow sets the flag on temp-password customers; the
+    // portal change-password UI (and admin-initiated resets) should both
+    // lift the prompt once a real password lands — without the client
+    // having to know about the flag.
+    if (updates.password !== undefined) {
+      updates.mustChangePassword = false;
+    }
     const customer = await updateCustomer(id, updates);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });

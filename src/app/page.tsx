@@ -10,7 +10,7 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gold/20 rounded-2xl blur-xl scale-110" />
           <Image
             src="/logo.png"
-            alt="Guidon Brewing"
+            alt="Guidon Brewing Co."
             width={350}
             height={194}
             priority
@@ -19,7 +19,7 @@ export default function HomePage() {
         </div>
 
         <h1 className="text-2xl font-heading text-cream mb-2">
-          Guidon Brewing
+          Guidon Brewing Co.
         </h1>
         <p className="text-cream/35 text-sm mb-10 leading-relaxed max-w-xs mx-auto">
           Wholesale keg ordering and management.
