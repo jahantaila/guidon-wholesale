@@ -170,6 +170,15 @@ create table if not exists invoices (
 alter table invoices drop constraint if exists invoices_status_check;
 alter table invoices add constraint invoices_status_check check (status in ('draft', 'unpaid', 'paid', 'overdue'));
 
+-- Invoice line items live as a jsonb blob on the invoice row (a snapshot
+-- of the order's items at the moment the invoice was issued, so invoices
+-- stay correct even if the admin later edits the order or product prices
+-- change). Without this column, createInvoice fails with
+-- "Could not find the 'items' column of 'invoices' in the schema cache"
+-- and order confirm breaks after inventory + ledger have already fired,
+-- leaving the system in an inconsistent state.
+alter table invoices add column if not exists items jsonb not null default '[]'::jsonb;
+
 -- Orders lifecycle simplified: pending → confirmed → completed (+ cancelled).
 -- 'delivered' was a redundant middle state and is dropped; any existing
 -- 'delivered' rows need to be migrated to 'confirmed' or 'completed' out

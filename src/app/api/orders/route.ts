@@ -142,19 +142,26 @@ export async function PUT(request: NextRequest) {
     // Track which sizes cross below the low-stock threshold so we can fire
     // a single digest email instead of N per-order emails.
     const crossed: Array<{ productName: string; size: string; remaining: number }> = [];
-    for (const item of existingOrder.items) {
-      const after = await adjustProductInventory(item.productId, item.size, -item.quantity);
-      if (after !== null && after < LOW_STOCK_THRESHOLD) {
-        const before = after + item.quantity;
-        if (before >= LOW_STOCK_THRESHOLD) {
-          crossed.push({ productName: item.productName, size: item.size, remaining: after });
+    // Inventory decrement is gated on !alreadyLedgered for the same reason
+    // as the ledger block below: if a prior confirm attempt already posted
+    // the deposit entries, inventory was already decremented. Without this
+    // guard, a retry (which happens when the first attempt failed mid-way,
+    // e.g. an invoice-create error) would double-decrement.
+    if (!alreadyLedgered) {
+      for (const item of existingOrder.items) {
+        const after = await adjustProductInventory(item.productId, item.size, -item.quantity);
+        if (after !== null && after < LOW_STOCK_THRESHOLD) {
+          const before = after + item.quantity;
+          if (before >= LOW_STOCK_THRESHOLD) {
+            crossed.push({ productName: item.productName, size: item.size, remaining: after });
+          }
         }
       }
-    }
-    if (crossed.length > 0) {
-      notifyLowStock({ items: crossed }).catch((err) =>
-        console.error('[email] notifyLowStock failed (non-fatal):', err),
-      );
+      if (crossed.length > 0) {
+        notifyLowStock({ items: crossed }).catch((err) =>
+          console.error('[email] notifyLowStock failed (non-fatal):', err),
+        );
+      }
     }
 
     // Keg ledger deposits: one row per line item. These count against the

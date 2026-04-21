@@ -59,7 +59,18 @@ export default function KegTrackerPage() {
         const balancesData = await balancesRes.json();
         const customersData = await customersRes.json();
         const ledgerData = await ledgerRes.json();
-        setBalances(Array.isArray(balancesData) ? balancesData : []);
+        // The /api/keg-ledger?balances=true endpoint returns an object keyed
+        // by customerId (Record<string, KegBalance>), not an array. We need
+        // { customerId, balance } rows for rendering. Without this conversion
+        // the tracker silently shows "No keg balances recorded" even when
+        // customers have outstanding kegs.
+        const balancesArr: CustomerBalance[] = balancesData && typeof balancesData === 'object' && !Array.isArray(balancesData)
+          ? Object.entries(balancesData).map(([customerId, balance]) => ({
+              customerId,
+              balance: balance as KegBalance,
+            }))
+          : Array.isArray(balancesData) ? balancesData : [];
+        setBalances(balancesArr);
         setCustomers(Array.isArray(customersData) ? customersData : []);
         setAllLedger(Array.isArray(ledgerData) ? ledgerData : []);
       } catch (err) { console.error('Failed to load keg data', err); }
