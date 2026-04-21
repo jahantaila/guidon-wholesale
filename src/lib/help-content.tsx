@@ -580,7 +580,7 @@ export const ADMIN_HELP: HelpTopic[] = [
     articles: [
       {
         id: 'what-to-brew',
-        title: 'Reading the &ldquo;What to Brew&rdquo; table',
+        title: 'Reading the \u201cWhat to Brew\u201d table',
         body: (
           <>
             <P>
@@ -643,7 +643,7 @@ export const ADMIN_HELP: HelpTopic[] = [
     articles: [
       {
         id: 'outstanding-kegs',
-        title: 'What &ldquo;outstanding kegs&rdquo; means',
+        title: 'What \u201coutstanding kegs\u201d means',
         body: (
           <>
             <P>
@@ -828,7 +828,7 @@ export const PORTAL_HELP: HelpTopic[] = [
       },
       {
         id: 'sizes-explained',
-        title: 'Sizes: barrels, cases, cans — what&rsquo;s the difference?',
+        title: 'Sizes: barrels, cases, cans \u2014 what\u2019s the difference?',
         body: (
           <>
             <P>
