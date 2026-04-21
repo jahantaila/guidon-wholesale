@@ -23,7 +23,11 @@ const STATUS_ACTION: Record<OrderStatus, { next?: OrderStatus; label: string; co
   cancelled: { label: 'Cancelled', color: 'var(--muted)' },
 };
 
-type ViewMode = 'table' | 'kanban';
+type ViewMode = 'cards' | 'table' | 'kanban';
+
+// Delivery-window quick chips. "This week" = today through Sunday end-of-day.
+// Overdue = pending or confirmed with a deliveryDate before today.
+type DeliveryWindow = 'all' | 'today' | 'this-week' | 'overdue';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -32,10 +36,14 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [customerFilter, setCustomerFilter] = useState<string>('all'); // customer id or 'all'
+  const [deliveryWindow, setDeliveryWindow] = useState<DeliveryWindow>('all');
+  const [placedFrom, setPlacedFrom] = useState<string>('');
+  const [placedTo, setPlacedTo] = useState<string>('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
   const [reminderToast, setReminderToast] = useState<string>('');
-  const [view, setView] = useState<ViewMode>('table');
+  const [view, setView] = useState<ViewMode>('cards');
 
   useEffect(() => {
     async function load() {
@@ -155,20 +163,106 @@ export default function OrdersPage() {
     }
   }, []);
 
-  const filtered = filter === 'all' ? orders : orders.filter((o) => o.status === filter);
-  const searched = search
-    ? filtered.filter((o) => {
+  // Filter pipeline — composes status + customer + delivery window + date
+  // range + free-text search. AND across filters. Kept as a single useMemo
+  // so we don't recompute date boundaries on every render.
+  const sorted = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().slice(0, 10);
+    // End of current week = upcoming Sunday (Sunday = 0 in getDay).
+    const weekEnd = new Date(today);
+    const daysUntilSunday = (7 - today.getDay()) % 7; // today is Sunday -> 0
+    weekEnd.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday));
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+    const isOpenForDelivery = (o: Order) =>
+      o.status === 'pending' || o.status === 'confirmed';
+
+    const q = search.trim().toLowerCase();
+    const filteredOrders = orders.filter((o) => {
+      // Status
+      if (filter !== 'all' && o.status !== filter) return false;
+      // Customer
+      if (customerFilter !== 'all' && o.customerId !== customerFilter) return false;
+      // Delivery window
+      if (deliveryWindow !== 'all') {
+        const dd = o.deliveryDate;
+        if (!dd) return false;
+        if (deliveryWindow === 'today' && dd !== todayStr) return false;
+        if (deliveryWindow === 'this-week' && (dd < todayStr || dd > weekEndStr)) return false;
+        if (deliveryWindow === 'overdue' && !(isOpenForDelivery(o) && dd < todayStr)) return false;
+      }
+      // Date placed range
+      if (placedFrom || placedTo) {
+        const placed = o.createdAt.slice(0, 10);
+        if (placedFrom && placed < placedFrom) return false;
+        if (placedTo && placed > placedTo) return false;
+      }
+      // Search by id / business name / product name
+      if (q) {
         const cust = customerMap.get(o.customerId);
-        const q = search.toLowerCase();
-        return (
-          o.id.toLowerCase().includes(q) ||
-          (cust?.businessName || '').toLowerCase().includes(q)
-        );
-      })
-    : filtered;
-  const sorted = [...searched].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+        const haystack = [
+          o.id,
+          cust?.businessName || '',
+          cust?.contactName || '',
+          ...o.items.map((i) => i.productName),
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    return filteredOrders.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [orders, filter, customerFilter, deliveryWindow, placedFrom, placedTo, search, customerMap]);
+
+  // Count of orders matching each delivery-window chip (for the chip's number).
+  const windowCounts = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().slice(0, 10);
+    const weekEnd = new Date(today);
+    const daysUntilSunday = (7 - today.getDay()) % 7;
+    weekEnd.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday));
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    let todayN = 0, thisWeekN = 0, overdueN = 0;
+    for (const o of orders) {
+      const dd = o.deliveryDate;
+      if (!dd) continue;
+      if (dd === todayStr) todayN++;
+      if (dd >= todayStr && dd <= weekEndStr) thisWeekN++;
+      if ((o.status === 'pending' || o.status === 'confirmed') && dd < todayStr) overdueN++;
+    }
+    return { today: todayN, thisWeek: thisWeekN, overdue: overdueN };
+  }, [orders]);
+
+  const activeCustomers = useMemo(() => {
+    // Only customers that actually have orders on file — keeps the dropdown
+    // useful instead of listing every business.
+    const withOrders = new Set(orders.map((o) => o.customerId));
+    return customers
+      .filter((c) => withOrders.has(c.id))
+      .sort((a, b) => a.businessName.localeCompare(b.businessName));
+  }, [orders, customers]);
+
+  const filtersActive =
+    filter !== 'all' ||
+    customerFilter !== 'all' ||
+    deliveryWindow !== 'all' ||
+    placedFrom !== '' ||
+    placedTo !== '' ||
+    search.trim() !== '';
+
+  const clearFilters = () => {
+    setFilter('all');
+    setCustomerFilter('all');
+    setDeliveryWindow('all');
+    setPlacedFrom('');
+    setPlacedTo('');
+    setSearch('');
+  };
 
   return (
     <div className="space-y-6">
@@ -191,33 +285,29 @@ export default function OrdersPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="text"
-            placeholder="Search orders..."
+            placeholder="Search by order, customer, or beer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input max-w-xs text-sm flex-1 sm:flex-initial"
           />
-          {/* View toggle */}
+          {/* View toggle — Cards is the default dense view for scanning the
+              book; Table is compact for bulk actions; Kanban is for stage
+              review. */}
           <div className="flex border border-divider" style={{ borderRadius: '3px', overflow: 'hidden' }}>
-            <button
-              onClick={() => setView('table')}
-              className="px-3 py-1.5 text-xs font-ui font-semibold"
-              style={{
-                background: view === 'table' ? 'var(--brass)' : 'transparent',
-                color: view === 'table' ? 'var(--paper)' : 'var(--ink)',
-              }}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setView('kanban')}
-              className="px-3 py-1.5 text-xs font-ui font-semibold"
-              style={{
-                background: view === 'kanban' ? 'var(--brass)' : 'transparent',
-                color: view === 'kanban' ? 'var(--paper)' : 'var(--ink)',
-              }}
-            >
-              Kanban
-            </button>
+            {(['cards', 'table', 'kanban'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setView(m)}
+                className="px-3 py-1.5 text-xs font-ui font-semibold transition-colors"
+                style={{
+                  background: view === m ? 'var(--brass)' : 'transparent',
+                  color: view === m ? 'var(--paper)' : 'var(--ink)',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {m}
+              </button>
+            ))}
           </div>
           <a
             href="/api/orders/export"
@@ -230,8 +320,9 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Status filter tabs with descriptions */}
-      <div className="space-y-2">
+      {/* Filters — status tabs on top, then delivery-window + customer + date
+          range on a second row. All compose with the search box. */}
+      <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {(['all', ...STATUS_FLOW] as const).map((status) => {
             const count =
@@ -260,12 +351,99 @@ export default function OrdersPage() {
             );
           })}
         </div>
-        {/* Description for the currently active filter — gives new admins
-            context on what each stage means. */}
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Delivery-window chips */}
+          <span className="section-label mr-1" style={{ color: 'var(--muted)' }}>Delivery:</span>
+          {([
+            { key: 'all', label: 'Any', n: null },
+            { key: 'today', label: 'Today', n: windowCounts.today },
+            { key: 'this-week', label: 'This week', n: windowCounts.thisWeek },
+            { key: 'overdue', label: 'Overdue', n: windowCounts.overdue },
+          ] as const).map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => setDeliveryWindow(chip.key)}
+              className="px-2.5 py-1 font-ui font-semibold border transition-colors"
+              style={{
+                borderRadius: '3px',
+                borderColor:
+                  deliveryWindow === chip.key
+                    ? 'var(--brass)'
+                    : chip.key === 'overdue' && (chip.n ?? 0) > 0
+                      ? 'var(--ruby)'
+                      : 'var(--divider)',
+                background: deliveryWindow === chip.key ? 'var(--brass)' : 'transparent',
+                color:
+                  deliveryWindow === chip.key
+                    ? 'var(--paper)'
+                    : chip.key === 'overdue' && (chip.n ?? 0) > 0
+                      ? 'var(--ruby)'
+                      : 'var(--ink)',
+              }}
+            >
+              {chip.label}
+              {chip.n !== null && <span style={{ opacity: 0.6, marginLeft: 4 }}>({chip.n})</span>}
+            </button>
+          ))}
+
+          {/* Customer dropdown */}
+          <span className="section-label ml-3 mr-1" style={{ color: 'var(--muted)' }}>Customer:</span>
+          <select
+            value={customerFilter}
+            onChange={(e) => setCustomerFilter(e.target.value)}
+            className="input text-xs py-1"
+            style={{ minWidth: 160 }}
+          >
+            <option value="all">All customers</option>
+            {activeCustomers.map((c) => (
+              <option key={c.id} value={c.id}>{c.businessName}</option>
+            ))}
+          </select>
+
+          {/* Date-placed range */}
+          <span className="section-label ml-3 mr-1" style={{ color: 'var(--muted)' }}>Placed:</span>
+          <input
+            type="date"
+            value={placedFrom}
+            onChange={(e) => setPlacedFrom(e.target.value)}
+            aria-label="From date"
+            className="input text-xs py-1"
+            style={{ maxWidth: 140 }}
+          />
+          <span style={{ color: 'var(--muted)' }}>to</span>
+          <input
+            type="date"
+            value={placedTo}
+            onChange={(e) => setPlacedTo(e.target.value)}
+            aria-label="To date"
+            className="input text-xs py-1"
+            style={{ maxWidth: 140 }}
+          />
+
+          {filtersActive && (
+            <button
+              onClick={clearFilters}
+              className="btn-ghost text-xs px-2 py-1 ml-auto italic"
+              style={{ color: 'var(--muted)' }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* Active-status caption kept so admins learn what each stage means. */}
         {filter !== 'all' && (
           <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
             <strong style={{ color: 'var(--ink)', textTransform: 'capitalize' }}>{filter}:</strong>{' '}
             {STATUS_DESCRIPTIONS[filter]}
+          </p>
+        )}
+
+        {/* Result count when filters active */}
+        {filtersActive && (
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
+            Showing <strong style={{ color: 'var(--ink)' }}>{sorted.length}</strong> of {orders.length} orders.
           </p>
         )}
       </div>
@@ -278,7 +456,7 @@ export default function OrdersPage() {
           ))}
         </div>
       ) : sorted.length === 0 ? (
-        <p className="italic" style={{ color: 'var(--muted)' }}>No orders found.</p>
+        <p className="italic" style={{ color: 'var(--muted)' }}>No orders match the current filters.</p>
       ) : view === 'kanban' ? (
         <KanbanView
           orders={sorted}
@@ -286,7 +464,7 @@ export default function OrdersPage() {
           onStatusChange={handleStatusChange}
           updating={updating}
         />
-      ) : (
+      ) : view === 'table' ? (
         <TableView
           orders={sorted}
           customerMap={customerMap}
@@ -298,7 +476,256 @@ export default function OrdersPage() {
           updateDeliveryDate={updateDeliveryDate}
           updating={updating}
         />
+      ) : (
+        <CardsView
+          orders={sorted}
+          customerMap={customerMap}
+          invoiceByOrderId={invoiceByOrderId}
+          expandedId={expandedId}
+          setExpandedId={setExpandedId}
+          onStatusChange={handleStatusChange}
+          sendReminder={sendReminder}
+          updateDeliveryDate={updateDeliveryDate}
+          updating={updating}
+        />
       )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  CARDS VIEW — default. Dense grid, click a card to expand in-place */
+/* ================================================================== */
+
+function CardsView({
+  orders,
+  customerMap,
+  invoiceByOrderId,
+  expandedId,
+  setExpandedId,
+  onStatusChange,
+  sendReminder,
+  updateDeliveryDate,
+  updating,
+}: {
+  orders: Order[];
+  customerMap: Map<string, Customer>;
+  invoiceByOrderId: Map<string, Invoice>;
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
+  onStatusChange: (o: Order, next: OrderStatus) => void;
+  sendReminder: (o: Order) => void;
+  updateDeliveryDate: (o: Order, newDate: string) => void;
+  updating: string | null;
+}) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {orders.map((order) => {
+        const cust = customerMap.get(order.customerId);
+        const inv = invoiceByOrderId.get(order.id);
+        const action = STATUS_ACTION[order.status];
+        const dd = new Date(order.deliveryDate);
+        const overdue = (order.status === 'pending' || order.status === 'confirmed') && dd < today;
+        const itemsCount = order.items.reduce((n, i) => n + i.quantity, 0);
+        const isExpanded = expandedId === order.id;
+
+        return (
+          <article
+            key={order.id}
+            className="card p-0 overflow-hidden"
+            style={{ border: '1px solid var(--divider)' }}
+          >
+            {/* Header: order id + status badge */}
+            <div
+              onClick={() => setExpandedId(isExpanded ? null : order.id)}
+              className="px-4 py-3 flex items-baseline justify-between gap-2 cursor-pointer transition-colors"
+              style={{ borderBottom: '1px solid var(--divider)' }}
+            >
+              <div className="min-w-0">
+                <p className="font-semibold truncate" style={{ color: 'var(--ink)' }}>
+                  {order.id}
+                </p>
+                <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>
+                  {cust?.businessName || order.customerId}
+                </p>
+              </div>
+              <span className={cn('badge-sm shrink-0', getStatusColor(order.status))}>
+                {order.status}
+              </span>
+            </div>
+
+            {/* Body: key figures */}
+            <div className="px-4 py-3 grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Total</span>
+                <p className="font-semibold font-variant-tabular" style={{ color: 'var(--brass)' }}>
+                  {formatCurrency(order.total)}
+                </p>
+              </div>
+              <div>
+                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Items</span>
+                <p className="font-variant-tabular" style={{ color: 'var(--ink)' }}>
+                  {itemsCount} keg{itemsCount === 1 ? '' : 's'}
+                </p>
+              </div>
+              <div>
+                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Placed</span>
+                <p className="font-variant-tabular text-xs" style={{ color: 'var(--ink)' }}>
+                  {formatDate(order.createdAt)}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Delivery</span>
+                <p
+                  className="font-variant-tabular"
+                  style={{ color: overdue ? 'var(--ruby)' : 'var(--ink)' }}
+                  title={overdue ? 'Past delivery date without being marked completed' : undefined}
+                >
+                  {formatDate(order.deliveryDate)}
+                  {overdue && (
+                    <span className="ml-1 text-[9px] uppercase tracking-wider font-semibold">
+                      · late
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Invoice</span>
+                {inv ? (
+                  <span className={cn('badge-sm', getStatusColor(inv.status))}>{inv.status}</span>
+                ) : (
+                  <span className="text-xs italic" style={{ color: 'var(--faint)' }}>none</span>
+                )}
+              </div>
+            </div>
+
+            {/* Primary action row */}
+            <div
+              className="px-4 py-2 flex items-center justify-between gap-2"
+              style={{ borderTop: '1px solid var(--divider)', background: 'color-mix(in srgb, var(--surface) 50%, transparent)' }}
+            >
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                className="btn-ghost text-xs"
+                style={{ color: 'var(--muted)' }}
+              >
+                {isExpanded ? 'Hide details' : 'Details ↓'}
+              </button>
+              {action.next ? (
+                <button
+                  onClick={() => onStatusChange(order, action.next!)}
+                  disabled={updating === order.id}
+                  className="btn-ghost text-xs"
+                  style={{ color: action.color, fontWeight: 600 }}
+                >
+                  {updating === order.id ? '…' : `${action.label} →`}
+                </button>
+              ) : (
+                <span className="section-label" style={{ color: 'var(--muted)' }}>
+                  {action.label}
+                </span>
+              )}
+            </div>
+
+            {isExpanded && (
+              <div
+                className="px-4 py-3 space-y-3 text-sm"
+                style={{ borderTop: '1px solid var(--divider)', background: 'color-mix(in srgb, var(--surface) 30%, transparent)' }}
+              >
+                {/* Items */}
+                <div>
+                  <span className="section-label block mb-1">Items</span>
+                  <ul className="space-y-1">
+                    {order.items.map((item, idx) => (
+                      <li key={idx} className="flex items-baseline justify-between gap-2 text-xs">
+                        <span style={{ color: 'var(--ink)' }} className="truncate">
+                          {item.quantity} × {item.productName}
+                        </span>
+                        <span className="font-variant-tabular shrink-0" style={{ color: 'var(--muted)' }}>
+                          {item.size}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {order.kegReturns.length > 0 && (
+                  <div>
+                    <span className="section-label block mb-1" style={{ color: 'var(--pine)' }}>Keg Returns</span>
+                    <div className="flex gap-2 flex-wrap">
+                      {order.kegReturns.map((kr, idx) => (
+                        <span
+                          key={idx}
+                          className="badge-sm"
+                          style={{ color: 'var(--pine)', borderColor: 'var(--pine)' }}
+                        >
+                          {kr.size} × {kr.quantity}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {order.notes && (
+                  <p className="italic text-xs" style={{ color: 'var(--muted)' }}>
+                    Note: {order.notes}
+                  </p>
+                )}
+
+                {/* Inline delivery-date edit for open orders */}
+                {(order.status === 'pending' || order.status === 'confirmed') && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-divider text-xs">
+                    <span className="section-label" style={{ color: 'var(--muted)' }}>Reschedule</span>
+                    <input
+                      type="date"
+                      defaultValue={order.deliveryDate}
+                      onBlur={(e) => updateDeliveryDate(order, e.target.value)}
+                      className="input text-xs py-1"
+                      style={{ maxWidth: 140 }}
+                      disabled={updating === order.id}
+                    />
+                  </div>
+                )}
+
+                {/* Keg-return reminder + cancel */}
+                <div className="flex items-center gap-3 pt-2 border-t border-divider">
+                  {(order.status === 'pending' || order.status === 'confirmed') && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Cancel order ${order.id}? This restores reserved inventory.`)) {
+                          onStatusChange(order, 'cancelled');
+                        }
+                      }}
+                      className="btn-ghost text-xs"
+                      style={{ color: 'var(--ruby)' }}
+                    >
+                      Cancel order
+                    </button>
+                  )}
+                  {(order.status === 'confirmed' || order.status === 'completed') && (
+                    <button
+                      onClick={() => sendReminder(order)}
+                      className="btn-ghost text-xs"
+                      style={{ color: 'var(--pine)' }}
+                    >
+                      Remind about kegs
+                    </button>
+                  )}
+                  <Link
+                    href="/admin/invoices"
+                    className="btn-ghost text-xs ml-auto"
+                    style={{ color: 'var(--brass)' }}
+                  >
+                    View invoice →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }
