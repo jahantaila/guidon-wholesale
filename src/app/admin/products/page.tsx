@@ -80,12 +80,30 @@ export default function ProductsPage() {
     setModalOpen(true);
   };
 
+  // Load every size the product actually has (legacy + custom), sorted by
+  // sortOrder. Previously we iterated over the three hardcoded KEG_SIZES
+  // which silently dropped any custom size like "Cas of 16oz Cans" —
+  // saving the form then wiped those sizes from the DB because
+  // updateProduct does a full delete + reinsert from fields.sizes.
+  const loadSizesFromProduct = (product: Product, resetInventory = false) => {
+    const sorted = [...product.sizes].sort(
+      (a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999),
+    );
+    return sorted.map((s) => ({
+      size: s.size,
+      price: s.price,
+      deposit: s.deposit,
+      inventoryCount: resetInventory ? 0 : (s.inventoryCount ?? 0),
+      parLevel: s.parLevel ?? null,
+      available: s.available ?? true,
+    }));
+  };
+
   // Duplicate an existing product into the Add form pre-populated. Useful
   // for seasonal variants (Winter Doppelbock → Spring Doppelbock with the
   // same ABV / IBU / description but a new name + inventory). Admin tweaks
   // what's different and hits Create.
   const openDuplicate = (product: Product) => {
-    const sizesMap = new Map(product.sizes.map(s => [s.size, s]));
     setForm({
       name: `${product.name} (copy)`,
       style: product.style,
@@ -98,33 +116,13 @@ export default function ProductsPage() {
       limitedRelease: product.limitedRelease ?? false,
       imageUrl: product.imageUrl ?? '',
       awards: product.awards ?? [],
-      sizes: KEG_SIZES.map((s) => {
-        const existing = sizesMap.get(s);
-        return existing
-          ? {
-              size: s,
-              price: existing.price,
-              deposit: existing.deposit,
-              inventoryCount: 0, // start duplicates at 0 stock
-              parLevel: existing.parLevel ?? null,
-              available: existing.available ?? true,
-            }
-          : {
-              size: s,
-              price: 0,
-              deposit: 0,
-              inventoryCount: 0,
-              parLevel: null,
-              available: false,
-            };
-      }),
+      sizes: loadSizesFromProduct(product, true),
     });
     setEditingId(null); // treat as a new product, not an edit
     setModalOpen(true);
   };
 
   const openEdit = (product: Product) => {
-    const sizesMap = new Map(product.sizes.map(s => [s.size, s]));
     setForm({
       name: product.name,
       style: product.style,
@@ -137,19 +135,7 @@ export default function ProductsPage() {
       limitedRelease: product.limitedRelease ?? false,
       imageUrl: product.imageUrl ?? '',
       awards: product.awards ?? [],
-      sizes: KEG_SIZES.map((s) => {
-        const existing = sizesMap.get(s);
-        return existing
-          ? {
-              size: s,
-              price: existing.price,
-              deposit: existing.deposit,
-              inventoryCount: existing.inventoryCount ?? 0,
-              parLevel: existing.parLevel ?? null,
-              available: existing.available ?? true,
-            }
-          : { size: s, price: 0, deposit: DEFAULT_DEPOSITS[s], inventoryCount: 0, parLevel: null, available: false };
-      }),
+      sizes: loadSizesFromProduct(product),
     });
     setEditingId(product.id);
     setModalOpen(true);
@@ -159,7 +145,13 @@ export default function ProductsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const activeSizes = form.sizes.filter(s => s.price > 0);
+      // Keep any row where the admin has entered a size name. The old
+       // filter `price > 0` incorrectly dropped legitimate zero-price rows
+       // (samples, promotional packs) — plus custom sizes the admin added
+       // via "+ Custom size" but hadn't priced yet (those should fail
+       // validation, not silently disappear). Blank-name rows are the
+       // only thing worth skipping.
+      const activeSizes = form.sizes.filter(s => s.size.trim() !== '');
       // Normalize: coerce ibu '' -> undefined so the API doesn't persist NaN;
       // trim empty awards so '' doesn't become a visible bullet on the card.
       const cleanAwards = form.awards.map(a => a.trim()).filter(Boolean);

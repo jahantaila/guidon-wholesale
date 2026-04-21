@@ -270,14 +270,14 @@ export async function PUT(request: NextRequest) {
 
   const order = await updateOrder(id, updates);
 
-  // Email the customer on 'completed' transition only. 'confirmed' used to
-  // fire a "your order is confirmed, delivery on <date>" email but the
-  // brewery asked to kill that — the invoice auto-send on confirm is the
-  // signal they want; a second email is noise. Pending is internal.
-  // Await so Vercel doesn't cut the promise.
+  // Email the customer on 'confirmed' transition only. Brewery preference:
+  // customers want to know the moment their order is committed to; a
+  // "completed" email is redundant since they already have the kegs in
+  // hand by then. Pending is internal. Await so Vercel doesn't cut the
+  // promise.
   if (
     order &&
-    updates.status === 'completed' &&
+    updates.status === 'confirmed' &&
     updates.status !== existingOrder.status
   ) {
     try {
@@ -288,7 +288,7 @@ export async function PUT(request: NextRequest) {
           orderId: order.id,
           customerEmail: customer.email,
           customerName: customer.contactName,
-          newStatus: 'completed',
+          newStatus: 'confirmed',
           deliveryDate: order.deliveryDate,
         });
       }
