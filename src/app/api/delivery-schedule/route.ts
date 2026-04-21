@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSetting } from '@/lib/data';
 
+// Prevent static prerendering so the customer checkout always reads the
+// latest delivery-days setting instead of a stale build-time snapshot. When
+// admin updates delivery schedule in /admin/settings we want that to take
+// effect immediately, not on the next deploy.
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/delivery-schedule
  *

@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
 import { getNotificationEmails, getSetting, setSetting } from '@/lib/data';
 
+// Opt out of static prerendering. Without this, Next.js sees a GET handler
+// that reads no request data and marks the whole route static — Vercel then
+// serves the prerendered GET response and returns 405 Method Not Allowed
+// for PUT/POST/DELETE, so "Add Recipient" silently fails on prod with
+// "Save failed" even though the handler code is correct. Any admin mutation
+// route needs to be marked dynamic.
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/admin/settings
  * Returns all admin-editable settings: notification emails + delivery schedule
