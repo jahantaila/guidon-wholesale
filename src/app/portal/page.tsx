@@ -7,6 +7,8 @@ import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegB
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
+import HelpView from '@/components/HelpView';
+import { PORTAL_HELP } from '@/lib/help-content';
 
 const KEG_LABELS: Record<string, string> = {
   '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel',
@@ -367,7 +369,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
 /*  DASHBOARD                                                         */
 /* ================================================================== */
 
-type Tab = 'overview' | 'products' | 'orders' | 'invoices' | 'settings';
+type Tab = 'overview' | 'products' | 'orders' | 'invoices' | 'settings' | 'help';
 
 function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -530,6 +532,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             { key: 'orders', label: 'Order History' },
             { key: 'invoices', label: 'Invoices' },
             { key: 'settings', label: 'Account' },
+            { key: 'help', label: 'Help' },
           ] as { key: Tab; label: string }[]).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={cn(
@@ -595,6 +598,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         {tab === 'settings' && (
           <SettingsTab customer={customer} onLogout={onLogout} />
         )}
+        {tab === 'help' && <PortalHelpTab />}
       </main>
 
       {showReturnModal && (
@@ -1935,6 +1939,20 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
         </button>
       </div>
     </div>
+  );
+}
+
+/* ================================================================== */
+/*  HELP TAB                                                          */
+/* ================================================================== */
+
+function PortalHelpTab() {
+  return (
+    <HelpView
+      topics={PORTAL_HELP}
+      title="Help & Guides"
+      subtitle="Everything you need to know about using the Guidon Brewing Co. wholesale portal."
+    />
   );
 }
 
