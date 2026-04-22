@@ -56,7 +56,9 @@ export default function KegTrackerPage() {
       try {
         const [balancesRes, customersRes, ledgerRes] = await Promise.all([
           adminFetch('/api/keg-ledger?balances=true'),
-          adminFetch('/api/customers'),
+          // includeArchived so a ledger row for an archived customer still
+          // resolves a business name in the tracker.
+          adminFetch('/api/customers?includeArchived=true'),
           adminFetch('/api/keg-ledger'),
         ]);
         const balancesData = await balancesRes.json();

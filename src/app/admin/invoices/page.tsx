@@ -36,7 +36,9 @@ export default function InvoicesPage() {
     try {
       const [invRes, custRes, ordRes] = await Promise.all([
         adminFetch('/api/invoices'),
-        adminFetch('/api/customers'),
+        // includeArchived so invoices linked to archived customers still
+        // resolve the business name on the invoices list.
+        adminFetch('/api/customers?includeArchived=true'),
         adminFetch('/api/orders'),
       ]);
       const [invData, custData, ordData] = await Promise.all([invRes.json(), custRes.json(), ordRes.json()]);
