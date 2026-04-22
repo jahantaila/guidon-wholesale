@@ -5,6 +5,8 @@ import Link from 'next/link';
 import type { Order, Product, KegSize, BrewSchedule } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { buildBrewScheduleFilter, filterBrewsByRange, brewScheduleQuickFilters, type BrewQuickFilter } from '@/lib/brew-schedule-filter';
+import { renderBrewSchedulePrintHtml } from '@/lib/brew-schedule-pdf';
 
 type RowKey = `${string}::${string}`;
 
@@ -379,13 +381,52 @@ function BrewScheduleSection({
     expectedYield: 10,
     notes: '',
   });
+  const [quickFilter, setQuickFilter] = useState<BrewQuickFilter>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
-  const sortedBrews = useMemo(
-    () => [...brews].sort((a, b) => a.brewDate.localeCompare(b.brewDate)),
-    [brews],
+  const activeRange = useMemo(
+    () => buildBrewScheduleFilter(quickFilter, { from: customFrom, to: customTo }),
+    [quickFilter, customFrom, customTo],
   );
+
+  const sortedBrews = useMemo(() => {
+    const filtered = filterBrewsByRange(brews, activeRange);
+    return [...filtered].sort((a, b) => a.brewDate.localeCompare(b.brewDate));
+  }, [brews, activeRange]);
+
+  const filterLabel = useMemo(() => {
+    const def = brewScheduleQuickFilters.find((q) => q.key === quickFilter);
+    if (!def) return 'All Brews';
+    if (quickFilter === 'custom') {
+      if (customFrom && customTo) return `Custom: ${customFrom} to ${customTo}`;
+      if (customFrom) return `Custom: from ${customFrom}`;
+      if (customTo) return `Custom: through ${customTo}`;
+      return 'All Brews';
+    }
+    return def.label;
+  }, [quickFilter, customFrom, customTo]);
+
+  const downloadPdf = useCallback(() => {
+    const html = renderBrewSchedulePrintHtml({
+      brews: sortedBrews,
+      products,
+      filterLabel,
+    });
+    // Popup-blocker-safe: requires a user gesture, which we have (button
+    // click). If the browser still blocks the popup, we surface a toast so
+    // Mike knows to allow popups for this origin.
+    const win = window.open('', '_blank', 'width=960,height=720');
+    if (!win) {
+      flash('Enable popups for this site to download the PDF.');
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }, [sortedBrews, products, filterLabel, flash]);
 
   const reset = () => setForm({ productId: '', size: '', brewDate: '', expectedYield: 10, notes: '' });
 
@@ -463,7 +504,7 @@ function BrewScheduleSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <span className="section-label">Brewing Schedule</span>
           <p className="text-sm italic mt-1" style={{ color: 'var(--muted)' }}>
@@ -471,13 +512,73 @@ function BrewScheduleSection({
             stock by&rdquo; date for that product + size above.
           </p>
         </div>
-        {!adding && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setAdding(true)}
-            className="btn-primary text-xs"
+            type="button"
+            onClick={downloadPdf}
+            className="btn-ghost text-xs"
+            title="Open a print-friendly view; use your browser's Save as PDF to download."
           >
-            + Schedule Brew
+            Download PDF
           </button>
+          {!adding && (
+            <button
+              onClick={() => setAdding(true)}
+              className="btn-primary text-xs"
+            >
+              + Schedule Brew
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Quick-range filters + optional custom date range. We filter on
+          brewDate so "This Week" means "brews scheduled to happen this week"
+          rather than "brews created this week." */}
+      <div className="flex flex-wrap items-center gap-2 py-2">
+        <span className="section-label" style={{ color: 'var(--muted)' }}>Filter:</span>
+        {brewScheduleQuickFilters.map((f) => {
+          const selected = quickFilter === f.key;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setQuickFilter(f.key)}
+              className="text-xs px-2.5 py-1 rounded-full transition-all"
+              style={{
+                background: selected ? 'color-mix(in srgb, var(--brass) 16%, transparent)' : 'transparent',
+                border: `1px solid ${selected ? 'color-mix(in srgb, var(--brass) 55%, transparent)' : 'var(--divider)'}`,
+                color: selected ? 'var(--brass)' : 'var(--muted)',
+                fontWeight: selected ? 600 : 400,
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+        {quickFilter === 'custom' && (
+          <div className="flex items-center gap-2 ml-2">
+            <input
+              type="date"
+              className="input text-xs"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              aria-label="From date"
+            />
+            <span className="text-xs" style={{ color: 'var(--muted)' }}>to</span>
+            <input
+              type="date"
+              className="input text-xs"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              aria-label="To date"
+            />
+          </div>
+        )}
+        {activeRange && sortedBrews.length === 0 && brews.length > 0 && (
+          <span className="text-xs italic ml-2" style={{ color: 'var(--muted)' }}>
+            {brews.length} brew{brews.length === 1 ? '' : 's'} hidden by filter
+          </span>
         )}
       </div>
 
@@ -540,8 +641,9 @@ function BrewScheduleSection({
 
       {!loading && sortedBrews.length === 0 && !adding && (
         <p className="text-sm italic py-3" style={{ color: 'var(--faint)' }}>
-          No brews scheduled. Click &ldquo;Schedule Brew&rdquo; to add one — the
-          Back In Stock By column above will fill in automatically.
+          {brews.length === 0
+            ? 'No brews scheduled. Click "Schedule Brew" to add one — the Back In Stock By column above will fill in automatically.'
+            : 'No brews match the current filter. Try "All" to see everything on the calendar.'}
         </p>
       )}
 

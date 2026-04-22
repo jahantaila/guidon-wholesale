@@ -27,6 +27,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const allowedPayment = ['check', 'fintech', 'no_preference'] as const;
+  const preferredPaymentMethod =
+    allowedPayment.includes(body.preferredPaymentMethod)
+      ? (body.preferredPaymentMethod as (typeof allowedPayment)[number])
+      : 'no_preference';
+
   const application: WholesaleApplication = {
     id: generateId('app'),
     businessName: body.businessName,
@@ -36,6 +42,7 @@ export async function POST(request: NextRequest) {
     address: body.address || '',
     businessType: body.businessType || '',
     expectedMonthlyVolume: body.expectedMonthlyVolume || '',
+    preferredPaymentMethod,
     createdAt: new Date().toISOString(),
   };
 
@@ -55,6 +62,7 @@ export async function POST(request: NextRequest) {
       phone: application.phone,
       businessType: application.businessType,
       expectedMonthlyVolume: application.expectedMonthlyVolume,
+      preferredPaymentMethod: application.preferredPaymentMethod,
     });
   } catch (err) {
     console.error('[email] notifyApplicationSubmitted failed (non-fatal):', err);

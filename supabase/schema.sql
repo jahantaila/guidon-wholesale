@@ -298,6 +298,17 @@ create table if not exists keg_ledger (
   notes text not null default ''
 );
 
+-- Customer-initiated keg return requests post as status='pending' so they
+-- don't decrement the balance until an admin approves the pickup. Admin-
+-- initiated entries (deposits from order confirmation, manual adjustments)
+-- default to 'approved' and count immediately. Without this column the
+-- portal return request would drop the balance while the empties were still
+-- physically at the customer's location, producing phantom negatives.
+alter table keg_ledger
+  add column if not exists status text not null default 'approved'
+  check (status in ('pending', 'approved', 'rejected'));
+create index if not exists idx_keg_ledger_status on keg_ledger(status) where status = 'pending';
+
 alter table keg_ledger enable row level security;
 drop policy if exists "Service role full access" on keg_ledger;
 create policy "Service role full access" on keg_ledger using (true) with check (true);
@@ -322,6 +333,13 @@ create table if not exists applications (
     check (status in ('pending', 'approved', 'rejected')),
   created_at timestamptz not null default now()
 );
+
+-- Applicant's preferred payment rail — lets Mike size the account risk
+-- before approving. 'check' = paper check, 'fintech' = any digital rail
+-- (ACH / Zelle / card), 'no_preference' = applicant didn't pick.
+alter table applications
+  add column if not exists preferred_payment_method text not null default 'no_preference'
+  check (preferred_payment_method in ('check', 'fintech', 'no_preference'));
 
 alter table applications enable row level security;
 drop policy if exists "Service role full access" on applications;

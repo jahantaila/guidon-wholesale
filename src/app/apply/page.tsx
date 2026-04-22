@@ -12,6 +12,10 @@ export default function ApplyPage() {
     address: '',
     businessType: '',
     expectedMonthlyVolume: '',
+    // Default matches the server's fallback. 'no_preference' is an explicit
+    // value so admin can tell "applicant picked no preference" from "field
+    // was blank on an old app."
+    preferredPaymentMethod: 'no_preference' as 'check' | 'fintech' | 'no_preference',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -135,6 +139,41 @@ export default function ApplyPage() {
                 <input id="phone" type="tel" autoComplete="tel" className="input" placeholder="(828) 555-0000"
                   value={form.phone} onChange={(e) => update('phone', e.target.value)} />
               </div>
+            </div>
+          </div>
+
+          <div className="border-t border-white/[0.04] pt-5">
+            <span className="section-label mb-3 block">Preferred Payment Method</span>
+            <p className="text-xs text-cream/35 mb-3">How do you plan to pay invoices? Helps us set up your account faster. You can change later.</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'check', label: 'Check', hint: 'Paper check' },
+                { value: 'fintech', label: 'Fintech', hint: 'ACH / Zelle / card' },
+                { value: 'no_preference', label: 'Either', hint: 'No preference' },
+              ] as const).map((opt) => {
+                const selected = form.preferredPaymentMethod === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className="cursor-pointer text-center rounded-xl border px-3 py-3 transition-all"
+                    style={{
+                      background: selected ? 'color-mix(in srgb, var(--brass) 14%, transparent)' : 'transparent',
+                      borderColor: selected ? 'color-mix(in srgb, var(--brass) 55%, transparent)' : 'rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="preferredPaymentMethod"
+                      value={opt.value}
+                      checked={selected}
+                      onChange={() => update('preferredPaymentMethod', opt.value)}
+                      className="sr-only"
+                    />
+                    <div className="text-sm font-heading font-bold text-cream">{opt.label}</div>
+                    <div className="text-[10px] text-cream/40 mt-0.5">{opt.hint}</div>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
