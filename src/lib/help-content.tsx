@@ -704,30 +704,6 @@ export const ADMIN_HELP: HelpTopic[] = [
       },
     ],
   },
-  {
-    id: 'embed',
-    title: 'Embedding the portal on your website',
-    articles: [
-      {
-        id: 'embed-code',
-        title: 'Getting the embed code',
-        body: (
-          <>
-            <P>
-              Visit <Code>/embed</Code> in your browser (not inside the admin nav — it&rsquo;s a standalone
-              page). Copy the generated iframe snippet. Paste it into any Custom HTML block
-              on your marketing site (WordPress, Squarespace, etc.). The iframe auto-resizes
-              to fit its content via postMessage.
-            </P>
-            <P>
-              The customer-facing portal link you give out for emails and other CTAs should be
-              <Code> https://guidonbrewing.com/wholesale</Code> (or wherever you embed it).
-            </P>
-          </>
-        ),
-      },
-    ],
-  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
