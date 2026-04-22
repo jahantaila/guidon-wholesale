@@ -45,7 +45,9 @@ export default function AdminDashboard() {
         // call that could drift out of sync with the list pages.
         const [ordersRes, customersRes, appsRes, invoicesRes, productsRes, balancesRes] = await Promise.all([
           adminFetch('/api/orders', { cache: 'no-store' }),
-          adminFetch('/api/customers', { cache: 'no-store' }),
+          // includeArchived so dashboard stats (kegs-out, recent activity)
+          // name the customer correctly even if the account was archived.
+          adminFetch('/api/customers?includeArchived=true', { cache: 'no-store' }),
           adminFetch('/api/applications', { cache: 'no-store' }),
           adminFetch('/api/invoices', { cache: 'no-store' }),
           adminFetch('/api/products', { cache: 'no-store' }),

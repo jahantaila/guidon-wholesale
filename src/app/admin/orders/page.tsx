@@ -50,7 +50,9 @@ export default function OrdersPage() {
       try {
         const [ordersRes, customersRes, invoicesRes] = await Promise.all([
           adminFetch('/api/orders', { cache: 'no-store' }),
-          adminFetch('/api/customers', { cache: 'no-store' }),
+          // includeArchived so orders from archived accounts keep their
+          // business name on the list, not a blank / fallback label.
+          adminFetch('/api/customers?includeArchived=true', { cache: 'no-store' }),
           adminFetch('/api/invoices', { cache: 'no-store' }),
         ]);
         const ordersData = await ordersRes.json().catch(() => []);

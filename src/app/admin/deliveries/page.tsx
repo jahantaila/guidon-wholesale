@@ -19,7 +19,9 @@ export default function DeliveriesPage() {
   useEffect(() => {
     Promise.all([
       adminFetch('/api/orders').then((r) => r.json()),
-      adminFetch('/api/customers').then((r) => r.json()),
+      // includeArchived so orders tied to archived accounts still render
+      // with their customer name on the delivery route, not "Unknown".
+      adminFetch('/api/customers?includeArchived=true').then((r) => r.json()),
     ])
       .then(([o, c]) => {
         setOrders(Array.isArray(o) ? o : []);
