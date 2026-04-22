@@ -133,7 +133,12 @@ export async function PUT(request: NextRequest) {
         await createCustomer(newCustomer);
 
         // Provision a Supabase Auth user so the portal login (which uses
-        // sb.auth.signInWithPassword) works for this email.
+        // sb.auth.signInWithPassword) works for this email. If an auth user
+        // already exists (orphaned from a prior approval, a test run, or a
+        // manual admin action), we UPDATE its password to the freshly
+        // generated temp so the email we just sent actually matches what
+        // the auth table stores. Without this update, the old symptom was
+        // "customer gets the email but can't log in."
         if (isSupabaseConfigured()) {
           try {
             const sb = createAdminClient();
@@ -150,9 +155,32 @@ export async function PUT(request: NextRequest) {
                 },
               });
               if (res?.error) {
-                // If the user already exists in Supabase Auth, treat as success.
                 const alreadyExists = /already|exists|registered/i.test(res.error.message);
-                if (!alreadyExists) {
+                if (alreadyExists && adminApi.listUsers && adminApi.updateUserById) {
+                  // Auth user exists with an unknown password. Sync the new
+                  // temp password in so the email-delivered credential works.
+                  const listRes = await adminApi.listUsers();
+                  const authUser = listRes?.data?.users?.find(
+                    (u: { email?: string }) =>
+                      u.email?.toLowerCase() === newCustomer.email.toLowerCase(),
+                  );
+                  if (authUser) {
+                    const updateRes = await adminApi.updateUserById(authUser.id, {
+                      password: tempPassword,
+                      email_confirm: true,
+                    });
+                    if (updateRes?.error) {
+                      console.error(
+                        '[approval] Supabase auth password sync failed:',
+                        updateRes.error.message,
+                      );
+                    }
+                  } else {
+                    console.error(
+                      '[approval] createUser said "exists" but listUsers could not find the email; auth state is inconsistent.',
+                    );
+                  }
+                } else if (!alreadyExists) {
                   console.error('[approval] Supabase auth user creation failed:', res.error.message);
                 }
               }
