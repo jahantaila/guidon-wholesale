@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
-import { getKegLedger, getKegLedgerByCustomer, getAllKegBalances, addKegLedgerEntry } from '@/lib/data';
+import {
+  getKegLedger,
+  getKegLedgerByCustomer,
+  getAllKegBalances,
+  addKegLedgerEntry,
+  updateKegLedgerStatus,
+  getCustomers,
+} from '@/lib/data';
 import { generateId } from '@/lib/utils';
-import type { KegLedgerEntry, KegSize } from '@/lib/types';
+import type { KegLedgerEntry, KegLedgerStatus, KegSize } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
+import { notifyKegReturnRequested } from '@/lib/email';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -91,6 +99,13 @@ export async function POST(request: NextRequest) {
     body.type === 'return' ? 'Portal return request' : 'Manual adjustment';
   const notes = userNote ? `${defaultSource}: ${userNote}` : defaultSource;
 
+  // Portal-initiated returns start as 'pending' — the empties are still at
+  // the customer's location until admin confirms pickup, so the balance
+  // shouldn't drop yet. Admin-initiated entries (admin adjusts manually,
+  // or a deposit for any reason) are immediately 'approved'.
+  const isPortalReturn = !admin && body.type === 'return';
+  const status: KegLedgerStatus = isPortalReturn ? 'pending' : 'approved';
+
   const entry: KegLedgerEntry = {
     id: generateId('kl'),
     customerId: body.customerId,
@@ -105,7 +120,60 @@ export async function POST(request: NextRequest) {
         : depositAmount * quantity,
     date: new Date().toISOString(),
     notes,
+    status,
   };
   await addKegLedgerEntry(entry);
+
+  // Notify admin of a customer-submitted return request so they can schedule
+  // the pickup. Failures are logged but don't block the request — the entry
+  // is already saved and visible in the keg tracker.
+  if (isPortalReturn) {
+    try {
+      const customers = await getCustomers();
+      const customer = customers.find((c) => c.id === entry.customerId);
+      if (customer) {
+        await notifyKegReturnRequested({
+          customerEmail: customer.email,
+          customerName: customer.contactName,
+          businessName: customer.businessName,
+          size: entry.size,
+          quantity: entry.quantity,
+          notes: userNote,
+        });
+      }
+    } catch (err) {
+      console.error('[email] notifyKegReturnRequested failed (non-fatal):', err);
+    }
+  }
+
   return NextResponse.json(entry, { status: 201 });
+}
+
+/**
+ * PATCH /api/keg-ledger — admin approves or rejects a pending keg return
+ * request. Approving flips status to 'approved' which decrements the
+ * customer's balance on the next tracker refresh. Rejecting marks the row
+ * 'rejected' (kept for audit trail; never affects balance).
+ */
+export async function PATCH(request: NextRequest) {
+  if (!isAdminRequest(request)) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+  const body = await request.json().catch(() => ({}));
+  const id: string = typeof body.id === 'string' ? body.id : '';
+  const status: KegLedgerStatus = body.status;
+  if (!id) {
+    return NextResponse.json({ error: 'id is required.' }, { status: 400 });
+  }
+  if (status !== 'approved' && status !== 'rejected' && status !== 'pending') {
+    return NextResponse.json(
+      { error: 'status must be "approved", "rejected", or "pending".' },
+      { status: 400 },
+    );
+  }
+  const updated = await updateKegLedgerStatus(id, status);
+  if (!updated) {
+    return NextResponse.json({ error: 'Ledger entry not found.' }, { status: 404 });
+  }
+  return NextResponse.json(updated);
 }

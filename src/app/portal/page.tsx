@@ -414,6 +414,11 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
       .then((entries: KegLedgerEntry[]) => {
         const bal: KegBalance = { '1/2bbl': 0, '1/4bbl': 0, '1/6bbl': 0 };
         entries.forEach((e) => {
+          // Only approved entries count. Pending return requests stay
+          // visible in the ledger but don't drop the balance until admin
+          // confirms pickup — matches the server-side rule in data.ts.
+          const status = e.status ?? 'approved';
+          if (status !== 'approved') return;
           if (e.type === 'deposit') bal[e.size] += e.quantity;
           else if (e.type === 'return') bal[e.size] -= e.quantity;
         });

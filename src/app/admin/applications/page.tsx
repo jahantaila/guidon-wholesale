@@ -33,6 +33,11 @@ export default function ApplicationsPage() {
   const [customerForm, setCustomerForm] = useState<CustomerForm>({ businessName: '', contactName: '', email: '', phone: '', address: '', password: '' });
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [customerSuccess, setCustomerSuccess] = useState('');
+  // Auto-generated temp password returned from the approve PUT. Surfaced in
+  // the modal so the admin can copy+share if the email lands in spam, and
+  // echoed in a toast on Skip so the admin never walks away empty-handed.
+  const [tempPassword, setTempPassword] = useState('');
+  const [toast, setToast] = useState('');
 
   const loadApplications = useCallback(async () => {
     try {
@@ -64,6 +69,13 @@ export default function ApplicationsPage() {
       if (res.ok) {
         setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'approved' } : a));
         notifyNavRefresh();
+        // Capture the auto-generated temp password so we can both pre-fill
+        // the modal AND surface it if the admin hits Skip. The API already
+        // created the customer + emailed the password; the modal is mostly
+        // a convenience for override.
+        const data = await res.json().catch(() => ({} as { tempPassword?: string }));
+        const generated = typeof data?.tempPassword === 'string' ? data.tempPassword : '';
+        setTempPassword(generated);
         // Pre-fill customer creation form
         setCustomerForm({
           businessName: app.businessName,
@@ -71,7 +83,7 @@ export default function ApplicationsPage() {
           email: app.email,
           phone: app.phone || '',
           address: app.address || '',
-          password: '',
+          password: generated,
         });
         setShowCreateCustomer(true);
       } else {
@@ -136,6 +148,9 @@ export default function ApplicationsPage() {
 
   return (
     <div className="space-y-6">
+      {toast && (
+        <div className="toast font-mono text-sm" style={{ color: 'var(--brass)' }}>{toast}</div>
+      )}
       <div>
         <span className="section-label mb-1 block">Review</span>
         <h2 className="font-heading text-2xl font-black text-cream">Applications</h2>
@@ -203,10 +218,18 @@ export default function ApplicationsPage() {
                   </div>
                 </div>
                 {expandedId === app.id && (
-                  <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fade-in">
+                  <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs animate-fade-in">
                     <div><span className="text-cream/25">Phone:</span><p className="text-cream/60 mt-0.5">{app.phone || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Address:</span><p className="text-cream/60 mt-0.5">{app.address || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Business Type:</span><p className="text-cream/60 mt-0.5">{app.businessType || 'N/A'}</p></div>
+                    <div>
+                      <span className="text-cream/25">Payment:</span>
+                      <p className="text-cream/60 mt-0.5">
+                        {app.preferredPaymentMethod === 'check' && 'Check'}
+                        {app.preferredPaymentMethod === 'fintech' && 'Fintech (ACH/Zelle/card)'}
+                        {(app.preferredPaymentMethod === 'no_preference' || !app.preferredPaymentMethod) && 'No preference'}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -310,13 +333,36 @@ export default function ApplicationsPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Password</label>
-                  <input type="text" className="input" placeholder="Set a login password" value={customerForm.password}
-                    onChange={e => setCustomerForm(p => ({ ...p, password: e.target.value }))} required />
-                  <p className="text-[10px] text-cream/20 mt-1">Share this with the customer so they can log in.</p>
+                  <label className="block text-sm font-medium text-cream/40 mb-1.5">
+                    {tempPassword ? 'Temporary Password' : 'Password'}
+                  </label>
+                  <input type="text" className="input font-mono" placeholder="Set a login password" value={customerForm.password}
+                    onChange={e => setCustomerForm(p => ({ ...p, password: e.target.value }))} />
+                  <p className="text-[10px] text-cream/40 mt-1">
+                    {tempPassword
+                      ? 'Auto-generated and emailed to the customer. Copy it if you want to share verbally as a backup.'
+                      : 'Share this with the customer so they can log in.'}
+                  </p>
                 </div>
                 <div className="flex justify-end gap-3 pt-3">
-                  <button type="button" onClick={() => setShowCreateCustomer(false)} className="btn-secondary px-4 py-2">Skip</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // If the API already generated a temp password, flash it
+                      // as a toast on Skip so the admin has a copy trail even
+                      // after closing the modal. Without this the password is
+                      // only visible in the customer's inbox, which is useless
+                      // if the email bounces or lands in spam.
+                      if (tempPassword) {
+                        setToast(`Temporary password: ${tempPassword} — emailed to customer.`);
+                        window.setTimeout(() => setToast(''), 12000);
+                      }
+                      setShowCreateCustomer(false);
+                    }}
+                    className="btn-secondary px-4 py-2"
+                  >
+                    Skip
+                  </button>
                   <button type="submit" disabled={savingCustomer} className="btn-primary">
                     {savingCustomer ? 'Creating...' : 'Create Account'}
                   </button>

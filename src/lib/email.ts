@@ -269,10 +269,9 @@ export async function notifyOrderPlaced(args: {
 
   const adminHtml = emailShell({
     title: `New order from ${args.businessName}`,
-    preheader: `${args.items.length} item(s), delivery ${args.deliveryDate}, ${formatCurrencyForEmail(args.total)}.`,
+    preheader: `${args.items.length} item(s), ${formatCurrencyForEmail(args.total)}.`,
     body: `
       <p>New order <strong>${escapeHtml(args.orderId)}</strong> from <strong>${escapeHtml(args.businessName)}</strong> (${escapeHtml(args.customerEmail)}).</p>
-      <p style="margin:12px 0;">Delivery: <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>.</p>
       ${itemsTable}
       ${args.notes ? `<p style="margin-top:12px;font-size:13px;color:#6B5F48;font-style:italic;">Customer note: ${escapeHtml(args.notes)}</p>` : ''}
     `,
@@ -348,6 +347,7 @@ export async function notifyApplicationSubmitted(args: {
   phone?: string;
   expectedMonthlyVolume?: string;
   businessType?: string;
+  preferredPaymentMethod?: 'check' | 'fintech' | 'no_preference';
 }): Promise<void> {
   const applicantHtml = emailShell({
     title: 'Application received',
@@ -370,6 +370,13 @@ export async function notifyApplicationSubmitted(args: {
         ${args.phone ? `<div><strong>Phone:</strong> ${escapeHtml(args.phone)}</div>` : ''}
         ${args.businessType ? `<div><strong>Type:</strong> ${escapeHtml(args.businessType)}</div>` : ''}
         ${args.expectedMonthlyVolume ? `<div><strong>Expected volume:</strong> ${escapeHtml(args.expectedMonthlyVolume)}</div>` : ''}
+        ${
+          args.preferredPaymentMethod && args.preferredPaymentMethod !== 'no_preference'
+            ? `<div><strong>Payment preference:</strong> ${
+                args.preferredPaymentMethod === 'check' ? 'Check' : 'Fintech (ACH/Zelle/card)'
+              }</div>`
+            : ''
+        }
       </div>
       <p style="margin-top:16px;"><a href="${(cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app')}/admin/applications" style="color:#9E7A3B;">Review in admin &rarr;</a></p>
     `,
@@ -392,6 +399,45 @@ export async function notifyApplicationSubmitted(args: {
       });
     })(),
   ]);
+}
+
+/**
+ * Keg-return request from the customer portal. Admin gets an email so they
+ * know to schedule pickup; the entry lands in the keg tracker's pending
+ * queue for approve/reject. The customer doesn't get a copy — they already
+ * saw the "submitted" confirmation in the portal modal.
+ */
+export async function notifyKegReturnRequested(args: {
+  customerEmail: string;
+  customerName: string;
+  businessName: string;
+  size: string;
+  quantity: number;
+  notes?: string;
+}): Promise<void> {
+  const adminTo = await adminRecipients();
+  if (adminTo.length === 0) return;
+  const appUrl = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app';
+  await send({
+    to: adminTo,
+    subject: `Keg return request: ${args.businessName} (${args.quantity} x ${args.size})`,
+    replyTo: args.customerEmail,
+    html: emailShell({
+      title: 'New keg return request',
+      preheader: `${args.businessName} wants to return ${args.quantity} x ${args.size}.`,
+      body: `
+        <p><strong>${escapeHtml(args.businessName)}</strong> (${escapeHtml(args.customerName)}) requested a keg return:</p>
+        <div style="margin:12px 0;font-size:14px;">
+          <div><strong>Quantity:</strong> <span style="font-family:monospace;">${args.quantity}</span> &middot; <strong>Size:</strong> <span style="font-family:monospace;">${escapeHtml(args.size)}</span></div>
+          ${args.notes ? `<div style="margin-top:8px;color:#6B5F48;font-style:italic;">Customer note: ${escapeHtml(args.notes)}</div>` : ''}
+        </div>
+        <p style="margin:12px 0;">The balance won&rsquo;t drop until you approve the pickup in the keg tracker. That prevents phantom negatives when kegs are still at the customer&rsquo;s location.</p>
+        <p style="margin:16px 0;">
+          <a href="${appUrl}/admin/kegs" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Review in keg tracker &rarr;</a>
+        </p>
+      `,
+    }),
+  });
 }
 
 /**

@@ -21,6 +21,12 @@ export interface Customer {
   createdAt: string;
 }
 
+/** How the applicant plans to pay — surfaced on the application so Mike
+ * can factor it into the approval call without a follow-up call. 'check' =
+ * paper check; 'fintech' = any digital rail (ACH, Zelle, card, etc.);
+ * 'no_preference' = applicant didn't pick. */
+export type PreferredPaymentMethod = 'check' | 'fintech' | 'no_preference';
+
 export interface WholesaleApplication {
   id: string;
   businessName: string;
@@ -30,6 +36,7 @@ export interface WholesaleApplication {
   address: string;
   businessType: string;
   expectedMonthlyVolume: string;
+  preferredPaymentMethod?: PreferredPaymentMethod;
   status?: ApplicationStatus;
   createdAt: string;
 }
@@ -161,6 +168,12 @@ export interface Invoice {
 
 export type KegLedgerType = 'deposit' | 'return';
 
+/** 'pending' returns are customer-initiated requests awaiting admin pickup
+ * approval — they show in the tracker but DO NOT decrement the balance.
+ * 'approved' is the default and the only status that affects the balance.
+ * 'rejected' returns are kept for audit trail but also don't affect balance. */
+export type KegLedgerStatus = 'pending' | 'approved' | 'rejected';
+
 export interface KegLedgerEntry {
   id: string;
   customerId: string;
@@ -172,6 +185,9 @@ export interface KegLedgerEntry {
   totalAmount: number;
   date: string;
   notes: string;
+  /** Optional for back-compat with existing rows; undefined is treated as
+   * 'approved' so legacy data keeps working. */
+  status?: KegLedgerStatus;
 }
 
 export interface CartItem {

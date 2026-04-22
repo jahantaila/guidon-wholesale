@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule } from './types';
+import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
@@ -137,7 +137,32 @@ function rowToKegEntry(row: any): KegLedgerEntry {
     totalAmount: row.total_amount,
     date: row.date,
     notes: row.notes,
+    status: row.status ?? 'approved',
   };
+}
+
+/** Only 'approved' entries count toward the outstanding-keg balance. Pending
+ * customer-initiated returns are visible in the ledger but don't subtract
+ * until admin confirms the empties came back. */
+export function countsTowardBalance(entry: Pick<KegLedgerEntry, 'status'>): boolean {
+  return (entry.status ?? 'approved') === 'approved';
+}
+
+/** Pure reducer that turns a list of ledger entries into a per-size balance.
+ * Exported for testability — the stateful getKegBalanceByCustomer /
+ * getAllKegBalances functions above delegate here after fetching. */
+export function computeKegBalance(entries: Pick<KegLedgerEntry, 'type' | 'size' | 'quantity' | 'status'>[]): Record<string, number> {
+  const balance: Record<string, number> = { '1/2bbl': 0, '1/4bbl': 0, '1/6bbl': 0 };
+  for (const entry of entries) {
+    if (!countsTowardBalance(entry)) continue;
+    if (!(entry.size in balance)) balance[entry.size] = 0;
+    if (entry.type === 'deposit') {
+      balance[entry.size] += entry.quantity;
+    } else {
+      balance[entry.size] -= entry.quantity;
+    }
+  }
+  return balance;
 }
 
 // ─── Customers ─────────────────────────────────────────────────────────────────
@@ -727,6 +752,7 @@ export async function getKegLedger(): Promise<KegLedgerEntry[]> {
 }
 
 export async function addKegLedgerEntry(entry: KegLedgerEntry): Promise<KegLedgerEntry> {
+  const status: KegLedgerStatus = entry.status ?? 'approved';
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const { error } = await sb.from('keg_ledger').insert({
@@ -740,14 +766,42 @@ export async function addKegLedgerEntry(entry: KegLedgerEntry): Promise<KegLedge
       total_amount: entry.totalAmount,
       date: entry.date,
       notes: entry.notes,
+      status,
     });
     if (error) throw error;
-    return entry;
+    return { ...entry, status };
   }
   const ledger = readJSON<KegLedgerEntry[]>('keg-ledger.json');
-  ledger.push(entry);
+  const row = { ...entry, status };
+  ledger.push(row);
   writeJSON('keg-ledger.json', ledger);
-  return entry;
+  return row;
+}
+
+/** Flip a keg ledger entry's status. Used by admin to approve or reject a
+ * customer-initiated return request. Returns the updated row, or null if
+ * no row with that id exists. */
+export async function updateKegLedgerStatus(
+  id: string,
+  status: KegLedgerStatus,
+): Promise<KegLedgerEntry | null> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('keg_ledger')
+      .update({ status })
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToKegEntry(data) : null;
+  }
+  const ledger = readJSON<KegLedgerEntry[]>('keg-ledger.json');
+  const idx = ledger.findIndex((e) => e.id === id);
+  if (idx === -1) return null;
+  ledger[idx] = { ...ledger[idx], status };
+  writeJSON('keg-ledger.json', ledger);
+  return ledger[idx];
 }
 
 export async function getKegLedgerByCustomer(customerId: string): Promise<KegLedgerEntry[]> {
@@ -766,31 +820,28 @@ export async function getKegLedgerByCustomer(customerId: string): Promise<KegLed
 
 export async function getKegBalanceByCustomer(customerId: string): Promise<Record<string, number>> {
   const entries = await getKegLedgerByCustomer(customerId);
-  const balance: Record<string, number> = { '1/2bbl': 0, '1/4bbl': 0, '1/6bbl': 0 };
-  for (const entry of entries) {
-    if (entry.type === 'deposit') {
-      balance[entry.size] += entry.quantity;
-    } else {
-      balance[entry.size] -= entry.quantity;
-    }
-  }
-  return balance;
+  return computeKegBalance(entries);
 }
 
 export async function getAllKegBalances(): Promise<Record<string, Record<string, number>>> {
   const ledger = await getKegLedger();
-  const balances: Record<string, Record<string, number>> = {};
+  const byCustomer = new Map<string, KegLedgerEntry[]>();
   for (const entry of ledger) {
-    if (!balances[entry.customerId]) {
-      balances[entry.customerId] = { '1/2bbl': 0, '1/4bbl': 0, '1/6bbl': 0 };
-    }
-    if (entry.type === 'deposit') {
-      balances[entry.customerId][entry.size] += entry.quantity;
-    } else {
-      balances[entry.customerId][entry.size] -= entry.quantity;
-    }
+    if (!byCustomer.has(entry.customerId)) byCustomer.set(entry.customerId, []);
+    byCustomer.get(entry.customerId)!.push(entry);
   }
-  return balances;
+  const result: Record<string, Record<string, number>> = {};
+  byCustomer.forEach((entries, customerId) => {
+    result[customerId] = computeKegBalance(entries);
+  });
+  return result;
+}
+
+/** All pending keg-return requests across customers, newest first. Admin
+ * keg tracker uses this to show the approval queue. */
+export async function getPendingKegReturns(): Promise<KegLedgerEntry[]> {
+  const ledger = await getKegLedger();
+  return ledger.filter((e) => e.type === 'return' && (e.status ?? 'approved') === 'pending');
 }
 
 // ─── Wholesale Applications ────────────────────────────────────────────────────
@@ -809,6 +860,8 @@ export async function getApplications(): Promise<WholesaleApplication[]> {
       address: row.address as string,
       businessType: (row.business_type as string) || '',
       expectedMonthlyVolume: (row.expected_monthly_volume as string) || '',
+      preferredPaymentMethod:
+        (row.preferred_payment_method as 'check' | 'fintech' | 'no_preference') || 'no_preference',
       // CRITICAL: without this, the admin applications page sees every row
       // as having no status and treats them all as pending, so approved /
       // rejected apps never leave the Pending (N) section — the bug users
@@ -833,6 +886,7 @@ export async function createApplication(app: WholesaleApplication): Promise<Whol
       message: '',
       business_type: app.businessType || '',
       expected_monthly_volume: app.expectedMonthlyVolume || '',
+      preferred_payment_method: app.preferredPaymentMethod || 'no_preference',
     });
     if (error) throw error;
     return app;
