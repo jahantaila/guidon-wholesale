@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
-import { formatCurrency, formatDate, cn, getStatusColor } from '@/lib/utils';
+import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import HelpView from '@/components/HelpView';
 import { PORTAL_HELP } from '@/lib/help-content';
@@ -1723,7 +1723,7 @@ function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loa
             <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
             <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
             <p className="text-sm text-gray-600">{customer.contactName}</p>
-            <p className="text-sm text-gray-500">{customer.address}</p>
+            <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
           </div>
           <table className="w-full mb-6">
             <thead>
@@ -1837,7 +1837,10 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
   const [form, setForm] = useState({
     contactName: customer.contactName,
     phone: customer.phone,
-    address: customer.address,
+    streetAddress: customer.streetAddress,
+    city: customer.city,
+    state: customer.state,
+    zip: customer.zip,
   });
   const [passwordForm, setPasswordForm] = useState({ current: '', newPassword: '', confirm: '' });
   const [saving, setSaving] = useState(false);
@@ -1908,8 +1911,27 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
             <input className="input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-cream/40 mb-1.5">Address</label>
-            <input className="input" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+            <label className="block text-sm font-medium text-cream/40 mb-1.5">Street Address</label>
+            <input className="input" value={form.streetAddress} onChange={e => setForm(p => ({ ...p, streetAddress: e.target.value }))} autoComplete="street-address" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-cream/40 mb-1.5">City</label>
+              <input className="input" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} autoComplete="address-level2" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-cream/40 mb-1.5">State</label>
+              <select className="input" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} autoComplete="address-level1">
+                <option value="">Select...</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-cream/40 mb-1.5">Zip</label>
+              <input className="input" value={form.zip} onChange={e => setForm(p => ({ ...p, zip: e.target.value }))} autoComplete="postal-code" />
+            </div>
           </div>
           {message && <p className="text-sm text-emerald-400">{message}</p>}
           <button type="submit" disabled={saving} className="btn-primary">

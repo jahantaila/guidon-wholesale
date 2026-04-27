@@ -10,7 +10,12 @@ import type { Customer } from '@/lib/types';
  * POST /api/customers/import
  *
  * Accepts { rows: Array<{ businessName, contactName, email, phone?,
- *          address?, notes?, tags?, password? }> }
+ *          streetAddress?, city?, state?, zip?, address?, notes?, tags?,
+ *          password? }> }
+ *
+ * Address: prefers split fields (streetAddress/city/state/zip). If the row
+ * only has a legacy `address` value, it lands in streetAddress so the data
+ * is preserved (admin can re-edit to populate city/state/zip).
  *
  * Upsert-by-email: if a customer with the same email already exists, skip
  * (or could update, but skip is safer for a first pass). Returns
@@ -55,15 +60,24 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+      const splitStreet = str(r.streetAddress);
+      const legacyAddress = str(r.address);
       const customer: Customer = {
         id: generateId('cust'),
         businessName,
         contactName,
         email,
-        phone: (typeof r.phone === 'string' && r.phone.trim()) || '',
-        address: (typeof r.address === 'string' && r.address.trim()) || '',
-        password: (typeof r.password === 'string' && r.password.trim()) || '',
-        notes: (typeof r.notes === 'string' && r.notes.trim()) || '',
+        phone: str(r.phone),
+        // Prefer split columns. If the row only carried the legacy single
+        // `address` field, fall back to dumping it in streetAddress so the
+        // data isn't dropped on the floor.
+        streetAddress: splitStreet || legacyAddress,
+        city: str(r.city),
+        state: str(r.state).toUpperCase(),
+        zip: str(r.zip),
+        password: str(r.password),
+        notes: str(r.notes),
         tags: typeof r.tags === 'string'
           ? r.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean)
           : Array.isArray(r.tags) ? (r.tags as unknown[]).map(String) : [],

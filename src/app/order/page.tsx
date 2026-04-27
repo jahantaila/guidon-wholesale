@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
@@ -88,7 +88,8 @@ export default function OrderPage() {
   }, []);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
-    businessName: '', contactName: '', email: '', phone: '', address: '',
+    businessName: '', contactName: '', email: '', phone: '',
+    streetAddress: '', city: '', state: '', zip: '',
   });
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -815,8 +816,25 @@ export default function OrderPage() {
                       onChange={(e) => setNewCustomer((prev) => ({ ...prev, email: e.target.value }))} className="input" />
                     <input type="tel" placeholder="Phone" value={newCustomer.phone}
                       onChange={(e) => setNewCustomer((prev) => ({ ...prev, phone: e.target.value }))} className="input" />
-                    <input type="text" placeholder="Address" value={newCustomer.address}
-                      onChange={(e) => setNewCustomer((prev) => ({ ...prev, address: e.target.value }))} className="input" />
+                    <input type="text" placeholder="Street Address" value={newCustomer.streetAddress}
+                      autoComplete="street-address"
+                      onChange={(e) => setNewCustomer((prev) => ({ ...prev, streetAddress: e.target.value }))} className="input" />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" placeholder="City" value={newCustomer.city}
+                        autoComplete="address-level2"
+                        onChange={(e) => setNewCustomer((prev) => ({ ...prev, city: e.target.value }))} className="input" />
+                      <select value={newCustomer.state}
+                        autoComplete="address-level1"
+                        onChange={(e) => setNewCustomer((prev) => ({ ...prev, state: e.target.value }))} className="input">
+                        <option value="">State...</option>
+                        {US_STATES.map((s) => (
+                          <option key={s.code} value={s.code}>{s.code}</option>
+                        ))}
+                      </select>
+                      <input type="text" placeholder="Zip" value={newCustomer.zip}
+                        autoComplete="postal-code"
+                        onChange={(e) => setNewCustomer((prev) => ({ ...prev, zip: e.target.value }))} className="input" />
+                    </div>
                   </div>
                 )}
               </div>

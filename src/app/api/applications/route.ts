@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getApplications, createApplication, updateApplication, createCustomer, getCustomers } from '@/lib/data';
-import { generateId } from '@/lib/utils';
+import { generateId, isValidUsStateCode } from '@/lib/utils';
 import type { WholesaleApplication, Customer } from '@/lib/types';
 import { notifyApplicationSubmitted, notifyApplicationDecision, portalUrl } from '@/lib/email';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
@@ -20,11 +20,34 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
-  if (!body.businessName || !body.contactName || !body.email) {
+  // Required-field gate. Mirrors the client-side check on /apply so a
+  // crafted request that bypasses the form (or an old cached form HTML)
+  // can't sneak in incomplete applications. Order matches the form's
+  // field order so the message reads naturally.
+  const trim = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const required: Record<string, string> = {
+    'Business Name': trim(body.businessName),
+    'Contact Name': trim(body.contactName),
+    'Email': trim(body.email),
+    'Phone': trim(body.phone),
+    'ABC Permit Number': trim(body.abcPermitNumber),
+    'Street Address': trim(body.streetAddress),
+    'City': trim(body.city),
+    'State': trim(body.state),
+    'Zip': trim(body.zip),
+  };
+  const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length > 0) {
     return NextResponse.json(
-      { error: 'Business name, contact name, and email are required.' },
-      { status: 400 }
+      { error: `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.` },
+      { status: 400 },
     );
+  }
+  // State must be a valid 2-letter US postal code so downstream consumers
+  // (delivery routing, invoice billing) can rely on a normalized value.
+  const state = required['State'].toUpperCase();
+  if (!isValidUsStateCode(state)) {
+    return NextResponse.json({ error: 'State must be a valid 2-letter US postal code.' }, { status: 400 });
   }
 
   const allowedPayment = ['check', 'fintech', 'no_preference'] as const;
@@ -35,11 +58,15 @@ export async function POST(request: NextRequest) {
 
   const application: WholesaleApplication = {
     id: generateId('app'),
-    businessName: body.businessName,
-    contactName: body.contactName,
-    email: body.email,
-    phone: body.phone || '',
-    address: body.address || '',
+    businessName: required['Business Name'],
+    contactName: required['Contact Name'],
+    email: required['Email'],
+    phone: required['Phone'],
+    streetAddress: required['Street Address'],
+    city: required['City'],
+    state,
+    zip: required['Zip'],
+    abcPermitNumber: required['ABC Permit Number'],
     businessType: body.businessType || '',
     expectedMonthlyVolume: body.expectedMonthlyVolume || '',
     preferredPaymentMethod,
@@ -60,6 +87,11 @@ export async function POST(request: NextRequest) {
       applicantName: application.contactName,
       businessName: application.businessName,
       phone: application.phone,
+      streetAddress: application.streetAddress,
+      city: application.city,
+      state: application.state,
+      zip: application.zip,
+      abcPermitNumber: application.abcPermitNumber,
       businessType: application.businessType,
       expectedMonthlyVolume: application.expectedMonthlyVolume,
       preferredPaymentMethod: application.preferredPaymentMethod,
@@ -122,7 +154,10 @@ export async function PUT(request: NextRequest) {
           contactName: app.contactName,
           email: app.email.toLowerCase().trim(),
           phone: app.phone,
-          address: app.address,
+          streetAddress: app.streetAddress,
+          city: app.city,
+          state: app.state,
+          zip: app.zip,
           password: tempPassword, // only used by file-based fallback auth
           // Force the customer to change their password on first login —
           // the auto-generated temp is emailed in plaintext and shouldn't

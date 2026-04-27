@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
       contactName: body.contactName,
       email: normalizedEmail,
       phone: body.phone || '',
-      address: body.address || '',
+      streetAddress: body.streetAddress || '',
+      city: body.city || '',
+      state: body.state || '',
+      zip: body.zip || '',
       password: body.password || '',
       createdAt: new Date().toISOString(),
     };
@@ -137,7 +140,10 @@ export async function PUT(request: NextRequest) {
       updates = {
         contactName: rawUpdates.contactName,
         phone: rawUpdates.phone,
-        address: rawUpdates.address,
+        streetAddress: rawUpdates.streetAddress,
+        city: rawUpdates.city,
+        state: rawUpdates.state,
+        zip: rawUpdates.zip,
         password: rawUpdates.password,
         email: rawUpdates.email,
       };

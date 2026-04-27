@@ -20,6 +20,17 @@ create table if not exists customers (
   created_at timestamptz not null default now()
 );
 
+-- Split address columns. Added in 2026-04 alongside the apply-form refactor
+-- that captures street/city/state/zip separately. Kept additive (legacy
+-- `address` column above stays as a fallback for pre-migration rows). New
+-- writes populate all four split columns AND the joined `address` column so
+-- any consumer still reading the single-string column keeps working.
+alter table customers
+  add column if not exists street_address text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists zip text not null default '';
+
 -- Row Level Security
 alter table customers enable row level security;
 -- Service role (admin client) can do everything
@@ -340,6 +351,21 @@ create table if not exists applications (
 alter table applications
   add column if not exists preferred_payment_method text not null default 'no_preference'
   check (preferred_payment_method in ('check', 'fintech', 'no_preference'));
+
+-- ABC permit number is required at submission so the brewery has the legal
+-- license on file before approving. Default empty for any pre-migration row;
+-- the API rejects new submissions without it.
+alter table applications
+  add column if not exists abc_permit_number text not null default '';
+
+-- Split address columns mirroring the customers table. The legacy `address`
+-- column above stays as a joined fallback so pre-migration rows are still
+-- readable.
+alter table applications
+  add column if not exists street_address text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists zip text not null default '';
 
 alter table applications enable row level security;
 drop policy if exists "Service role full access" on applications;

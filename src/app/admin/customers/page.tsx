@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Customer, Order, Invoice } from '@/lib/types';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, cn, US_STATES } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
@@ -12,11 +12,17 @@ interface CustomerForm {
   contactName: string;
   email: string;
   phone: string;
-  address: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
   password: string;
 }
 
-const emptyForm: CustomerForm = { businessName: '', contactName: '', email: '', phone: '', address: '', password: '' };
+const emptyForm: CustomerForm = {
+  businessName: '', contactName: '', email: '', phone: '',
+  streetAddress: '', city: '', state: '', zip: '', password: '',
+};
 
 type ViewMode = 'table' | 'cards' | 'kanban';
 
@@ -122,7 +128,17 @@ export default function CustomersPage() {
 
   const openAdd = () => { setForm(emptyForm); setEditingId(null); setModalOpen(true); };
   const openEdit = (customer: Customer) => {
-    setForm({ businessName: customer.businessName, contactName: customer.contactName, email: customer.email, phone: customer.phone, address: customer.address, password: '' });
+    setForm({
+      businessName: customer.businessName,
+      contactName: customer.contactName,
+      email: customer.email,
+      phone: customer.phone,
+      streetAddress: customer.streetAddress,
+      city: customer.city,
+      state: customer.state,
+      zip: customer.zip,
+      password: '',
+    });
     setEditingId(customer.id); setModalOpen(true);
   };
 
@@ -292,14 +308,31 @@ export default function CustomersPage() {
                 <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Email</label>
                 <input type="email" className="input" value={form.email} onChange={(e) => updateField('email', e.target.value)} required />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Phone</label>
+                <input className="input" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Street Address</label>
+                <input className="input" value={form.streetAddress} onChange={(e) => updateField('streetAddress', e.target.value)} required autoComplete="street-address" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Phone</label>
-                  <input className="input" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required />
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>City</label>
+                  <input className="input" value={form.city} onChange={(e) => updateField('city', e.target.value)} required autoComplete="address-level2" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Address</label>
-                  <input className="input" value={form.address} onChange={(e) => updateField('address', e.target.value)} required />
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>State</label>
+                  <select className="input" value={form.state} onChange={(e) => updateField('state', e.target.value)} required autoComplete="address-level1">
+                    <option value="">Select...</option>
+                    {US_STATES.map((s) => (
+                      <option key={s.code} value={s.code}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Zip</label>
+                  <input className="input" value={form.zip} onChange={(e) => updateField('zip', e.target.value)} required autoComplete="postal-code" />
                 </div>
               </div>
               {!editingId && (
@@ -695,7 +728,13 @@ function parseCSV(text: string): Record<string, string>[] {
     if (h === 'contactname' || h === 'contact' || h === 'name') return 'contactName';
     if (h === 'email' || h === 'emailaddress') return 'email';
     if (h === 'phone' || h === 'phonenumber' || h === 'tel') return 'phone';
-    if (h === 'address' || h === 'street' || h === 'location') return 'address';
+    if (h === 'streetaddress' || h === 'street' || h === 'street1') return 'streetAddress';
+    if (h === 'city') return 'city';
+    if (h === 'state' || h === 'st' || h === 'province') return 'state';
+    if (h === 'zip' || h === 'zipcode' || h === 'postalcode' || h === 'postal') return 'zip';
+    // Legacy single-string column. Server-side import treats this as a fallback
+    // and lands it in streetAddress if no split columns are present.
+    if (h === 'address' || h === 'location') return 'address';
     if (h === 'password' || h === 'pw') return 'password';
     if (h === 'notes' || h === 'note') return 'notes';
     if (h === 'tags') return 'tags';
@@ -735,7 +774,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       if (!('contactName' in parsed[0])) missing.push('contactName');
       if (!('email' in parsed[0])) missing.push('email');
       if (missing.length > 0) {
-        setParseError(`Missing required column${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}. Expected headers: businessName, contactName, email, phone, address, password, notes, tags.`);
+        setParseError(`Missing required column${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}. Expected headers: businessName, contactName, email, phone, streetAddress, city, state, zip, password, notes, tags.`);
         setRows([]);
         return;
       }
@@ -774,7 +813,8 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         <h3 className="font-heading text-xl font-bold mb-1" style={{ color: 'var(--ink)' }}>Import Customers from CSV</h3>
         <p className="text-sm mb-5 italic" style={{ color: 'var(--muted)' }}>
           Required columns: <code>businessName</code>, <code>contactName</code>, <code>email</code>.
-          Optional: <code>phone</code>, <code>address</code>, <code>password</code>, <code>notes</code>, <code>tags</code>.
+          Optional: <code>phone</code>, <code>streetAddress</code>, <code>city</code>, <code>state</code>, <code>zip</code>, <code>password</code>, <code>notes</code>, <code>tags</code>.
+          Legacy single <code>address</code> column also accepted (lands in <code>streetAddress</code>).
           Duplicates by email are skipped.
         </p>
 

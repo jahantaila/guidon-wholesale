@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
+import { formatAddress } from './utils';
 
 // ─── File-based helpers ────────────────────────────────────────────────────────
 
@@ -30,13 +31,25 @@ function writeJSON<T>(filename: string, data: T): void {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToCustomer(row: any): Customer {
+  // Split-address columns are the source of truth. Pre-migration rows have
+  // them empty but `address` populated — surface that legacy value as
+  // streetAddress so we don't lose data until admin re-edits.
+  const street = (row.street_address || '') as string;
+  const city = (row.city || '') as string;
+  const state = (row.state || '') as string;
+  const zip = (row.zip || '') as string;
+  const legacy = (row.address || '') as string;
+  const hasSplit = Boolean(street || city || state || zip);
   return {
     id: row.id,
     businessName: row.business_name,
     contactName: row.contact_name,
     email: row.email,
     phone: row.phone,
-    address: row.address,
+    streetAddress: hasSplit ? street : legacy,
+    city,
+    state,
+    zip,
     notes: row.notes ?? '',
     tags: Array.isArray(row.tags) ? row.tags : [],
     autoSendInvoices: row.auto_send_invoices === true,
@@ -204,7 +217,14 @@ export async function createCustomer(customer: Customer): Promise<Customer> {
       contact_name: customer.contactName,
       email: customer.email,
       phone: customer.phone,
-      address: customer.address,
+      street_address: customer.streetAddress,
+      city: customer.city,
+      state: customer.state,
+      zip: customer.zip,
+      // Keep the legacy single-string column populated (joined) so any
+      // consumer still reading `address` directly keeps working until the
+      // column is dropped.
+      address: formatAddress(customer),
       // Persist the force-change-password flag when the approval flow sets
       // it. Default of false in the DB handles the admin-creates-customer
       // path where no temp password is involved.
@@ -227,7 +247,35 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.contactName !== undefined) row.contact_name = updates.contactName;
     if (updates.email !== undefined) row.email = updates.email;
     if (updates.phone !== undefined) row.phone = updates.phone;
-    if (updates.address !== undefined) row.address = updates.address;
+    // Address: write any provided split fields, and re-derive the legacy
+    // joined `address` column whenever ANY split piece changes so the
+    // single-string fallback stays in sync.
+    const addressTouched =
+      updates.streetAddress !== undefined ||
+      updates.city !== undefined ||
+      updates.state !== undefined ||
+      updates.zip !== undefined;
+    if (updates.streetAddress !== undefined) row.street_address = updates.streetAddress;
+    if (updates.city !== undefined) row.city = updates.city;
+    if (updates.state !== undefined) row.state = updates.state;
+    if (updates.zip !== undefined) row.zip = updates.zip;
+    if (addressTouched) {
+      // Need the merged view of the address to re-derive the joined string.
+      // Fetch the existing row's split parts and overlay updates so a partial
+      // update doesn't blank out the joined column.
+      const { data: existing } = await sb
+        .from('customers')
+        .select('street_address, city, state, zip, address')
+        .eq('id', id)
+        .single();
+      const merged = {
+        streetAddress: updates.streetAddress ?? (existing?.street_address || ''),
+        city: updates.city ?? (existing?.city || ''),
+        state: updates.state ?? (existing?.state || ''),
+        zip: updates.zip ?? (existing?.zip || ''),
+      };
+      row.address = formatAddress(merged);
+    }
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.tags !== undefined) row.tags = updates.tags;
     if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;
@@ -851,24 +899,38 @@ export async function getApplications(): Promise<WholesaleApplication[]> {
     const sb = createAdminClient();
     const { data, error } = await sb.from('applications').select('*').order('created_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      businessName: row.business_name as string,
-      contactName: row.contact_name as string,
-      email: row.email as string,
-      phone: row.phone as string,
-      address: row.address as string,
-      businessType: (row.business_type as string) || '',
-      expectedMonthlyVolume: (row.expected_monthly_volume as string) || '',
-      preferredPaymentMethod:
-        (row.preferred_payment_method as 'check' | 'fintech' | 'no_preference') || 'no_preference',
-      // CRITICAL: without this, the admin applications page sees every row
-      // as having no status and treats them all as pending, so approved /
-      // rejected apps never leave the Pending (N) section — the bug users
-      // kept flagging as "approve doesn't work".
-      status: (row.status as 'pending' | 'approved' | 'rejected') || 'pending',
-      createdAt: row.created_at as string,
-    }));
+    return (data || []).map((row: Record<string, unknown>) => {
+      // Mirror rowToCustomer: prefer split columns, fall back to legacy
+      // joined `address` for pre-migration rows so we don't lose data.
+      const street = (row.street_address as string) || '';
+      const city = (row.city as string) || '';
+      const state = (row.state as string) || '';
+      const zip = (row.zip as string) || '';
+      const legacy = (row.address as string) || '';
+      const hasSplit = Boolean(street || city || state || zip);
+      return {
+        id: row.id as string,
+        businessName: row.business_name as string,
+        contactName: row.contact_name as string,
+        email: row.email as string,
+        phone: row.phone as string,
+        streetAddress: hasSplit ? street : legacy,
+        city,
+        state,
+        zip,
+        abcPermitNumber: (row.abc_permit_number as string) || '',
+        businessType: (row.business_type as string) || '',
+        expectedMonthlyVolume: (row.expected_monthly_volume as string) || '',
+        preferredPaymentMethod:
+          (row.preferred_payment_method as 'check' | 'fintech' | 'no_preference') || 'no_preference',
+        // CRITICAL: without this, the admin applications page sees every row
+        // as having no status and treats them all as pending, so approved /
+        // rejected apps never leave the Pending (N) section — the bug users
+        // kept flagging as "approve doesn't work".
+        status: (row.status as 'pending' | 'approved' | 'rejected') || 'pending',
+        createdAt: row.created_at as string,
+      };
+    });
   }
   return readJSON<WholesaleApplication[]>('applications.json');
 }
@@ -882,7 +944,14 @@ export async function createApplication(app: WholesaleApplication): Promise<Whol
       contact_name: app.contactName,
       email: app.email,
       phone: app.phone,
-      address: app.address,
+      street_address: app.streetAddress,
+      city: app.city,
+      state: app.state,
+      zip: app.zip,
+      // Keep legacy single-string column populated for any consumer still
+      // reading it (admin view, email, etc. that haven't migrated).
+      address: formatAddress(app),
+      abc_permit_number: app.abcPermitNumber,
       message: '',
       business_type: app.businessType || '',
       expected_monthly_volume: app.expectedMonthlyVolume || '',

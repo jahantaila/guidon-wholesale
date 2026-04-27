@@ -3,13 +3,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { US_STATES } from '@/lib/utils';
 export default function ApplyPage() {
   const [form, setForm] = useState({
     businessName: '',
     contactName: '',
     email: '',
     phone: '',
-    address: '',
+    streetAddress: '',
+    city: '',
+    state: '',
+    zip: '',
+    abcPermitNumber: '',
     businessType: '',
     expectedMonthlyVolume: '',
     // Default matches the server's fallback. 'no_preference' is an explicit
@@ -28,8 +33,20 @@ export default function ApplyPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!form.businessName.trim() || !form.contactName.trim() || !form.email.trim()) {
-      setError('Business Name, Contact Name, and Email are required.');
+    // Required-field gate. Mirrors server-side validation in /api/applications
+    // POST so the user gets an inline message instead of a 400 toast.
+    const missing: string[] = [];
+    if (!form.businessName.trim()) missing.push('Business Name');
+    if (!form.contactName.trim()) missing.push('Contact Name');
+    if (!form.email.trim()) missing.push('Email');
+    if (!form.phone.trim()) missing.push('Phone');
+    if (!form.abcPermitNumber.trim()) missing.push('ABC Permit Number');
+    if (!form.streetAddress.trim()) missing.push('Street Address');
+    if (!form.city.trim()) missing.push('City');
+    if (!form.state.trim()) missing.push('State');
+    if (!form.zip.trim()) missing.push('Zip');
+    if (missing.length > 0) {
+      setError(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.`);
       return;
     }
     setSubmitting(true);
@@ -114,9 +131,36 @@ export default function ApplyPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="address" className="block text-sm font-medium text-cream/50 mb-1.5">Address</label>
-                <input id="address" type="text" autoComplete="street-address" className="input" placeholder="Street address, city, state, zip"
-                  value={form.address} onChange={(e) => update('address', e.target.value)} />
+                <label htmlFor="abcPermitNumber" className="block text-sm font-medium text-cream/50 mb-1.5">ABC Permit Number *</label>
+                <input id="abcPermitNumber" type="text" required className="input" placeholder="e.g. NC-12345"
+                  value={form.abcPermitNumber} onChange={(e) => update('abcPermitNumber', e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="streetAddress" className="block text-sm font-medium text-cream/50 mb-1.5">Street Address *</label>
+                <input id="streetAddress" type="text" required autoComplete="street-address" className="input" placeholder="123 Main St"
+                  value={form.streetAddress} onChange={(e) => update('streetAddress', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label htmlFor="city" className="block text-sm font-medium text-cream/50 mb-1.5">City *</label>
+                  <input id="city" type="text" required autoComplete="address-level2" className="input" placeholder="Asheville"
+                    value={form.city} onChange={(e) => update('city', e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="state" className="block text-sm font-medium text-cream/50 mb-1.5">State *</label>
+                  <select id="state" required autoComplete="address-level1" className="input"
+                    value={form.state} onChange={(e) => update('state', e.target.value)}>
+                    <option value="">Select...</option>
+                    {US_STATES.map((s) => (
+                      <option key={s.code} value={s.code}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="zip" className="block text-sm font-medium text-cream/50 mb-1.5">Zip *</label>
+                  <input id="zip" type="text" required autoComplete="postal-code" className="input" placeholder="28801"
+                    value={form.zip} onChange={(e) => update('zip', e.target.value)} />
+                </div>
               </div>
             </div>
           </div>
@@ -135,8 +179,8 @@ export default function ApplyPage() {
                   value={form.email} onChange={(e) => update('email', e.target.value)} />
               </div>
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-cream/50 mb-1.5">Phone</label>
-                <input id="phone" type="tel" autoComplete="tel" className="input" placeholder="(828) 555-0000"
+                <label htmlFor="phone" className="block text-sm font-medium text-cream/50 mb-1.5">Phone *</label>
+                <input id="phone" type="tel" required autoComplete="tel" className="input" placeholder="(828) 555-0000"
                   value={form.phone} onChange={(e) => update('phone', e.target.value)} />
               </div>
             </div>

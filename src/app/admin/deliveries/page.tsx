@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { Order, Customer } from '@/lib/types';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatAddress } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 type DeliveryGroup = {
@@ -191,12 +191,12 @@ export default function DeliveriesPage() {
                           <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
                             {customer?.contactName}
                           </p>
-                          {customer?.address && (
+                          {customer && formatAddress(customer) && (
                             <p
                               className="text-sm mt-1 italic"
                               style={{ color: 'var(--ink)', fontFamily: "'Source Serif 4', serif" }}
                             >
-                              {customer.address}
+                              {formatAddress(customer)}
                             </p>
                           )}
                           {customer?.phone && (

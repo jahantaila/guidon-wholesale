@@ -345,10 +345,19 @@ export async function notifyApplicationSubmitted(args: {
   applicantName: string;
   businessName: string;
   phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  abcPermitNumber?: string;
   expectedMonthlyVolume?: string;
   businessType?: string;
   preferredPaymentMethod?: 'check' | 'fintech' | 'no_preference';
 }): Promise<void> {
+  const formattedAddress = [
+    args.streetAddress,
+    [args.city, [args.state, args.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+  ].filter(Boolean).join(', ');
   const applicantHtml = emailShell({
     title: 'Application received',
     preheader: 'We got your wholesale application. We review within 24 hours.',
@@ -368,6 +377,8 @@ export async function notifyApplicationSubmitted(args: {
         <div><strong>Contact:</strong> ${escapeHtml(args.applicantName)}</div>
         <div><strong>Email:</strong> ${escapeHtml(args.applicantEmail)}</div>
         ${args.phone ? `<div><strong>Phone:</strong> ${escapeHtml(args.phone)}</div>` : ''}
+        ${formattedAddress ? `<div><strong>Address:</strong> ${escapeHtml(formattedAddress)}</div>` : ''}
+        ${args.abcPermitNumber ? `<div><strong>ABC Permit:</strong> ${escapeHtml(args.abcPermitNumber)}</div>` : ''}
         ${args.businessType ? `<div><strong>Type:</strong> ${escapeHtml(args.businessType)}</div>` : ''}
         ${args.expectedMonthlyVolume ? `<div><strong>Expected volume:</strong> ${escapeHtml(args.expectedMonthlyVolume)}</div>` : ''}
         ${
