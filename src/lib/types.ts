@@ -4,7 +4,10 @@ export interface Customer {
   contactName: string;
   email: string;
   phone: string;
-  address: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
   password?: string;
   /** Brewery-only notes. Not visible to the customer. */
   notes?: string;
@@ -33,7 +36,13 @@ export interface WholesaleApplication {
   contactName: string;
   email: string;
   phone: string;
-  address: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
+  /** ABC liquor license / permit number. Required at submission so the
+   * brewery has the legal license on file before approving. */
+  abcPermitNumber: string;
   businessType: string;
   expectedMonthlyVolume: string;
   preferredPaymentMethod?: PreferredPaymentMethod;

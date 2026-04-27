@@ -6,13 +6,13 @@
 -- ============================================================
 -- CUSTOMERS (Hendersonville / Asheville / WNC area)
 -- ============================================================
-insert into customers (id, business_name, contact_name, email, phone, address, created_at) values
-  ('cust-001', 'The Brass Bell Tavern',     'Marcus Johnson',   'marcus@brassbelltavern.com',   '(828) 555-0101', '142 Main St, Hendersonville, NC 28792',          '2025-08-15T10:00:00Z'),
-  ('cust-002', 'Mountain Run Taphouse',     'Sarah Mitchell',   'sarah@mountainruntap.com',     '(828) 555-0202', '87 Haywood Rd, Asheville, NC 28806',              '2025-09-01T14:30:00Z'),
-  ('cust-003', 'Pisgah Social Club',        'James Patterson',  'james@pisgahsocial.com',       '(828) 555-0303', '315 S Broad St, Brevard, NC 28712',               '2025-09-20T09:15:00Z'),
-  ('cust-004', 'Biltmore Village Pub',      'Elena Rodriguez',  'elena@biltmorevillagepub.com', '(828) 555-0404', '10 Kitchen Pl, Asheville, NC 28803',              '2025-10-05T11:00:00Z'),
-  ('cust-005', 'Flat Rock Cinema Grill',    'David Chen',       'david@flatrockcinema.com',     '(828) 555-0505', '2700 Greenville Hwy, Flat Rock, NC 28731',        '2025-10-18T16:45:00Z'),
-  ('cust-006', 'Derby Digital',             'Jahan',            'jahan@derbydigital.us',        '(828) 555-0606', 'Hendersonville, NC 28792',                        '2026-04-12T00:00:00Z')
+insert into customers (id, business_name, contact_name, email, phone, address, street_address, city, state, zip, created_at) values
+  ('cust-001', 'The Brass Bell Tavern',     'Marcus Johnson',   'marcus@brassbelltavern.com',   '(828) 555-0101', '142 Main St, Hendersonville, NC 28792',     '142 Main St',         'Hendersonville', 'NC', '28792', '2025-08-15T10:00:00Z'),
+  ('cust-002', 'Mountain Run Taphouse',     'Sarah Mitchell',   'sarah@mountainruntap.com',     '(828) 555-0202', '87 Haywood Rd, Asheville, NC 28806',         '87 Haywood Rd',       'Asheville',      'NC', '28806', '2025-09-01T14:30:00Z'),
+  ('cust-003', 'Pisgah Social Club',        'James Patterson',  'james@pisgahsocial.com',       '(828) 555-0303', '315 S Broad St, Brevard, NC 28712',          '315 S Broad St',      'Brevard',        'NC', '28712', '2025-09-20T09:15:00Z'),
+  ('cust-004', 'Biltmore Village Pub',      'Elena Rodriguez',  'elena@biltmorevillagepub.com', '(828) 555-0404', '10 Kitchen Pl, Asheville, NC 28803',         '10 Kitchen Pl',       'Asheville',      'NC', '28803', '2025-10-05T11:00:00Z'),
+  ('cust-005', 'Flat Rock Cinema Grill',    'David Chen',       'david@flatrockcinema.com',     '(828) 555-0505', '2700 Greenville Hwy, Flat Rock, NC 28731',   '2700 Greenville Hwy', 'Flat Rock',      'NC', '28731', '2025-10-18T16:45:00Z'),
+  ('cust-006', 'Derby Digital',             'Jahan',            'jahan@derbydigital.us',        '(828) 555-0606', 'Hendersonville, NC 28792',                   '',                    'Hendersonville', 'NC', '28792', '2026-04-12T00:00:00Z')
 on conflict (id) do nothing;
 
 -- ============================================================

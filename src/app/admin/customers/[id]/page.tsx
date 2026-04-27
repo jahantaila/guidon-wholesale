@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, cn, formatAddress } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 export default function CustomerDetailPage() {
@@ -248,9 +248,9 @@ export default function CustomerDetailPage() {
               </>
             )}
           </p>
-          {customer.address && (
+          {formatAddress(customer) && (
             <p className="mt-1 italic" style={{ color: 'var(--muted)' }}>
-              {customer.address}
+              {formatAddress(customer)}
             </p>
           )}
           <p className="mt-1 text-xs" style={{ color: 'var(--faint)' }}>

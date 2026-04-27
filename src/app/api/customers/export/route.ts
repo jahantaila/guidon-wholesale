@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getCustomers, getOrders, getInvoices } from '@/lib/data';
+import { formatAddress } from '@/lib/utils';
 
 /**
  * GET /api/customers/export
@@ -42,6 +43,12 @@ export async function GET(request: NextRequest) {
     'Contact Name',
     'Email',
     'Phone',
+    'Street Address',
+    'City',
+    'State',
+    'Zip',
+    // Joined `Address` kept for spreadsheet workflows that already point at
+    // a single column. Derived from the split fields so it's always in sync.
     'Address',
     'Orders',
     'LTV',
@@ -60,7 +67,11 @@ export async function GET(request: NextRequest) {
       c.contactName,
       c.email,
       c.phone,
-      c.address,
+      c.streetAddress,
+      c.city,
+      c.state,
+      c.zip,
+      formatAddress(c),
       String(m.orderCount),
       m.ltv.toFixed(2),
       m.lastOrder || '',

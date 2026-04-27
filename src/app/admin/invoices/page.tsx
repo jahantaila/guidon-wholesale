@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { Invoice, InvoiceStatus, Customer, Order } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, cn, formatAddress } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 type FilterStatus = InvoiceStatus | 'all';
@@ -220,7 +220,7 @@ export default function InvoicesPage() {
               <>
                 <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
                 <p className="text-sm text-gray-600">{customer.contactName}</p>
-                <p className="text-sm text-gray-500">{customer.address}</p>
+                <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
                 <p className="text-sm text-gray-500">{customer.email}</p>
               </>
             ) : (

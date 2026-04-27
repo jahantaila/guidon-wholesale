@@ -5,6 +5,9 @@ import {
   cn,
   generateId,
   getStatusColor,
+  formatAddress,
+  isValidUsStateCode,
+  US_STATES,
 } from "@/lib/utils";
 
 describe("formatCurrency", () => {
@@ -74,5 +77,73 @@ describe("getStatusColor", () => {
 describe("formatDate", () => {
   it("formats an ISO date string to human-readable", () => {
     expect(formatDate("2026-01-15T00:00:00Z")).toMatch(/Jan \d{1,2}, 2026/);
+  });
+});
+
+describe("formatAddress", () => {
+  it("joins all four parts with commas in postal order", () => {
+    expect(
+      formatAddress({
+        streetAddress: "142 Main St",
+        city: "Hendersonville",
+        state: "NC",
+        zip: "28792",
+      }),
+    ).toBe("142 Main St, Hendersonville, NC 28792");
+  });
+
+  it("skips empty parts so legacy rows with only a street don't render dangling commas", () => {
+    expect(formatAddress({ streetAddress: "142 Main St" })).toBe("142 Main St");
+  });
+
+  it("handles partial city/state when zip is missing", () => {
+    expect(
+      formatAddress({ streetAddress: "1 X", city: "Asheville", state: "NC" }),
+    ).toBe("1 X, Asheville, NC");
+  });
+
+  it("returns empty string when all parts are missing", () => {
+    expect(formatAddress({})).toBe("");
+  });
+
+  it("trims whitespace from each part", () => {
+    expect(
+      formatAddress({
+        streetAddress: "  1 X  ",
+        city: " Asheville ",
+        state: "NC",
+        zip: " 28801 ",
+      }),
+    ).toBe("1 X, Asheville, NC 28801");
+  });
+});
+
+describe("isValidUsStateCode", () => {
+  it("accepts valid 2-letter codes", () => {
+    expect(isValidUsStateCode("NC")).toBe(true);
+    expect(isValidUsStateCode("CA")).toBe(true);
+    expect(isValidUsStateCode("DC")).toBe(true);
+  });
+
+  it("normalizes lowercase input", () => {
+    expect(isValidUsStateCode("nc")).toBe(true);
+  });
+
+  it("rejects unknown codes", () => {
+    expect(isValidUsStateCode("ZZ")).toBe(false);
+    expect(isValidUsStateCode("")).toBe(false);
+    expect(isValidUsStateCode("California")).toBe(false);
+  });
+});
+
+describe("US_STATES constant", () => {
+  it("includes 51 entries (50 states + DC)", () => {
+    expect(US_STATES).toHaveLength(51);
+  });
+
+  it("uses uppercase 2-letter codes throughout", () => {
+    for (const s of US_STATES) {
+      expect(s.code).toMatch(/^[A-Z]{2}$/);
+    }
   });
 });

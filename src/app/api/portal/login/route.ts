@@ -38,13 +38,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Mirror the data-layer mapper: prefer split address columns, fall back
+     // to the legacy `address` string for pre-migration rows.
+    const splitStreet = (customerRow.street_address as string) || '';
+    const city = (customerRow.city as string) || '';
+    const state = (customerRow.state as string) || '';
+    const zip = (customerRow.zip as string) || '';
+    const legacyAddress = (customerRow.address as string) || '';
+    const hasSplit = Boolean(splitStreet || city || state || zip);
     const customer = {
       id: customerRow.id,
       businessName: customerRow.business_name,
       contactName: customerRow.contact_name,
       email: customerRow.email,
       phone: customerRow.phone,
-      address: customerRow.address,
+      streetAddress: hasSplit ? splitStreet : legacyAddress,
+      city,
+      state,
+      zip,
       // Expose the temp-password flag so the portal UI can force a
       // change-password modal on first login after approval.
       mustChangePassword: customerRow.must_change_password === true,

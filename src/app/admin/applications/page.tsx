@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { WholesaleApplication, Customer } from '@/lib/types';
-import { formatDate, cn, getStatusColor } from '@/lib/utils';
+import { formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 // Use the shared badge-status-* classes so the paper-theme colors match
@@ -17,7 +17,10 @@ interface CustomerForm {
   contactName: string;
   email: string;
   phone: string;
-  address: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
   password: string;
 }
 
@@ -30,7 +33,10 @@ export default function ApplicationsPage() {
 
   // Customer creation modal
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
-  const [customerForm, setCustomerForm] = useState<CustomerForm>({ businessName: '', contactName: '', email: '', phone: '', address: '', password: '' });
+  const [customerForm, setCustomerForm] = useState<CustomerForm>({
+    businessName: '', contactName: '', email: '', phone: '',
+    streetAddress: '', city: '', state: '', zip: '', password: '',
+  });
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [customerSuccess, setCustomerSuccess] = useState('');
   // Auto-generated temp password returned from the approve PUT. Surfaced in
@@ -82,7 +88,10 @@ export default function ApplicationsPage() {
           contactName: app.contactName,
           email: app.email,
           phone: app.phone || '',
-          address: app.address || '',
+          streetAddress: app.streetAddress || '',
+          city: app.city || '',
+          state: app.state || '',
+          zip: app.zip || '',
           password: generated,
         });
         setShowCreateCustomer(true);
@@ -220,7 +229,8 @@ export default function ApplicationsPage() {
                 {expandedId === app.id && (
                   <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs animate-fade-in">
                     <div><span className="text-cream/25">Phone:</span><p className="text-cream/60 mt-0.5">{app.phone || 'N/A'}</p></div>
-                    <div><span className="text-cream/25">Address:</span><p className="text-cream/60 mt-0.5">{app.address || 'N/A'}</p></div>
+                    <div className="sm:col-span-2"><span className="text-cream/25">Address:</span><p className="text-cream/60 mt-0.5">{formatAddress(app) || 'N/A'}</p></div>
+                    <div><span className="text-cream/25">ABC Permit:</span><p className="text-cream/60 mt-0.5 font-mono">{app.abcPermitNumber || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Business Type:</span><p className="text-cream/60 mt-0.5">{app.businessType || 'N/A'}</p></div>
                     <div>
                       <span className="text-cream/25">Payment:</span>
@@ -320,16 +330,36 @@ export default function ApplicationsPage() {
                   <input type="email" className="input" value={customerForm.email}
                     onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))} required />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
+                  <input className="input" value={customerForm.phone}
+                    onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Street Address</label>
+                  <input className="input" value={customerForm.streetAddress}
+                    onChange={e => setCustomerForm(p => ({ ...p, streetAddress: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
-                    <input className="input" value={customerForm.phone}
-                      onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))} />
+                    <label className="block text-sm font-medium text-cream/40 mb-1.5">City</label>
+                    <input className="input" value={customerForm.city}
+                      onChange={e => setCustomerForm(p => ({ ...p, city: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-cream/40 mb-1.5">Address</label>
-                    <input className="input" value={customerForm.address}
-                      onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))} />
+                    <label className="block text-sm font-medium text-cream/40 mb-1.5">State</label>
+                    <select className="input" value={customerForm.state}
+                      onChange={e => setCustomerForm(p => ({ ...p, state: e.target.value }))}>
+                      <option value="">Select...</option>
+                      {US_STATES.map((s) => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-cream/40 mb-1.5">Zip</label>
+                    <input className="input" value={customerForm.zip}
+                      onChange={e => setCustomerForm(p => ({ ...p, zip: e.target.value }))} />
                   </div>
                 </div>
                 <div>
