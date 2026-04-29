@@ -253,6 +253,23 @@ export default function CustomerDetailPage() {
               {formatAddress(customer)}
             </p>
           )}
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--muted)' }}>
+            <span>
+              <span style={{ color: 'var(--faint)' }}>ID:</span>{' '}
+              <span className="font-mono">{customer.id}</span>
+            </span>
+            <span>
+              <span style={{ color: 'var(--faint)' }}>ABC Permit:</span>{' '}
+              <span className="font-mono">{customer.abcPermitNumber || 'N/A'}</span>
+            </span>
+            <span>
+              <span style={{ color: 'var(--faint)' }}>Payment:</span>{' '}
+              {(() => {
+                const labels: Record<string, string> = { check: 'Check', fintech: 'Fintech', no_preference: 'No preference' };
+                return labels[customer.preferredPaymentMethod || 'no_preference'];
+              })()}
+            </span>
+          </div>
           <p className="mt-1 text-xs" style={{ color: 'var(--faint)' }}>
             Customer since {formatDate(customer.createdAt)}
           </p>
@@ -478,8 +495,7 @@ export default function CustomerDetailPage() {
                       </p>
                       <p className="text-sm" style={{ color: 'var(--muted)' }}>
                         {formatDate(order.createdAt)} &middot; {order.items.length} item
-                        {order.items.length === 1 ? '' : 's'} &middot; delivery{' '}
-                        {formatDate(order.deliveryDate)}
+                        {order.items.length === 1 ? '' : 's'}
                       </p>
                     </div>
                     <div className="text-right shrink-0">

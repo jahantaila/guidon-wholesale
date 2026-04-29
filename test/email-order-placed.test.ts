@@ -25,7 +25,7 @@ describe("notifyOrderPlaced — customer + admin emails", () => {
     sendSpy.mockClear();
   });
 
-  it("does NOT mention the delivery date anywhere in the confirmation emails (regression: Bug 2)", async () => {
+  it("does NOT mention any delivery date in the confirmation emails (per-order delivery dates removed 2026-04-29)", async () => {
     await notifyOrderPlaced({
       orderId: "ord_abc",
       customerEmail: "customer@test.example",
@@ -35,7 +35,6 @@ describe("notifyOrderPlaced — customer + admin emails", () => {
       subtotal: 360,
       totalDeposit: 100,
       total: 460,
-      deliveryDate: "2026-05-01",
       notes: "leave at back door",
     });
 

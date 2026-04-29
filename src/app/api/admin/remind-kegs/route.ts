@@ -64,7 +64,6 @@ export async function POST(request: NextRequest) {
       customerName: customer.contactName,
       businessName: customer.businessName,
       items: order.items,
-      deliveryDate: order.deliveryDate,
       portalUrl: portalUrl(),
     });
     return NextResponse.json({ ok: true });

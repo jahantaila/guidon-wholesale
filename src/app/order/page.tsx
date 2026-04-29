@@ -91,7 +91,9 @@ export default function OrderPage() {
     businessName: '', contactName: '', email: '', phone: '',
     streetAddress: '', city: '', state: '', zip: '',
   });
-  const [deliveryDate, setDeliveryDate] = useState('');
+  // Delivery date selection removed 2026-04-29 per client. Brewery delivers
+  // Thursdays + Fridays; admin schedules internally. Order is created with
+  // null deliveryDate.
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -257,7 +259,6 @@ export default function OrderPage() {
     if (isNewCustomer && (!newCustomer.businessName || !newCustomer.contactName || !newCustomer.email)) {
       setSubmitError('Business name, contact name, and email are required.'); return;
     }
-    if (!deliveryDate) { setSubmitError('Please select a delivery date.'); return; }
     setSubmitting(true);
     try {
       if (isNewCustomer) {
@@ -275,7 +276,7 @@ export default function OrderPage() {
       }));
       const orderRes = await fetch('/api/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, deliveryDate, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
       if (!orderRes.ok) {
         const data = await orderRes.json().catch(() => ({}));
@@ -289,10 +290,6 @@ export default function OrderPage() {
       setSubmitting(false);
     }
   };
-
-  const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 1);
-  const minDateStr = minDate.toISOString().split('T')[0];
 
   return (
     <div className="min-h-screen bg-charcoal font-body">
@@ -840,9 +837,11 @@ export default function OrderPage() {
               </div>
 
               <div>
-                <span className="section-label mb-2 block">Delivery Date</span>
-                <input type="date" value={deliveryDate} min={minDateStr}
-                  onChange={(e) => setDeliveryDate(e.target.value)} className="input" />
+                <span className="section-label mb-2 block">Delivery</span>
+                <p className="text-sm text-cream/50">
+                  We deliver Thursdays and Fridays. We&apos;ll schedule your order
+                  for the next available day and email you a confirmation.
+                </p>
               </div>
 
               <div>

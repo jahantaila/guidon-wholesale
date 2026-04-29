@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(safe, { status: 200 });
     }
 
+    const allowedPayment = ['check', 'fintech', 'no_preference'] as const;
     const customer: Customer = {
       id: generateId('cust'),
       businessName: body.businessName,
@@ -61,6 +62,10 @@ export async function POST(request: NextRequest) {
       city: body.city || '',
       state: body.state || '',
       zip: body.zip || '',
+      abcPermitNumber: body.abcPermitNumber || '',
+      preferredPaymentMethod: allowedPayment.includes(body.preferredPaymentMethod)
+        ? (body.preferredPaymentMethod as (typeof allowedPayment)[number])
+        : 'no_preference',
       password: body.password || '',
       createdAt: new Date().toISOString(),
     };
@@ -137,6 +142,10 @@ export async function PUT(request: NextRequest) {
       if (portalCustomerId !== id) {
         return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
       }
+      // Portal-customer self-edit: limited subset. Customer can update
+      // contact info + address + password. ABC permit + payment method are
+      // admin-managed (license # is a legal matter; payment rail is a
+      // brewery-side decision tied to AR), so they're stripped here.
       updates = {
         contactName: rawUpdates.contactName,
         phone: rawUpdates.phone,

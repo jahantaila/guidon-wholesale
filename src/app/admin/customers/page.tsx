@@ -16,12 +16,15 @@ interface CustomerForm {
   city: string;
   state: string;
   zip: string;
+  abcPermitNumber: string;
+  preferredPaymentMethod: 'check' | 'fintech' | 'no_preference';
   password: string;
 }
 
 const emptyForm: CustomerForm = {
   businessName: '', contactName: '', email: '', phone: '',
-  streetAddress: '', city: '', state: '', zip: '', password: '',
+  streetAddress: '', city: '', state: '', zip: '',
+  abcPermitNumber: '', preferredPaymentMethod: 'no_preference', password: '',
 };
 
 type ViewMode = 'table' | 'cards' | 'kanban';
@@ -137,6 +140,8 @@ export default function CustomersPage() {
       city: customer.city,
       state: customer.state,
       zip: customer.zip,
+      abcPermitNumber: customer.abcPermitNumber || '',
+      preferredPaymentMethod: customer.preferredPaymentMethod || 'no_preference',
       password: '',
     });
     setEditingId(customer.id); setModalOpen(true);
@@ -336,6 +341,23 @@ export default function CustomersPage() {
                 <div>
                   <label htmlFor="cust-zip" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Zip</label>
                   <input id="cust-zip" className="input" value={form.zip} onChange={(e) => updateField('zip', e.target.value)} required autoComplete="postal-code" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="cust-abcPermitNumber" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>ABC Permit Number</label>
+                  <input id="cust-abcPermitNumber" className="input font-mono" placeholder="e.g. NC-12345"
+                    value={form.abcPermitNumber} onChange={(e) => updateField('abcPermitNumber', e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="cust-preferredPaymentMethod" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Payment Method</label>
+                  <select id="cust-preferredPaymentMethod" className="input"
+                    value={form.preferredPaymentMethod}
+                    onChange={(e) => updateField('preferredPaymentMethod', e.target.value as CustomerForm['preferredPaymentMethod'])}>
+                    <option value="no_preference">No preference</option>
+                    <option value="check">Check</option>
+                    <option value="fintech">Fintech (ACH / Zelle / card)</option>
+                  </select>
                 </div>
               </div>
               {!editingId && (

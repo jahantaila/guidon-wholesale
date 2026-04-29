@@ -122,11 +122,15 @@ export default function ProductionPage() {
           acc.set(key, row);
         }
         row.committed += item.quantity;
+        // Per-order delivery dates were removed in 2026-04-29. We treat the
+        // order's createdAt as a stand-in deadline so production planning
+        // still has a "we owe these by..." anchor — brewery delivers Thu/Fri
+        // so an old undelivered order is the most-urgent obligation.
         if (
           !row.earliestDelivery ||
-          (order.deliveryDate && order.deliveryDate < row.earliestDelivery)
+          (order.createdAt && order.createdAt < row.earliestDelivery)
         ) {
-          row.earliestDelivery = order.deliveryDate;
+          row.earliestDelivery = order.createdAt;
         }
       }
     }

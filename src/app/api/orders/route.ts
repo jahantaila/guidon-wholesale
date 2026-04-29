@@ -50,7 +50,9 @@ export async function POST(request: NextRequest) {
     subtotal: body.subtotal,
     totalDeposit: body.totalDeposit,
     total: body.total,
-    deliveryDate: body.deliveryDate,
+    // Per-order delivery dates were removed in 2026-04-29; brewery delivers
+    // Thursdays + Fridays and admin schedules from the queue.
+    deliveryDate: null,
     notes: body.notes || '',
     createdAt: new Date().toISOString(),
   };
@@ -94,7 +96,6 @@ export async function POST(request: NextRequest) {
         subtotal: order.subtotal,
         totalDeposit: order.totalDeposit,
         total: order.total,
-        deliveryDate: order.deliveryDate,
         notes: order.notes,
       });
     }
@@ -184,7 +185,14 @@ export async function PUT(request: NextRequest) {
         };
         await addKegLedgerEntry(entry);
       }
-      // Returns the customer declared at checkout
+      // Returns the customer declared at checkout. CRITICAL: these are
+      // posted as `pending`, not `approved`, so they do NOT subtract from
+      // the customer's outstanding-keg balance until the brewery physically
+      // receives the empties and admin manually approves the return from
+      // the keg-tracker pending queue. Per client (2026-04-29): "keg returns
+      // are still adjusting automatically based on what the order says. We
+      // don't want keg returns calculated until they are in our possession
+      // and we manually confirm the returns. THIS IS VERY IMPORTANT."
       for (const ret of existingOrder.kegReturns) {
         const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
         const entry: KegLedgerEntry = {
@@ -197,7 +205,8 @@ export async function PUT(request: NextRequest) {
           depositAmount: depositAmounts[ret.size] || 0,
           totalAmount: -((depositAmounts[ret.size] || 0) * ret.quantity),
           date: now,
-          notes: `Keg returns with order ${existingOrder.id}`,
+          notes: `Customer declared on order ${existingOrder.id} — awaiting brewery confirmation`,
+          status: 'pending',
         };
         await addKegLedgerEntry(entry);
       }
@@ -289,7 +298,6 @@ export async function PUT(request: NextRequest) {
           customerEmail: customer.email,
           customerName: customer.contactName,
           newStatus: 'confirmed',
-          deliveryDate: order.deliveryDate,
         });
       }
     } catch (err) {

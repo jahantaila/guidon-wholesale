@@ -205,7 +205,20 @@ export default function KegTrackerPage() {
       ]);
       const bData = await bRes.json();
       const allData = await allRes.json();
-      setBalances(Array.isArray(bData) ? bData : []);
+      // /api/keg-ledger?balances=true returns Record<customerId, KegBalance>,
+      // not an array. Without the Object.entries() conversion the table goes
+      // empty after every adjust-modal save — the user reported this as
+      // "the screen does not return to the previous page when saved" because
+      // visually the data vanished. Mirror the conversion in the initial
+      // load() so subsequent refreshes match.
+      const balancesArr: CustomerBalance[] =
+        bData && typeof bData === 'object' && !Array.isArray(bData)
+          ? Object.entries(bData).map(([customerId, balance]) => ({
+              customerId,
+              balance: balance as KegBalance,
+            }))
+          : Array.isArray(bData) ? bData : [];
+      setBalances(balancesArr);
       setAllLedger(Array.isArray(allData) ? allData : []);
     } catch {}
   }, []);

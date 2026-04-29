@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
   const headers = [
     'Order ID',
     'Date Placed',
-    'Delivery Date',
     'Status',
     'Customer',
     'Customer Email',
@@ -41,7 +40,6 @@ export async function GET(request: NextRequest) {
       rows.push([
         o.id,
         new Date(o.createdAt).toLocaleDateString(),
-        o.deliveryDate,
         o.status,
         cust?.businessName || o.customerId,
         cust?.email || '',

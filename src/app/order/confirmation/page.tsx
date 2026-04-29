@@ -195,15 +195,14 @@ function ConfirmationContent() {
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-white/[0.04] grid grid-cols-2 gap-4">
-            <div>
-              <span className="section-label mb-1 block">Delivery Date</span>
-              <p className="text-sm font-heading font-bold text-cream">{formatDate(order.deliveryDate)}</p>
-            </div>
-            <div>
-              <span className="section-label mb-1 block">Payment</span>
-              <p className="text-sm font-heading font-bold text-cream">Due on Delivery</p>
-            </div>
+          <div className="mt-5 pt-4 border-t border-white/[0.04]">
+            <span className="section-label mb-1 block">Delivery</span>
+            <p className="text-sm font-heading font-bold text-cream">
+              We deliver Thursdays and Fridays
+            </p>
+            <p className="text-xs text-cream/40 mt-1">
+              We&apos;ll schedule your order for the next available day and email you a confirmation. Payment is due on delivery.
+            </p>
           </div>
 
           {order.notes && (

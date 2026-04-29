@@ -158,6 +158,16 @@ export default function InvoicesPage() {
   if (viewingInvoice) {
     const inv = viewingInvoice;
     const customer = customerMap.get(inv.customerId);
+    // Pull keg returns + payment method context from the source order so the
+    // printed invoice can show Returns Received + Customer Info per client
+    // request 2026-04-29.
+    const sourceOrder = orders.find((o) => o.id === inv.orderId);
+    const kegReturns = sourceOrder?.kegReturns || [];
+    const paymentLabel: Record<string, string> = {
+      check: 'Check',
+      fintech: 'Fintech (ACH / Zelle / card)',
+      no_preference: 'No preference',
+    };
     return (
       <div>
         <div className="no-print mb-6 flex items-center gap-4 flex-wrap">
@@ -214,18 +224,37 @@ export default function InvoicesPage() {
 
           <div className="h-1 bg-gradient-to-r from-gray-900 via-amber-600 to-gray-900 rounded mb-8" />
 
-          <div className="mb-8 p-5 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
-            {customer ? (
-              <>
-                <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
-                <p className="text-sm text-gray-600">{customer.contactName}</p>
-                <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
-                <p className="text-sm text-gray-500">{customer.email}</p>
-              </>
-            ) : (
-              <p className="text-sm text-gray-500">{inv.customerId}</p>
-            )}
+          <div className="mb-8 p-5 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
+              {customer ? (
+                <>
+                  <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
+                  <p className="text-sm text-gray-600">{customer.contactName}</p>
+                  <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
+                  <p className="text-sm text-gray-500">{customer.email}</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">{inv.customerId}</p>
+              )}
+            </div>
+            <div>
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Customer Info</h3>
+              <dl className="text-sm space-y-1">
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">Customer ID</dt>
+                  <dd className="text-gray-700 font-mono">{inv.customerId}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">ABC Permit</dt>
+                  <dd className="text-gray-700 font-mono">{customer?.abcPermitNumber || 'N/A'}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">Payment</dt>
+                  <dd className="text-gray-700">{paymentLabel[customer?.preferredPaymentMethod || 'no_preference']}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
 
           <table className="w-full mb-8">
@@ -254,6 +283,36 @@ export default function InvoicesPage() {
               ))}
             </tbody>
           </table>
+
+          {/* Keg Returns Received: separate section per client request
+              2026-04-29. Lists empties the customer brought back so the
+              invoice doubles as a receipt for the customer's records. The
+              actual outstanding-keg ledger is approved manually by admin
+              from the Keg Tracker — this section just shows the count. */}
+          {kegReturns.length > 0 && (
+            <div className="mb-8 mt-2 p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <h3 className="text-[10px] font-bold text-amber-800 uppercase tracking-[0.2em] mb-3">Keg Returns Received</h3>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-amber-200">
+                    <th className="text-left py-2 text-xs font-semibold text-amber-800">Size</th>
+                    <th className="text-right py-2 text-xs font-semibold text-amber-800">Quantity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kegReturns.map((r, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2 text-sm text-gray-700 font-mono">{r.size}</td>
+                      <td className="py-2 text-sm text-right text-gray-700 font-mono">{r.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] italic text-amber-700 mt-2">
+                Deposit credits apply to your account once the brewery confirms the empties on receipt.
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end">
             <div className="w-72 space-y-2">

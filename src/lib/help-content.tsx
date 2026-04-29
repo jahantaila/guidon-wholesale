@@ -268,7 +268,7 @@ export const ADMIN_HELP: HelpTopic[] = [
               <li>Inventory is <strong>decremented</strong> per size on the order.</li>
               <li>A <strong>keg-deposit ledger entry</strong> is posted per size (counts against the customer&rsquo;s outstanding-kegs balance).</li>
               <li>The draft invoice becomes <strong>unpaid + sent</strong> if the customer has <Code>autoSendInvoices</Code> on; otherwise it stays in draft for you to send manually later.</li>
-              <li>The customer gets an <strong>&ldquo;Order confirmed&rdquo; email</strong> with the delivery date.</li>
+              <li>The customer gets an <strong>&ldquo;Order confirmed&rdquo; email</strong> letting them know we&rsquo;ll deliver on the next Thursday or Friday.</li>
             </OL>
             <H>What happens when you click &ldquo;Mark completed →&rdquo;</H>
             <UL>
@@ -299,7 +299,6 @@ export const ADMIN_HELP: HelpTopic[] = [
             <H>Filters</H>
             <UL>
               <li><strong>Status tabs</strong> — All / Pending / Confirmed / Completed.</li>
-              <li><strong>Delivery chips</strong> — <em>Any / Today / This week / Overdue</em>. Overdue tints ruby when &gt; 0 — catches your eye when you open the page.</li>
               <li><strong>Customer dropdown</strong> — only lists customers with orders on file; keeps the list short.</li>
               <li><strong>Placed-date range</strong> — from/to pickers.</li>
               <li><strong>Search</strong> — matches order ID, business name, contact name, and product name inside the order items.</li>
@@ -307,24 +306,6 @@ export const ADMIN_HELP: HelpTopic[] = [
             <P>
               All filters AND-compose. A <strong>Clear filters</strong> link appears when any filter is
               active, and the result count shows above the list (e.g. &ldquo;Showing 3 of 11&rdquo;).
-            </P>
-          </>
-        ),
-      },
-      {
-        id: 'delivery-date',
-        title: 'Rescheduling a delivery',
-        body: (
-          <>
-            <P>
-              Expand any pending or confirmed order (click the order row in Table view,
-              or <strong>Details ↓</strong> on a card) and edit the date in the
-              <strong> Reschedule</strong> field. Change takes effect on blur; the customer is NOT
-              emailed (too noisy if you&rsquo;re nudging deliveries around the schedule).
-            </P>
-            <P>
-              If you want the customer notified, drop them a direct email — we intentionally
-              don&rsquo;t auto-email on every date change.
             </P>
           </>
         ),
@@ -591,7 +572,7 @@ export const ADMIN_HELP: HelpTopic[] = [
               <li><strong>Committed</strong> — total quantity on pending + confirmed orders.</li>
               <li><strong>On Hand</strong> — current inventory.</li>
               <li><strong>Deficit</strong> — how many you need to brew to cover committed orders. Rows with a deficit tint ruby.</li>
-              <li><strong>Earliest Delivery</strong> — the soonest delivery date on a committed order for that size.</li>
+              <li><strong>Earliest Owed</strong> — the placement date of the oldest committed order for that size (since per-order delivery dates were removed, this stands in as the urgency anchor).</li>
               <li><strong>Back In Stock By</strong> — the next scheduled brew&rsquo;s date (from the Brewing Schedule section below).</li>
               <li><strong>Action</strong> — at-a-glance status: <Code>Brew →</Code> (need to brew), <Code>Brew Scheduled</Code> (a brew is booked that covers the deficit), <Code>Tight</Code>, <Code>Covered</Code>, or <Code>Surplus</Code>.</li>
             </UL>
@@ -851,7 +832,7 @@ export const PORTAL_HELP: HelpTopic[] = [
           <>
             <UL>
               <li><strong>Order received</strong> — immediately when you place the order. Lists the items and tells you we&rsquo;ll email again when it&rsquo;s confirmed.</li>
-              <li><strong>Order confirmed</strong> — when the brewery commits to the order. Includes the delivery date. An invoice follows right after.</li>
+              <li><strong>Order confirmed</strong> — when the brewery commits to the order. We deliver Thursdays and Fridays and will schedule yours for the next available day. An invoice follows right after.</li>
               <li><strong>Invoice</strong> — with payment terms. Payment is due on delivery or per your negotiated terms.</li>
               <li><strong>Keg return reminder</strong> — if we have kegs out from you for a while, the brewery may send a gentle nudge. You can put in a return request from the Overview tab.</li>
             </UL>
@@ -874,8 +855,7 @@ export const PORTAL_HELP: HelpTopic[] = [
               Each row has the order ID, date, items summary, status badge, and total.
             </P>
             <P>
-              Click an order to expand it and see the full line items, any keg returns, and
-              delivery date.
+              Click an order to expand it and see the full line items and any keg returns.
             </P>
           </>
         ),
@@ -1092,10 +1072,10 @@ export const PORTAL_HELP: HelpTopic[] = [
         body: (
           <>
             <P>
-              Orders placed early in the week typically deliver that Thursday or Friday.
-              Late-week orders move to the following week&rsquo;s run. The portal auto-assigns
-              the next feasible delivery date at checkout — if you need a different date,
-              add a note and the brewery will coordinate.
+              We deliver Thursdays and Fridays. Orders placed early in the week typically
+              go out that same week; late-week orders move to the following week&rsquo;s run.
+              We&rsquo;ll email a confirmation once your order is scheduled. If you need
+              special timing, add a note and the brewery will coordinate.
             </P>
           </>
         ),

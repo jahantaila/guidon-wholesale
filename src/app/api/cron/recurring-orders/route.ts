@@ -79,11 +79,9 @@ async function runCron() {
       const totalDeposit = rec.items.reduce((s, i) => s + i.deposit * i.quantity, 0);
       const total = subtotal + totalDeposit;
 
-      // Default delivery to 3 days from now. Admin will adjust if needed.
-      const deliveryDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
-
+      // Per-order delivery dates were removed in 2026-04-29. Brewery
+      // delivers Thursdays + Fridays; admin schedules the recurring run
+      // along with the rest of the queue.
       const order: Order = {
         id: generateId('ord'),
         customerId: rec.customerId,
@@ -93,7 +91,7 @@ async function runCron() {
         subtotal,
         totalDeposit,
         total,
-        deliveryDate,
+        deliveryDate: null,
         notes: `Auto-generated from recurring order "${rec.name}"`,
         createdAt: new Date().toISOString(),
       };
@@ -126,7 +124,6 @@ async function runCron() {
         subtotal,
         totalDeposit,
         total,
-        deliveryDate,
         notes: order.notes,
       }).catch((err) => console.error('[cron] email failed (non-fatal):', err));
 

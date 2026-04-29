@@ -598,7 +598,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
           />
         )}
         {tab === 'invoices' && (
-          <InvoicesTab invoices={invoices} loading={loadingInvoices} customer={customer} />
+          <InvoicesTab invoices={invoices} orders={orders} loading={loadingInvoices} customer={customer} />
         )}
         {tab === 'settings' && (
           <SettingsTab customer={customer} onLogout={onLogout} />
@@ -879,7 +879,8 @@ function ProductsTab({
       if (res.ok) await refreshTemplates();
     } catch { /* ignore */ }
   }, [refreshTemplates]);
-  const [deliveryDate, setDeliveryDate] = useState('');
+  // Delivery date selection removed 2026-04-29 per client. Brewery delivers
+  // Thursdays + Fridays; admin schedules internally.
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -1060,7 +1061,6 @@ function ProductsTab({
     setSubmitError('');
     setSubmitting(true);
     try {
-      const autoDate = deliveryDate || nextDeliveryDate();
       const items = cart.map((item) => ({
         productId: item.productId, productName: item.productName, size: item.size,
         quantity: item.quantity, unitPrice: item.unitPrice, deposit: item.deposit,
@@ -1068,13 +1068,13 @@ function ProductsTab({
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, deliveryDate: autoDate, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
-      setCart([]); setKegReturns([]); setShowCheckout(false); setDeliveryDate(''); setNotes('');
+      setCart([]); setKegReturns([]); setShowCheckout(false); setNotes('');
       onOrderPlaced();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -1461,33 +1461,6 @@ function ProductsTab({
                     We&rsquo;ll schedule your order for the next available delivery day and email you confirmation.
                   </p>
                 </div>
-                {false && (
-                  <div className="flex flex-wrap gap-2">
-                    {deliverySlots.map((iso) => {
-                      const on = deliveryDate === iso;
-                      const d = new Date(iso);
-                      const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                      return (
-                        <button
-                          key={iso}
-                          type="button"
-                          onClick={() => setDeliveryDate(iso)}
-                          className="px-3 py-2 text-xs font-semibold font-ui border transition-colors"
-                          style={{
-                            borderRadius: '3px',
-                            borderColor: on ? 'var(--brass-dim)' : 'var(--divider)',
-                            background: on ? 'var(--brass)' : 'transparent',
-                            color: on ? 'var(--paper)' : 'var(--ink)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               <div>
@@ -1661,10 +1634,11 @@ function OrdersTab({
 function OrderDetail({ order }: { order: Order }) {
   return (
     <div className="space-y-3 text-sm">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div><span className="text-cream/30">Delivery:</span>{' '}<span className="text-cream/60">{formatDate(order.deliveryDate)}</span></div>
-        {order.notes && <div><span className="text-cream/30">Notes:</span>{' '}<span className="text-cream/60">{order.notes}</span></div>}
-      </div>
+      {order.notes && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div><span className="text-cream/30">Notes:</span>{' '}<span className="text-cream/60">{order.notes}</span></div>
+        </div>
+      )}
       <div className="space-y-1">
         {order.items.map((item, idx) => (
           <div key={idx} className="flex justify-between">
@@ -1686,13 +1660,20 @@ function OrderDetail({ order }: { order: Order }) {
 /*  INVOICES TAB                                                      */
 /* ================================================================== */
 
-function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loading: boolean; customer: Customer }) {
+function InvoicesTab({ invoices, orders, loading, customer }: { invoices: Invoice[]; orders: Order[]; loading: boolean; customer: Customer }) {
   // Drafts are admin-internal; customer shouldn't see an unsent bill.
   const visible = invoices.filter((i) => i.status !== 'draft');
   const sorted = [...visible].sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
   const [printing, setPrinting] = useState<Invoice | null>(null);
 
   if (printing) {
+    const sourceOrder = orders.find((o) => o.id === printing.orderId);
+    const kegReturns = sourceOrder?.kegReturns || [];
+    const paymentLabel: Record<string, string> = {
+      check: 'Check',
+      fintech: 'Fintech (ACH / Zelle / card)',
+      no_preference: 'No preference',
+    };
     return (
       <div>
         <div className="no-print mb-6 flex items-center gap-4">
@@ -1719,11 +1700,30 @@ function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loa
             </div>
           </div>
           <div className="h-1 bg-gradient-to-r from-gray-900 via-amber-600 to-gray-900 rounded mb-6" />
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
-            <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
-            <p className="text-sm text-gray-600">{customer.contactName}</p>
-            <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Bill To</h3>
+              <p className="font-bold text-gray-900 text-lg">{customer.businessName}</p>
+              <p className="text-sm text-gray-600">{customer.contactName}</p>
+              <p className="text-sm text-gray-500">{formatAddress(customer)}</p>
+            </div>
+            <div>
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-2">Customer Info</h3>
+              <dl className="text-sm space-y-1">
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">Customer ID</dt>
+                  <dd className="text-gray-700 font-mono">{customer.id}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">ABC Permit</dt>
+                  <dd className="text-gray-700 font-mono">{customer.abcPermitNumber || 'N/A'}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-gray-500 w-24 shrink-0">Payment</dt>
+                  <dd className="text-gray-700">{paymentLabel[customer.preferredPaymentMethod || 'no_preference']}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
           <table className="w-full mb-6">
             <thead>
@@ -1749,6 +1749,30 @@ function InvoicesTab({ invoices, loading, customer }: { invoices: Invoice[]; loa
               ))}
             </tbody>
           </table>
+          {kegReturns.length > 0 && (
+            <div className="mb-6 mt-2 p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <h3 className="text-[10px] font-bold text-amber-800 uppercase tracking-[0.2em] mb-3">Keg Returns Received</h3>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-amber-200">
+                    <th className="text-left py-2 text-xs font-semibold text-amber-800">Size</th>
+                    <th className="text-right py-2 text-xs font-semibold text-amber-800">Quantity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kegReturns.map((r, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2 text-sm text-gray-700 font-mono">{r.size}</td>
+                      <td className="py-2 text-sm text-right text-gray-700 font-mono">{r.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] italic text-amber-700 mt-2">
+                Deposit credits apply to your account once the brewery confirms the empties on receipt.
+              </p>
+            </div>
+          )}
           <div className="flex justify-end">
             <div className="w-72 space-y-2">
               <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(printing.subtotal)}</span></div>
@@ -1889,8 +1913,37 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
     finally { setSavingPassword(false); }
   };
 
+  const paymentLabel: Record<string, string> = {
+    check: 'Check',
+    fintech: 'Fintech (ACH / Zelle / card)',
+    no_preference: 'No preference',
+  };
   return (
     <div className="animate-fade-in max-w-lg space-y-8">
+      {/* Read-only customer record summary — Customer ID, ABC permit, and
+          payment method are admin-managed (license + AR settings). Surface
+          here so customers can copy their ID for support tickets and verify
+          the brewery has their permit on file. */}
+      <div>
+        <span className="section-label mb-4 block">Customer Info</span>
+        <div className="card grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-cream/30 mb-1">Customer ID</p>
+            <p className="font-mono text-cream/80">{customer.id}</p>
+          </div>
+          <div>
+            <p className="text-xs text-cream/30 mb-1">ABC Permit</p>
+            <p className="font-mono text-cream/80">{customer.abcPermitNumber || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-cream/30 mb-1">Payment Method</p>
+            <p className="text-cream/80">{paymentLabel[customer.preferredPaymentMethod || 'no_preference']}</p>
+          </div>
+        </div>
+        <p className="text-[10px] italic text-cream/30 mt-2">
+          Email the brewery if any of this needs updating.
+        </p>
+      </div>
       <div>
         <span className="section-label mb-4 block">Account Information</span>
         <form onSubmit={handleSave} className="card space-y-4">

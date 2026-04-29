@@ -218,7 +218,6 @@ export async function notifyOrderPlaced(args: {
   subtotal: number;
   totalDeposit: number;
   total: number;
-  deliveryDate: string;
   notes?: string;
 }): Promise<void> {
   const itemRows = args.items
@@ -305,12 +304,11 @@ export async function notifyOrderStatusChanged(args: {
   customerEmail: string;
   customerName: string;
   newStatus: 'confirmed' | 'completed';
-  deliveryDate: string;
 }): Promise<void> {
   const copyByStatus: Record<typeof args.newStatus, { title: string; lead: string }> = {
     confirmed: {
       title: `Order ${args.orderId} confirmed`,
-      lead: `Your order is confirmed and scheduled for delivery on <strong style="color:#9E7A3B;">${escapeHtml(args.deliveryDate)}</strong>. An invoice is on its way.`,
+      lead: `Your order is confirmed. We deliver Thursdays and Fridays — we'll schedule it for the next available day. An invoice is on its way.`,
     },
     completed: {
       title: `Order ${args.orderId} completed`,
@@ -462,7 +460,6 @@ export async function notifyKegReminder(args: {
   customerName: string;
   businessName: string;
   items: OrderLine[];
-  deliveryDate: string;
   portalUrl?: string;
 }): Promise<void> {
   const kegRows = args.items
@@ -480,7 +477,7 @@ export async function notifyKegReminder(args: {
       preheader: `We still have kegs out from order ${args.orderId}.`,
       body: `
         <p>${escapeHtml(args.customerName)} &mdash;</p>
-        <p style="margin:12px 0;">We still have kegs out from your order <strong>${escapeHtml(args.orderId)}</strong> (delivery ${escapeHtml(args.deliveryDate)}):</p>
+        <p style="margin:12px 0;">We still have kegs out from your order <strong>${escapeHtml(args.orderId)}</strong>:</p>
         <ul style="margin:8px 0 16px 18px;font-size:14px;">${kegRows}</ul>
         <p style="margin:12px 0;">When you&rsquo;re ready, log into the portal and submit a return request so we can pick them up on your next delivery and credit the deposits back.</p>
         ${
