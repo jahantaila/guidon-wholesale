@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn, formatAddress } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 export default function CustomerDetailPage() {
@@ -244,7 +244,7 @@ export default function CustomerDetailPage() {
             </a>
             {customer.phone && (
               <>
-                {' '}&middot; <span className="font-variant-tabular">{customer.phone}</span>
+                {' '}&middot; <span className="font-variant-tabular">{formatPhone(customer.phone)}</span>
               </>
             )}
           </p>

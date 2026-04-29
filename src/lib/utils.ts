@@ -86,6 +86,18 @@ export interface AddressParts {
   state?: string;
   zip?: string;
 }
+// Display US phone numbers in (NPA) NXX-XXXX form. Strips non-digits and keeps
+// the first 10 it finds; if the input doesn't have 10 digits we return it as-
+// typed so we don't munge international formats or partial entries on the way
+// in. Used in admin tables, application detail cards, customer detail header,
+// delivery route sheets — anywhere a phone is rendered for human reading.
+export function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = String(raw).replace(/\D/g, '');
+  if (digits.length !== 10) return String(raw);
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 export function formatAddress(parts: AddressParts): string {
   const street = (parts.streetAddress || '').trim();
   const city = (parts.city || '').trim();

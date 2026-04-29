@@ -6,6 +6,7 @@ import {
   generateId,
   getStatusColor,
   formatAddress,
+  formatPhone,
   isValidUsStateCode,
   US_STATES,
 } from "@/lib/utils";
@@ -115,6 +116,30 @@ describe("formatAddress", () => {
         zip: " 28801 ",
       }),
     ).toBe("1 X, Asheville, NC 28801");
+  });
+});
+
+describe("formatPhone", () => {
+  it("formats 10-digit US numbers as (NPA) NXX-XXXX", () => {
+    expect(formatPhone("8285550199")).toBe("(828) 555-0199");
+  });
+
+  it("strips non-digit punctuation before formatting", () => {
+    expect(formatPhone("(828) 555-0199")).toBe("(828) 555-0199");
+    expect(formatPhone("828-555-0199")).toBe("(828) 555-0199");
+    expect(formatPhone("828.555.0199")).toBe("(828) 555-0199");
+  });
+
+  it("returns the input unchanged when digit count != 10", () => {
+    // International or partial entries should not be munged.
+    expect(formatPhone("+1 828 555 0199")).toBe("+1 828 555 0199");
+    expect(formatPhone("555-0199")).toBe("555-0199");
+  });
+
+  it("returns empty string for null/undefined/empty", () => {
+    expect(formatPhone(null)).toBe("");
+    expect(formatPhone(undefined)).toBe("");
+    expect(formatPhone("")).toBe("");
   });
 });
 

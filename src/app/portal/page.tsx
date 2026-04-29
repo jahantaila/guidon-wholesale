@@ -1904,11 +1904,11 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
           </div>
           <div>
             <label className="block text-sm font-medium text-cream/40 mb-1.5">Contact Name</label>
-            <input className="input" value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
+            <input className="input" value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} autoComplete="name" />
           </div>
           <div>
             <label className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
-            <input className="input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+            <input type="tel" className="input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} autoComplete="tel" />
           </div>
           <div>
             <label className="block text-sm font-medium text-cream/40 mb-1.5">Street Address</label>
