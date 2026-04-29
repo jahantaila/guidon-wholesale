@@ -40,6 +40,7 @@ function rowToCustomer(row: any): Customer {
   const zip = (row.zip || '') as string;
   const legacy = (row.address || '') as string;
   const hasSplit = Boolean(street || city || state || zip);
+  const ppm = row.preferred_payment_method;
   return {
     id: row.id,
     businessName: row.business_name,
@@ -50,6 +51,9 @@ function rowToCustomer(row: any): Customer {
     city,
     state,
     zip,
+    abcPermitNumber: row.abc_permit_number ?? '',
+    preferredPaymentMethod:
+      ppm === 'check' || ppm === 'fintech' ? ppm : 'no_preference',
     notes: row.notes ?? '',
     tags: Array.isArray(row.tags) ? row.tags : [],
     autoSendInvoices: row.auto_send_invoices === true,
@@ -225,6 +229,8 @@ export async function createCustomer(customer: Customer): Promise<Customer> {
       // consumer still reading `address` directly keeps working until the
       // column is dropped.
       address: formatAddress(customer),
+      abc_permit_number: customer.abcPermitNumber || '',
+      preferred_payment_method: customer.preferredPaymentMethod || 'no_preference',
       // Persist the force-change-password flag when the approval flow sets
       // it. Default of false in the DB handles the admin-creates-customer
       // path where no temp password is involved.
@@ -276,6 +282,8 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
       };
       row.address = formatAddress(merged);
     }
+    if (updates.abcPermitNumber !== undefined) row.abc_permit_number = updates.abcPermitNumber;
+    if (updates.preferredPaymentMethod !== undefined) row.preferred_payment_method = updates.preferredPaymentMethod;
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.tags !== undefined) row.tags = updates.tags;
     if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;

@@ -6,11 +6,6 @@ import type { Order, Customer } from '@/lib/types';
 import { formatCurrency, formatDate, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
-type DeliveryGroup = {
-  date: string;
-  orders: Order[];
-};
-
 export default function DeliveriesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -33,21 +28,17 @@ export default function DeliveriesPage() {
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-  // Group by delivery date — only pending + confirmed (not yet completed)
-  const groups: DeliveryGroup[] = (() => {
-    const byDate = new Map<string, Order[]>();
-    for (const o of orders) {
-      if (o.status !== 'pending' && o.status !== 'confirmed') continue;
-      if (!o.deliveryDate) continue;
-      if (!byDate.has(o.deliveryDate)) byDate.set(o.deliveryDate, []);
-      byDate.get(o.deliveryDate)!.push(o);
-    }
-    return Array.from(byDate.entries())
-      .map(([date, orders]) => ({ date, orders }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  })();
-
-  const today = new Date().toISOString().slice(0, 10);
+  // Pending + confirmed deliveries, oldest first so the brewery loads the
+  // route in the order they were placed. Per-order delivery dates were
+  // removed in 2026-04-29 — the brewery delivers Thursdays + Fridays and
+  // schedules these as one pile.
+  const queue: Order[] = orders
+    .filter((o) => o.status === 'pending' || o.status === 'confirmed')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const totalKegs = queue.reduce(
+    (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
+    0,
+  );
 
   return (
     <div className="space-y-8">
@@ -88,7 +79,7 @@ export default function DeliveriesPage() {
           <div className="skeleton h-16 w-full" />
           <div className="skeleton h-16 w-full" />
         </div>
-      ) : groups.length === 0 ? (
+      ) : queue.length === 0 ? (
         <p className="italic text-[var(--muted)]">
           No pending or confirmed deliveries. All caught up.
         </p>
@@ -113,51 +104,31 @@ export default function DeliveriesPage() {
             </p>
           </div>
 
-          {groups.map((group) => {
-            const isToday = group.date === today;
-            const isPast = group.date < today;
-            return (
-              <section key={group.date} className="print:break-inside-avoid">
-                {/* Date header — brass accent in screen, black on print */}
-                <div
-                  className="flex items-baseline gap-4 pb-2 mb-4 border-b-2"
-                  style={{ borderColor: 'var(--brass)' }}
-                >
-                  <h3
-                    className="font-display"
-                    style={{
-                      fontSize: '1.75rem',
-                      fontVariationSettings: "'opsz' 48",
-                      fontWeight: 500,
-                      color: 'var(--ink)',
-                    }}
-                  >
-                    {formatDate(group.date)}
-                  </h3>
-                  {isToday && (
-                    <span className="section-label" style={{ color: 'var(--brass)' }}>
-                      Today
-                    </span>
-                  )}
-                  {isPast && (
-                    <span className="section-label" style={{ color: 'var(--ruby)' }}>
-                      Overdue
-                    </span>
-                  )}
-                  <span className="text-sm italic ml-auto" style={{ color: 'var(--muted)' }}>
-                    {group.orders.length} {group.orders.length === 1 ? 'delivery' : 'deliveries'},{' '}
-                    {group.orders.reduce(
-                      (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
-                      0,
-                    )}{' '}
-                    kegs
-                  </span>
-                </div>
+          <section className="print:break-inside-avoid">
+            <div
+              className="flex items-baseline gap-4 pb-2 mb-4 border-b-2"
+              style={{ borderColor: 'var(--brass)' }}
+            >
+              <h3
+                className="font-display"
+                style={{
+                  fontSize: '1.75rem',
+                  fontVariationSettings: "'opsz' 48",
+                  fontWeight: 500,
+                  color: 'var(--ink)',
+                }}
+              >
+                Pending Deliveries
+              </h3>
+              <span className="text-sm italic ml-auto" style={{ color: 'var(--muted)' }}>
+                {queue.length} {queue.length === 1 ? 'delivery' : 'deliveries'}, {totalKegs} kegs
+              </span>
+            </div>
 
-                <ol className="space-y-5 print:space-y-3">
-                  {group.orders.map((order, idx) => {
-                    const customer = customerMap.get(order.customerId);
-                    const totalKegs = order.items.reduce((s, i) => s + i.quantity, 0);
+            <ol className="space-y-5 print:space-y-3">
+              {queue.map((order, idx) => {
+                const customer = customerMap.get(order.customerId);
+                const orderKegs = order.items.reduce((s, i) => s + i.quantity, 0);
                     return (
                       <li
                         key={order.id}
@@ -256,7 +227,7 @@ export default function DeliveriesPage() {
                             {formatCurrency(order.total)}
                           </p>
                           <p className="text-xs font-variant-tabular" style={{ color: 'var(--muted)' }}>
-                            {totalKegs} keg{totalKegs === 1 ? '' : 's'} out
+                            {orderKegs} keg{orderKegs === 1 ? '' : 's'} out
                           </p>
                           <p className="text-xs uppercase tracking-wider font-ui mt-1" style={{ color: order.status === 'confirmed' ? 'var(--pine)' : 'var(--ember)' }}>
                             {order.status}
@@ -279,8 +250,6 @@ export default function DeliveriesPage() {
                   })}
                 </ol>
               </section>
-            );
-          })}
 
           {/* Derby Digital print footer — only visible in print */}
           <div className="hidden print:block mt-8 pt-4 border-t border-gray-300 text-center text-[10px] text-gray-500">

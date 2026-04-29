@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     const zip = (customerRow.zip as string) || '';
     const legacyAddress = (customerRow.address as string) || '';
     const hasSplit = Boolean(splitStreet || city || state || zip);
+    const ppm = customerRow.preferred_payment_method;
     const customer = {
       id: customerRow.id,
       businessName: customerRow.business_name,
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
       city,
       state,
       zip,
+      abcPermitNumber: (customerRow.abc_permit_number as string) || '',
+      preferredPaymentMethod:
+        ppm === 'check' || ppm === 'fintech' ? ppm : 'no_preference',
       // Expose the temp-password flag so the portal UI can force a
       // change-password modal on first login after approval.
       mustChangePassword: customerRow.must_change_password === true,

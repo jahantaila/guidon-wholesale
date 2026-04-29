@@ -8,6 +8,14 @@ export interface Customer {
   city: string;
   state: string;
   zip: string;
+  /** ABC liquor permit / license number. Copied from the wholesale
+   * application at approval time. Surfaced on the customer's portal
+   * Account tab (read-only) and on invoices. Empty string for legacy
+   * customers approved before this column existed — display as 'N/A'. */
+  abcPermitNumber: string;
+  /** How the customer plans to pay. Defaults to 'no_preference' for
+   * legacy rows so the type stays narrow without optional. */
+  preferredPaymentMethod: PreferredPaymentMethod;
   password?: string;
   /** Brewery-only notes. Not visible to the customer. */
   notes?: string;
@@ -130,7 +138,11 @@ export interface Order {
   subtotal: number;
   totalDeposit: number;
   total: number;
-  deliveryDate: string;
+  /** @deprecated Customer-side delivery date selection was removed in
+   * 2026-04-29 per client request. The brewery delivers Thursdays and
+   * Fridays — admin schedules internally. Field kept on the type and
+   * column kept in the DB for legacy data, but new orders write `null`. */
+  deliveryDate?: string | null;
   notes: string;
   createdAt: string;
 }

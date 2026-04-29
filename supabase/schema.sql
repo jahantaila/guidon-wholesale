@@ -31,6 +31,15 @@ alter table customers
   add column if not exists state text not null default '',
   add column if not exists zip text not null default '';
 
+-- ABC permit + preferred payment method copied from the application at
+-- approval time so the customer record carries everything the brewery
+-- needs to invoice and license-check without re-fetching the application.
+-- Both default to '' so existing rows render as 'N/A' until admin fills them.
+alter table customers
+  add column if not exists abc_permit_number text not null default '',
+  add column if not exists preferred_payment_method text not null default 'no_preference'
+    check (preferred_payment_method in ('check', 'fintech', 'no_preference'));
+
 -- Row Level Security
 alter table customers enable row level security;
 -- Service role (admin client) can do everything

@@ -25,10 +25,6 @@ const STATUS_ACTION: Record<OrderStatus, { next?: OrderStatus; label: string; co
 
 type ViewMode = 'cards' | 'table' | 'kanban';
 
-// Delivery-window quick chips. "This week" = today through Sunday end-of-day.
-// Overdue = pending or confirmed with a deliveryDate before today.
-type DeliveryWindow = 'all' | 'today' | 'this-week' | 'overdue';
-
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -37,7 +33,6 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [customerFilter, setCustomerFilter] = useState<string>('all'); // customer id or 'all'
-  const [deliveryWindow, setDeliveryWindow] = useState<DeliveryWindow>('all');
   const [placedFrom, setPlacedFrom] = useState<string>('');
   const [placedTo, setPlacedTo] = useState<string>('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -118,33 +113,6 @@ export default function OrdersPage() {
     }
   }, []);
 
-  // Inline delivery-date edit from the order expand row. Admin can change
-  // when they'll deliver without touching Supabase.
-  const updateDeliveryDate = useCallback(async (order: Order, newDate: string) => {
-    if (!newDate || newDate === order.deliveryDate) return;
-    setUpdating(order.id);
-    try {
-      const res = await adminFetch('/api/orders', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: order.id, deliveryDate: newDate }),
-      });
-      if (res.ok) {
-        const updated = await res.json().catch(() => null);
-        setOrders((prev) => prev.map((o) => (o.id === order.id ? (updated ?? { ...o, deliveryDate: newDate }) : o)));
-        setReminderToast(`Delivery for ${order.id} moved to ${newDate}.`);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setReminderToast(data?.error || `Failed to update delivery date.`);
-      }
-    } catch {
-      setReminderToast('Network error updating delivery date.');
-    } finally {
-      setUpdating(null);
-      window.setTimeout(() => setReminderToast(''), 4000);
-    }
-  }, []);
-
   const sendReminder = useCallback(async (order: Order) => {
     try {
       const res = await adminFetch('/api/admin/remind-kegs', {
@@ -165,43 +133,19 @@ export default function OrdersPage() {
     }
   }, []);
 
-  // Filter pipeline — composes status + customer + delivery window + date
-  // range + free-text search. AND across filters. Kept as a single useMemo
-  // so we don't recompute date boundaries on every render.
+  // Filter pipeline — composes status + customer + date range + free-text
+  // search. AND across filters. Delivery-window chips were removed in
+  // 2026-04-29 along with the rest of the delivery-date UX per client.
   const sorted = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
-    // End of current week = upcoming Sunday (Sunday = 0 in getDay).
-    const weekEnd = new Date(today);
-    const daysUntilSunday = (7 - today.getDay()) % 7; // today is Sunday -> 0
-    weekEnd.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday));
-    const weekEndStr = weekEnd.toISOString().slice(0, 10);
-
-    const isOpenForDelivery = (o: Order) =>
-      o.status === 'pending' || o.status === 'confirmed';
-
     const q = search.trim().toLowerCase();
     const filteredOrders = orders.filter((o) => {
-      // Status
       if (filter !== 'all' && o.status !== filter) return false;
-      // Customer
       if (customerFilter !== 'all' && o.customerId !== customerFilter) return false;
-      // Delivery window
-      if (deliveryWindow !== 'all') {
-        const dd = o.deliveryDate;
-        if (!dd) return false;
-        if (deliveryWindow === 'today' && dd !== todayStr) return false;
-        if (deliveryWindow === 'this-week' && (dd < todayStr || dd > weekEndStr)) return false;
-        if (deliveryWindow === 'overdue' && !(isOpenForDelivery(o) && dd < todayStr)) return false;
-      }
-      // Date placed range
       if (placedFrom || placedTo) {
         const placed = o.createdAt.slice(0, 10);
         if (placedFrom && placed < placedFrom) return false;
         if (placedTo && placed > placedTo) return false;
       }
-      // Search by id / business name / product name
       if (q) {
         const cust = customerMap.get(o.customerId);
         const haystack = [
@@ -218,27 +162,7 @@ export default function OrdersPage() {
     return filteredOrders.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [orders, filter, customerFilter, deliveryWindow, placedFrom, placedTo, search, customerMap]);
-
-  // Count of orders matching each delivery-window chip (for the chip's number).
-  const windowCounts = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
-    const weekEnd = new Date(today);
-    const daysUntilSunday = (7 - today.getDay()) % 7;
-    weekEnd.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday));
-    const weekEndStr = weekEnd.toISOString().slice(0, 10);
-    let todayN = 0, thisWeekN = 0, overdueN = 0;
-    for (const o of orders) {
-      const dd = o.deliveryDate;
-      if (!dd) continue;
-      if (dd === todayStr) todayN++;
-      if (dd >= todayStr && dd <= weekEndStr) thisWeekN++;
-      if ((o.status === 'pending' || o.status === 'confirmed') && dd < todayStr) overdueN++;
-    }
-    return { today: todayN, thisWeek: thisWeekN, overdue: overdueN };
-  }, [orders]);
+  }, [orders, filter, customerFilter, placedFrom, placedTo, search, customerMap]);
 
   const activeCustomers = useMemo(() => {
     // Only customers that actually have orders on file — keeps the dropdown
@@ -252,7 +176,6 @@ export default function OrdersPage() {
   const filtersActive =
     filter !== 'all' ||
     customerFilter !== 'all' ||
-    deliveryWindow !== 'all' ||
     placedFrom !== '' ||
     placedTo !== '' ||
     search.trim() !== '';
@@ -260,7 +183,6 @@ export default function OrdersPage() {
   const clearFilters = () => {
     setFilter('all');
     setCustomerFilter('all');
-    setDeliveryWindow('all');
     setPlacedFrom('');
     setPlacedTo('');
     setSearch('');
@@ -355,42 +277,8 @@ export default function OrdersPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {/* Delivery-window chips */}
-          <span className="section-label mr-1" style={{ color: 'var(--muted)' }}>Delivery:</span>
-          {([
-            { key: 'all', label: 'Any', n: null },
-            { key: 'today', label: 'Today', n: windowCounts.today },
-            { key: 'this-week', label: 'This week', n: windowCounts.thisWeek },
-            { key: 'overdue', label: 'Overdue', n: windowCounts.overdue },
-          ] as const).map((chip) => (
-            <button
-              key={chip.key}
-              onClick={() => setDeliveryWindow(chip.key)}
-              className="px-2.5 py-1 font-ui font-semibold border transition-colors"
-              style={{
-                borderRadius: '3px',
-                borderColor:
-                  deliveryWindow === chip.key
-                    ? 'var(--brass)'
-                    : chip.key === 'overdue' && (chip.n ?? 0) > 0
-                      ? 'var(--ruby)'
-                      : 'var(--divider)',
-                background: deliveryWindow === chip.key ? 'var(--brass)' : 'transparent',
-                color:
-                  deliveryWindow === chip.key
-                    ? 'var(--paper)'
-                    : chip.key === 'overdue' && (chip.n ?? 0) > 0
-                      ? 'var(--ruby)'
-                      : 'var(--ink)',
-              }}
-            >
-              {chip.label}
-              {chip.n !== null && <span style={{ opacity: 0.6, marginLeft: 4 }}>({chip.n})</span>}
-            </button>
-          ))}
-
           {/* Customer dropdown */}
-          <span className="section-label ml-3 mr-1" style={{ color: 'var(--muted)' }}>Customer:</span>
+          <span className="section-label mr-1" style={{ color: 'var(--muted)' }}>Customer:</span>
           <select
             value={customerFilter}
             onChange={(e) => setCustomerFilter(e.target.value)}
@@ -475,7 +363,6 @@ export default function OrdersPage() {
           setExpandedId={setExpandedId}
           onStatusChange={handleStatusChange}
           sendReminder={sendReminder}
-          updateDeliveryDate={updateDeliveryDate}
           updating={updating}
         />
       ) : (
@@ -487,7 +374,6 @@ export default function OrdersPage() {
           setExpandedId={setExpandedId}
           onStatusChange={handleStatusChange}
           sendReminder={sendReminder}
-          updateDeliveryDate={updateDeliveryDate}
           updating={updating}
         />
       )}
@@ -507,7 +393,6 @@ function CardsView({
   setExpandedId,
   onStatusChange,
   sendReminder,
-  updateDeliveryDate,
   updating,
 }: {
   orders: Order[];
@@ -517,19 +402,14 @@ function CardsView({
   setExpandedId: (id: string | null) => void;
   onStatusChange: (o: Order, next: OrderStatus) => void;
   sendReminder: (o: Order) => void;
-  updateDeliveryDate: (o: Order, newDate: string) => void;
   updating: string | null;
 }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {orders.map((order) => {
         const cust = customerMap.get(order.customerId);
         const inv = invoiceByOrderId.get(order.id);
         const action = STATUS_ACTION[order.status];
-        const dd = new Date(order.deliveryDate);
-        const overdue = (order.status === 'pending' || order.status === 'confirmed') && dd < today;
         const itemsCount = order.items.reduce((n, i) => n + i.quantity, 0);
         const isExpanded = expandedId === order.id;
 
@@ -576,21 +456,6 @@ function CardsView({
                 <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Placed</span>
                 <p className="font-variant-tabular text-xs" style={{ color: 'var(--ink)' }}>
                   {formatDate(order.createdAt)}
-                </p>
-              </div>
-              <div className="col-span-2">
-                <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Delivery</span>
-                <p
-                  className="font-variant-tabular"
-                  style={{ color: overdue ? 'var(--ruby)' : 'var(--ink)' }}
-                  title={overdue ? 'Past delivery date without being marked completed' : undefined}
-                >
-                  {formatDate(order.deliveryDate)}
-                  {overdue && (
-                    <span className="ml-1 text-[9px] uppercase tracking-wider font-semibold">
-                      · late
-                    </span>
-                  )}
                 </p>
               </div>
               <div>
@@ -676,21 +541,6 @@ function CardsView({
                   </p>
                 )}
 
-                {/* Inline delivery-date edit for open orders */}
-                {(order.status === 'pending' || order.status === 'confirmed') && (
-                  <div className="flex items-center gap-2 pt-2 border-t border-divider text-xs">
-                    <span className="section-label" style={{ color: 'var(--muted)' }}>Reschedule</span>
-                    <input
-                      type="date"
-                      defaultValue={order.deliveryDate}
-                      onBlur={(e) => updateDeliveryDate(order, e.target.value)}
-                      className="input text-xs py-1"
-                      style={{ maxWidth: 140 }}
-                      disabled={updating === order.id}
-                    />
-                  </div>
-                )}
-
                 {/* Keg-return reminder + cancel */}
                 <div className="flex items-center gap-3 pt-2 border-t border-divider">
                   {(order.status === 'pending' || order.status === 'confirmed') && (
@@ -740,7 +590,6 @@ function TableView({
   setExpandedId,
   onStatusChange,
   sendReminder,
-  updateDeliveryDate,
   updating,
 }: {
   orders: Order[];
@@ -750,7 +599,6 @@ function TableView({
   setExpandedId: (id: string | null) => void;
   onStatusChange: (o: Order, next: OrderStatus) => void;
   sendReminder: (o: Order) => void;
-  updateDeliveryDate: (o: Order, newDate: string) => void;
   updating: string | null;
 }) {
   return (
@@ -760,7 +608,6 @@ function TableView({
           <th className="table-header">Order ID</th>
           <th className="table-header">Customer</th>
           <th className="table-header">Date</th>
-          <th className="table-header">Delivery</th>
           <th className="table-header">Items</th>
           <th className="table-header">Status</th>
           <th className="table-header text-right">Total</th>
@@ -783,19 +630,6 @@ function TableView({
                   {customerMap.get(order.customerId)?.businessName || order.customerId}
                 </td>
                 <td className="table-cell font-variant-tabular">{formatDate(order.createdAt)}</td>
-                <td className="table-cell font-variant-tabular">
-                  {(() => {
-                    const now = new Date(); now.setHours(0, 0, 0, 0);
-                    const dd = new Date(order.deliveryDate);
-                    const overdue = (order.status === 'pending' || order.status === 'confirmed') && dd < now;
-                    return (
-                      <span style={{ color: overdue ? 'var(--ruby)' : undefined }} title={overdue ? 'Past delivery date without being marked completed' : undefined}>
-                        {formatDate(order.deliveryDate)}
-                        {overdue && <span className="ml-1 text-[9px] uppercase tracking-wider">· late</span>}
-                      </span>
-                    );
-                  })()}
-                </td>
                 <td className="table-cell text-right font-variant-tabular">{order.items.length}</td>
                 <td className="table-cell">
                   <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
@@ -825,7 +659,7 @@ function TableView({
               </tr>
               {isExpanded && (
                 <tr>
-                  <td colSpan={8} style={{ padding: '1rem 1rem 1.5rem', background: 'color-mix(in srgb, var(--surface) 50%, transparent)' }}>
+                  <td colSpan={7} style={{ padding: '1rem 1rem 1.5rem', background: 'color-mix(in srgb, var(--surface) 50%, transparent)' }}>
                     <div className="space-y-3">
                       <div>
                         <span className="section-label mb-2 block">Order Items</span>
@@ -888,24 +722,6 @@ function TableView({
                         <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
                           Notes: {order.notes}
                         </p>
-                      )}
-                      {/* Inline delivery-date edit for pending/confirmed orders.
-                          Customer calls to push back delivery — admin can adjust
-                          without touching Supabase. Disabled once completed. */}
-                      {(order.status === 'pending' || order.status === 'confirmed') && (
-                        <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
-                          <span className="section-label" style={{ color: 'var(--muted)' }}>Delivery date</span>
-                          <input
-                            type="date"
-                            defaultValue={order.deliveryDate}
-                            onBlur={(e) => updateDeliveryDate(order, e.target.value)}
-                            className="input text-xs max-w-[160px]"
-                            disabled={updating === order.id}
-                          />
-                          <span className="text-xs italic" style={{ color: 'var(--muted)' }}>
-                            Saves on blur.
-                          </span>
-                        </div>
                       )}
                       {/* Invoice link — drops admin straight into billing context */}
                       <div className="flex items-center gap-3 pt-2 border-t border-divider text-sm">
@@ -1038,7 +854,7 @@ function KanbanView({
                     </p>
                     <p className="text-xs font-variant-tabular" style={{ color: 'var(--muted)' }}>
                       {order.items.length} item{order.items.length === 1 ? '' : 's'} &middot;{' '}
-                      delivery {formatDate(order.deliveryDate)}
+                      placed {formatDate(order.createdAt)}
                     </p>
                     {action.next && (
                       <button

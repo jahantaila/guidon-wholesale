@@ -163,7 +163,7 @@ async function fireInvoiceEmail(invoice: Invoice) {
   </td></tr>
   <tr><td style="padding:20px 28px;font-size:15px;">
     <p>${escapeHtml(customer.contactName)} at ${escapeHtml(customer.businessName)},</p>
-    <p style="margin:12px 0;">Your invoice for order <strong>${escapeHtml(invoice.orderId)}</strong>${order?.deliveryDate ? ` (delivery ${escapeHtml(order.deliveryDate)})` : ''} is below. Payment due on delivery.</p>
+    <p style="margin:12px 0;">Your invoice for order <strong>${escapeHtml(invoice.orderId)}</strong> is below. Payment due on delivery.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:14px;margin:16px 0;">
       <thead><tr style="background:#EEE5CE;">
         <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6B5F48;text-transform:uppercase;letter-spacing:0.08em;">Beer</th>

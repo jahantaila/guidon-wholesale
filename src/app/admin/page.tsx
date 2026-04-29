@@ -101,10 +101,20 @@ export default function AdminDashboard() {
   // Build activity feed from orders, applications, invoices
   type ActivityItem = { type: string; title: string; detail: string; date: string };
   const activityFeed: ActivityItem[] = [];
+  // Title verb tracks the order's current status so a confirmed order
+  // doesn't keep reading as "New order" in the activity feed.
+  const orderActivityTitle = (o: { id: string; status: string }) => {
+    switch (o.status) {
+      case 'confirmed': return `Confirmed order ${o.id}`;
+      case 'completed': return `Completed order ${o.id}`;
+      case 'cancelled': return `Cancelled order ${o.id}`;
+      default: return `New order ${o.id}`;
+    }
+  };
   orders.forEach((o) => {
     activityFeed.push({
       type: 'order',
-      title: `New order ${o.id}`,
+      title: orderActivityTitle(o),
       detail: customerMap.get(o.customerId)?.businessName || 'Unknown',
       date: o.createdAt,
     });
@@ -130,10 +140,12 @@ export default function AdminDashboard() {
   activityFeed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const recentActivity = activityFeed.slice(0, 10);
 
-  // Upcoming deliveries
+  // Pending delivery queue — sorted oldest first since per-order delivery
+  // dates were removed. Brewery delivers Thu/Fri and works through the
+  // backlog in placement order.
   const upcomingDeliveries = [...orders]
     .filter((o) => o.status === 'pending' || o.status === 'confirmed')
-    .sort((a, b) => new Date(a.deliveryDate).getTime() - new Date(b.deliveryDate).getTime())
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(0, 8);
 
   // Overdue invoices
@@ -510,8 +522,8 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="font-semibold text-[var(--ink)] font-variant-tabular">
-                      {formatDate(order.deliveryDate)}
+                    <p className="text-xs text-[var(--muted)] font-variant-tabular">
+                      placed {formatDate(order.createdAt)}
                     </p>
                     <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
                   </div>

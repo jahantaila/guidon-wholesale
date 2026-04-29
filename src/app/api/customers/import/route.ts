@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
       const splitStreet = str(r.streetAddress);
       const legacyAddress = str(r.address);
+      const ppm = str(r.preferredPaymentMethod).toLowerCase();
       const customer: Customer = {
         id: generateId('cust'),
         businessName,
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
         city: str(r.city),
         state: str(r.state).toUpperCase(),
         zip: str(r.zip),
+        abcPermitNumber: str(r.abcPermitNumber),
+        preferredPaymentMethod:
+          ppm === 'check' || ppm === 'fintech' ? ppm : 'no_preference',
         password: str(r.password),
         notes: str(r.notes),
         tags: typeof r.tags === 'string'

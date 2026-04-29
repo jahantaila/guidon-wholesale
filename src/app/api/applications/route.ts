@@ -158,6 +158,11 @@ export async function PUT(request: NextRequest) {
           city: app.city,
           state: app.state,
           zip: app.zip,
+          // Copy ABC permit + payment preference from the application so the
+          // customer record carries everything the brewery needs to invoice
+          // and license-check without re-fetching the application later.
+          abcPermitNumber: app.abcPermitNumber || '',
+          preferredPaymentMethod: app.preferredPaymentMethod || 'no_preference',
           password: tempPassword, // only used by file-based fallback auth
           // Force the customer to change their password on first login —
           // the auto-generated temp is emailed in plaintext and shouldn't
