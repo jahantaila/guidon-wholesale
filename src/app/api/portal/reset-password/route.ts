@@ -38,10 +38,20 @@ export async function POST(request: NextRequest) {
       const sb = createAdminClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const adminApi = (sb.auth as any).admin;
+      // Compute the redirect target so Supabase's recovery link lands on
+      // our /portal page (where the recovery handler reads the access_token
+      // from the URL hash). Falls back to NEXT_PUBLIC_APP_URL, which is the
+      // standard env var Vercel sets to the deployment URL. Without this,
+      // generateLink uses the project's `site_url` from Supabase Auth config
+      // — which used to point at localhost in prod. Belt + suspenders.
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+        || new URL(request.url).origin;
+      const redirectTo = `${appUrl}/portal`;
       if (adminApi?.generateLink) {
         const res = await adminApi.generateLink({
           type: 'recovery',
           email,
+          options: { redirectTo },
         });
         if (res?.data?.properties?.action_link) {
           await send({
