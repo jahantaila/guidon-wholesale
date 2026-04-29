@@ -248,7 +248,7 @@ export default function ProductionPage() {
               <th className="table-header text-right">Committed</th>
               <th className="table-header text-right">On Hand</th>
               <th className="table-header text-right">Deficit</th>
-              <th className="table-header">Earliest Delivery</th>
+              <th className="table-header">Earliest Owed</th>
               <th className="table-header">Back In Stock By</th>
               <th className="table-header text-right">Action</th>
             </tr>
