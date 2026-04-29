@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Customer, Order, Invoice } from '@/lib/types';
-import { formatCurrency, formatDate, cn, US_STATES } from '@/lib/utils';
+import { formatCurrency, formatDate, cn, US_STATES, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
@@ -297,33 +297,36 @@ export default function CustomersPage() {
             </h3>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Business Name</label>
-                <input className="input" value={form.businessName} onChange={(e) => updateField('businessName', e.target.value)} required />
+                <label htmlFor="cust-businessName" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Business Name</label>
+                <input id="cust-businessName" className="input" value={form.businessName} onChange={(e) => updateField('businessName', e.target.value)} required />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Contact Name</label>
-                <input className="input" value={form.contactName} onChange={(e) => updateField('contactName', e.target.value)} required />
+                <label htmlFor="cust-contactName" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Contact Name</label>
+                <input id="cust-contactName" className="input" value={form.contactName} onChange={(e) => updateField('contactName', e.target.value)} required autoComplete="name" />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Email</label>
-                <input type="email" className="input" value={form.email} onChange={(e) => updateField('email', e.target.value)} required />
+                <label htmlFor="cust-email" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Email</label>
+                <input id="cust-email" type="email" className="input" value={form.email} onChange={(e) => updateField('email', e.target.value)} required autoComplete="email" />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Phone</label>
-                <input className="input" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required />
+                <label htmlFor="cust-phone" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Phone</label>
+                <input id="cust-phone" type="tel" className="input" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} required autoComplete="tel" />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Street Address</label>
-                <input className="input" value={form.streetAddress} onChange={(e) => updateField('streetAddress', e.target.value)} required autoComplete="street-address" />
+                <label htmlFor="cust-streetAddress" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Street Address</label>
+                <input id="cust-streetAddress" className="input" value={form.streetAddress} onChange={(e) => updateField('streetAddress', e.target.value)} required autoComplete="street-address" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* 1fr / 1.5fr / 1fr keeps State wide enough for the longest US name
+                 ("District of Columbia") in the modal's narrower width — at the
+                 default grid-cols-3, "North Carolina" was clipping mid-word. */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.5fr_1fr] gap-3">
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>City</label>
-                  <input className="input" value={form.city} onChange={(e) => updateField('city', e.target.value)} required autoComplete="address-level2" />
+                  <label htmlFor="cust-city" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>City</label>
+                  <input id="cust-city" className="input" value={form.city} onChange={(e) => updateField('city', e.target.value)} required autoComplete="address-level2" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>State</label>
-                  <select className="input" value={form.state} onChange={(e) => updateField('state', e.target.value)} required autoComplete="address-level1">
+                  <label htmlFor="cust-state" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>State</label>
+                  <select id="cust-state" className="input" value={form.state} onChange={(e) => updateField('state', e.target.value)} required autoComplete="address-level1">
                     <option value="">Select...</option>
                     {US_STATES.map((s) => (
                       <option key={s.code} value={s.code}>{s.name}</option>
@@ -331,8 +334,8 @@ export default function CustomersPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Zip</label>
-                  <input className="input" value={form.zip} onChange={(e) => updateField('zip', e.target.value)} required autoComplete="postal-code" />
+                  <label htmlFor="cust-zip" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Zip</label>
+                  <input id="cust-zip" className="input" value={form.zip} onChange={(e) => updateField('zip', e.target.value)} required autoComplete="postal-code" />
                 </div>
               </div>
               {!editingId && (
@@ -413,7 +416,7 @@ function TableView({
                   </td>
                   <td className="table-cell">
                     <div>{c.contactName}</div>
-                    <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{c.phone}</div>
+                    <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{formatPhone(c.phone)}</div>
                   </td>
                   <td className="table-cell text-right font-variant-tabular">{m?.orderCount ?? 0}</td>
                   <td className="table-cell text-right font-semibold font-variant-tabular">{formatCurrency(m?.ltv ?? 0)}</td>

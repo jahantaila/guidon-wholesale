@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { WholesaleApplication, Customer } from '@/lib/types';
-import { formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
+import { formatDate, cn, getStatusColor, US_STATES, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 // Use the shared badge-status-* classes so the paper-theme colors match
@@ -228,7 +228,7 @@ export default function ApplicationsPage() {
                 </div>
                 {expandedId === app.id && (
                   <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs animate-fade-in">
-                    <div><span className="text-cream/25">Phone:</span><p className="text-cream/60 mt-0.5">{app.phone || 'N/A'}</p></div>
+                    <div><span className="text-cream/25">Phone:</span><p className="text-cream/60 mt-0.5">{app.phone ? formatPhone(app.phone) : 'N/A'}</p></div>
                     <div className="sm:col-span-2"><span className="text-cream/25">Address:</span><p className="text-cream/60 mt-0.5">{formatAddress(app) || 'N/A'}</p></div>
                     <div><span className="text-cream/25">ABC Permit:</span><p className="text-cream/60 mt-0.5 font-mono">{app.abcPermitNumber || 'N/A'}</p></div>
                     <div><span className="text-cream/25">Business Type:</span><p className="text-cream/60 mt-0.5">{app.businessType || 'N/A'}</p></div>
@@ -265,6 +265,7 @@ export default function ApplicationsPage() {
                     <th className="table-header">Contact</th>
                     <th className="table-header">Email</th>
                     <th className="table-header">Type</th>
+                    <th className="table-header">ABC Permit</th>
                     <th className="table-header">Date</th>
                     <th className="table-header">Status</th>
                   </tr>
@@ -276,6 +277,7 @@ export default function ApplicationsPage() {
                       <td className="table-cell">{app.contactName}</td>
                       <td className="table-cell text-cream/40">{app.email}</td>
                       <td className="table-cell text-cream/40">{app.businessType || '—'}</td>
+                      <td className="table-cell text-cream/40 font-mono text-xs">{app.abcPermitNumber || '—'}</td>
                       <td className="table-cell text-cream/30">{formatDate(app.createdAt)}</td>
                       <td className="table-cell">
                         <span className={cn('badge-sm', statusColor(app.status || 'pending'))}>
@@ -316,40 +318,41 @@ export default function ApplicationsPage() {
             ) : (
               <form onSubmit={handleCreateCustomer} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Business Name</label>
-                  <input className="input" value={customerForm.businessName}
+                  <label htmlFor="appcust-businessName" className="block text-sm font-medium text-cream/40 mb-1.5">Business Name</label>
+                  <input id="appcust-businessName" className="input" value={customerForm.businessName}
                     onChange={e => setCustomerForm(p => ({ ...p, businessName: e.target.value }))} required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Contact Name</label>
-                  <input className="input" value={customerForm.contactName}
-                    onChange={e => setCustomerForm(p => ({ ...p, contactName: e.target.value }))} required />
+                  <label htmlFor="appcust-contactName" className="block text-sm font-medium text-cream/40 mb-1.5">Contact Name</label>
+                  <input id="appcust-contactName" className="input" value={customerForm.contactName}
+                    onChange={e => setCustomerForm(p => ({ ...p, contactName: e.target.value }))} required autoComplete="name" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
-                  <input type="email" className="input" value={customerForm.email}
-                    onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))} required />
+                  <label htmlFor="appcust-email" className="block text-sm font-medium text-cream/40 mb-1.5">Email</label>
+                  <input id="appcust-email" type="email" className="input" value={customerForm.email}
+                    onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))} required autoComplete="email" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
-                  <input className="input" value={customerForm.phone}
-                    onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))} />
+                  <label htmlFor="appcust-phone" className="block text-sm font-medium text-cream/40 mb-1.5">Phone</label>
+                  <input id="appcust-phone" type="tel" className="input" value={customerForm.phone}
+                    onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))} autoComplete="tel" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">Street Address</label>
-                  <input className="input" value={customerForm.streetAddress}
-                    onChange={e => setCustomerForm(p => ({ ...p, streetAddress: e.target.value }))} />
+                  <label htmlFor="appcust-streetAddress" className="block text-sm font-medium text-cream/40 mb-1.5">Street Address</label>
+                  <input id="appcust-streetAddress" className="input" value={customerForm.streetAddress}
+                    onChange={e => setCustomerForm(p => ({ ...p, streetAddress: e.target.value }))} autoComplete="street-address" />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1fr / 1.5fr / 1fr — see admin/customers comment. */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.5fr_1fr] gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-cream/40 mb-1.5">City</label>
-                    <input className="input" value={customerForm.city}
-                      onChange={e => setCustomerForm(p => ({ ...p, city: e.target.value }))} />
+                    <label htmlFor="appcust-city" className="block text-sm font-medium text-cream/40 mb-1.5">City</label>
+                    <input id="appcust-city" className="input" value={customerForm.city}
+                      onChange={e => setCustomerForm(p => ({ ...p, city: e.target.value }))} autoComplete="address-level2" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-cream/40 mb-1.5">State</label>
-                    <select className="input" value={customerForm.state}
-                      onChange={e => setCustomerForm(p => ({ ...p, state: e.target.value }))}>
+                    <label htmlFor="appcust-state" className="block text-sm font-medium text-cream/40 mb-1.5">State</label>
+                    <select id="appcust-state" className="input" value={customerForm.state}
+                      onChange={e => setCustomerForm(p => ({ ...p, state: e.target.value }))} autoComplete="address-level1">
                       <option value="">Select...</option>
                       {US_STATES.map((s) => (
                         <option key={s.code} value={s.code}>{s.name}</option>
@@ -357,16 +360,16 @@ export default function ApplicationsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-cream/40 mb-1.5">Zip</label>
-                    <input className="input" value={customerForm.zip}
-                      onChange={e => setCustomerForm(p => ({ ...p, zip: e.target.value }))} />
+                    <label htmlFor="appcust-zip" className="block text-sm font-medium text-cream/40 mb-1.5">Zip</label>
+                    <input id="appcust-zip" className="input" value={customerForm.zip}
+                      onChange={e => setCustomerForm(p => ({ ...p, zip: e.target.value }))} autoComplete="postal-code" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-cream/40 mb-1.5">
+                  <label htmlFor="appcust-password" className="block text-sm font-medium text-cream/40 mb-1.5">
                     {tempPassword ? 'Temporary Password' : 'Password'}
                   </label>
-                  <input type="text" className="input font-mono" placeholder="Set a login password" value={customerForm.password}
+                  <input id="appcust-password" type="text" className="input font-mono" placeholder="Set a login password" value={customerForm.password}
                     onChange={e => setCustomerForm(p => ({ ...p, password: e.target.value }))} />
                   <p className="text-[10px] text-cream/40 mt-1">
                     {tempPassword
