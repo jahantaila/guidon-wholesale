@@ -199,20 +199,98 @@ function ForceChangePassword({
 /* ================================================================== */
 
 function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
-  // Two-step login flow:
-  //   mode='choose'  → landing screen with Sign In / Become a customer buttons
-  //   mode='signin'  → email + password form (revealed after clicking Sign In)
-  // Changed from a direct-to-form screen per brewery feedback — customers
-  // didn't realize there was an apply-for-wholesale path from the portal
-  // screen. Surfacing both options equally fixes the "how do I sign up?"
-  // cold-visitor drop-off.
-  const [mode, setMode] = useState<'choose' | 'signin'>('choose');
+  // Three-mode login flow:
+  //   mode='choose'   → landing screen with Sign In / Become a customer buttons
+  //   mode='signin'   → email + password form (revealed after clicking Sign In)
+  //   mode='recovery' → "Set new password" form, entered automatically when
+  //                     the user clicks the reset link in their email and
+  //                     lands here with #access_token=...&type=recovery in
+  //                     the URL hash. Without this, users hit the login screen
+  //                     with no indication their reset attempt did anything.
+  const [mode, setMode] = useState<'choose' | 'signin' | 'recovery'>('choose');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [recoveryNewPw, setRecoveryNewPw] = useState('');
+  const [recoveryConfirmPw, setRecoveryConfirmPw] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState('');
+
+  // Recovery flow: read the access_token + refresh_token Supabase appends to
+  // the URL hash after the user clicks the reset link, hand them to a Supabase
+  // browser client, and switch the UI to the "set new password" form.
+  // Hash-based auth tokens are intentionally fragment-only (never hit the
+  // server) — clear the hash after parsing so refreshes don't re-trigger.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token') || '';
+    const type = params.get('type');
+    if (!accessToken || type !== 'recovery') return;
+    (async () => {
+      try {
+        const { createBrowserClient } = await import('@/lib/supabase');
+        const sb = createBrowserClient();
+        const { error: setErr } = await sb.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (setErr) {
+          setError('Reset link is invalid or expired. Request a new one.');
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
+        }
+        setMode('recovery');
+        // Strip the tokens from the visible URL so a copy-paste of the page
+        // URL doesn't leak them.
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch {
+        setError('Could not start the password reset. Please try the link again.');
+      }
+    })();
+  }, []);
+
+  async function handleRecoverySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (recoveryNewPw.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (recoveryNewPw !== recoveryConfirmPw) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { createBrowserClient } = await import('@/lib/supabase');
+      const sb = createBrowserClient();
+      const { error: updateErr } = await sb.auth.updateUser({ password: recoveryNewPw });
+      if (updateErr) {
+        setError(updateErr.message || 'Could not update your password. Try requesting a new reset link.');
+        return;
+      }
+      // Sign the Supabase session out so the next portal login uses the
+      // brewery's HttpOnly cookie path, not the recovery session. Then
+      // surface a success state and prompt the user to sign in normally.
+      await sb.auth.signOut().catch(() => undefined);
+      setRecoverySuccess('Password updated. Sign in below with your new password.');
+      setRecoveryNewPw('');
+      setRecoveryConfirmPw('');
+      // Auto-switch back to the signin form so the user can immediately try
+      // their new password.
+      setMode('signin');
+    } catch {
+      setError('Something went wrong updating your password.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -264,6 +342,34 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
               Become a customer, or receive info
             </Link>
           </div>
+        ) : mode === 'recovery' ? (
+          <form onSubmit={handleRecoverySubmit} className="card space-y-4">
+            <h2 className="text-lg font-heading font-bold text-cream">Set a new password</h2>
+            <p className="text-xs text-cream/40">
+              You clicked a password reset link. Set your new password below — you&rsquo;ll
+              use it to sign in next time.
+            </p>
+            <div>
+              <label htmlFor="recovery-newpw" className="block text-sm font-medium text-cream/40 mb-1.5">New Password</label>
+              <input id="recovery-newpw" type="password" autoComplete="new-password" autoFocus className="input"
+                placeholder="Min 6 characters" value={recoveryNewPw}
+                onChange={(e) => setRecoveryNewPw(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="recovery-confirmpw" className="block text-sm font-medium text-cream/40 mb-1.5">Confirm Password</label>
+              <input id="recovery-confirmpw" type="password" autoComplete="new-password" className="input"
+                placeholder="Re-enter new password" value={recoveryConfirmPw}
+                onChange={(e) => setRecoveryConfirmPw(e.target.value)} />
+            </div>
+            {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
+            <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
+              {submitting ? 'Updating...' : 'Set password'}
+            </button>
+            <button type="button" onClick={() => { setMode('choose'); setError(''); }}
+              className="w-full text-xs text-cream/40 hover:text-cream/70 transition-colors">
+              &larr; Back
+            </button>
+          </form>
         ) : (
           <form onSubmit={handleSubmit} className="card space-y-4">
             <div>
@@ -338,6 +444,11 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
             </div>
 
             {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
+            {recoverySuccess && (
+              <p className="text-sm" style={{ color: 'var(--pine)', background: 'color-mix(in srgb, var(--pine) 8%, transparent)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--pine)' }}>
+                {recoverySuccess}
+              </p>
+            )}
             {resetSent && (
               <p className="text-sm" style={{ color: 'var(--pine)', background: 'color-mix(in srgb, var(--pine) 8%, transparent)', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--pine)' }}>
                 If an account exists for <strong>{email.trim()}</strong>, a reset email is on the way. Check your inbox.
