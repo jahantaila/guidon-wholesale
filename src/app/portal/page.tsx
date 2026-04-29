@@ -468,9 +468,9 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 
   // Reorder-to-cart. Adds the most recent order's items to the ProductsTab
   // cart and switches to that tab so the user can review, adjust, add
-  // returns, pick a delivery date, and checkout. Prevents accidental
-  // one-click reorders (the prior implementation placed the order directly,
-  // which was dangerous if a customer misclicked).
+  // returns, and checkout. Prevents accidental one-click reorders (the
+  // prior implementation placed the order directly, which was dangerous
+  // if a customer misclicked).
   const [reorderToast, setReorderToast] = useState<string>('');
   // Seed payload handed to ProductsTab. Bumps a nonce on every reorder
   // click so the child effect can detect re-triggers even if the items
@@ -886,36 +886,6 @@ function ProductsTab({
   const [submitError, setSubmitError] = useState('');
   const [toastMsg, setToastMsg] = useState('');
 
-  // Delivery schedule from admin settings. Used to build the list of valid
-  // delivery slots instead of a free-form date input. Falls back to Tue/Thu
-  // with a 2-day lead time if the fetch fails so checkout never locks up.
-  const [deliveryDays, setDeliveryDays] = useState<number[]>([2, 4]);
-  const [deliveryLeadDays, setDeliveryLeadDays] = useState<number>(2);
-  useEffect(() => {
-    fetch('/api/delivery-schedule', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.deliveryDays) && data.deliveryDays.length > 0) setDeliveryDays(data.deliveryDays);
-        if (typeof data?.deliveryLeadDays === 'number') setDeliveryLeadDays(data.deliveryLeadDays);
-      })
-      .catch(() => { /* keep defaults */ });
-  }, []);
-  // Compute up to the next 6 valid delivery dates based on schedule.
-  const deliverySlots = useMemo(() => {
-    const slots: string[] = [];
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() + Math.max(0, deliveryLeadDays));
-    for (let i = 0; i < 60 && slots.length < 6; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      if (deliveryDays.includes(d.getDay())) {
-        slots.push(d.toISOString().slice(0, 10));
-      }
-    }
-    return slots;
-  }, [deliveryDays, deliveryLeadDays]);
-
   // Consume reorder seed: merge the seeded items into the cart.
   // Keyed by nonce so repeated reorders trigger even if the items array
   // is reference-identical.
@@ -1039,23 +1009,6 @@ function ProductsTab({
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 1);
   const minDateStr = minDate.toISOString().split('T')[0];
-
-  // Next Thursday/Friday (in local time). Customer doesn't pick a date —
-  // we auto-schedule to the next delivery slot. If the cron job needs
-  // admin-configurable days later, this can read from /api/delivery-schedule;
-  // for now Guidon delivers Thu + Fri so we hardcode.
-  const nextDeliveryDate = (): string => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    // Start looking tomorrow (min 1 day lead time).
-    d.setDate(d.getDate() + 1);
-    for (let i = 0; i < 14; i++) {
-      const day = d.getDay();
-      if (day === 4 || day === 5) return d.toISOString().slice(0, 10);
-      d.setDate(d.getDate() + 1);
-    }
-    return d.toISOString().slice(0, 10); // fallback
-  };
 
   const handleSubmitOrder = async () => {
     setSubmitError('');
@@ -1351,7 +1304,7 @@ function ProductsTab({
           <div className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <h3 className="text-lg font-heading font-bold text-cream">Save cart as template</h3>
             <p className="text-xs text-cream/40 italic">
-              Give this a name you&rsquo;ll recognize. Next time, one click adds these {cartCount} item{cartCount === 1 ? '' : 's'} to your cart &mdash; delivery date + notes still fresh each time.
+              Give this a name you&rsquo;ll recognize. Next time, one click adds these {cartCount} item{cartCount === 1 ? '' : 's'} to your cart &mdash; you can edit notes before placing the order.
             </p>
             <input
               type="text"
