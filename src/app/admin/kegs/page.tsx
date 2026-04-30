@@ -533,7 +533,7 @@ export default function KegTrackerPage() {
 
       {adjustOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl shadow-dark-lg max-w-md w-full p-6 animate-scale-in">
+          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl shadow-dark-lg max-w-md w-full max-h-[90vh] overflow-y-auto p-6 animate-scale-in">
             <h3 className="font-heading text-xl font-bold text-cream mb-1">
               Record {adjustForm.type === 'return' ? 'Keg Return' : 'Keg Deposit'}
             </h3>

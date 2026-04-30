@@ -1412,7 +1412,7 @@ function ProductsTab({
       {showSaveTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => setShowSaveTemplate(false)} />
-          <div className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
+          <div className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-scale-in">
             <h3 className="text-lg font-heading font-bold text-cream">Save cart as template</h3>
             <p className="text-xs text-cream/40 italic">
               Give this a name you&rsquo;ll recognize. Next time, one click adds these {cartCount} item{cartCount === 1 ? '' : 's'} to your cart &mdash; you can edit notes before placing the order.
@@ -2163,7 +2163,7 @@ function KegReturnModal({ customerId, onClose, onSuccess }: { customerId: string
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <form onSubmit={handleSubmit}
-        className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
+        className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-scale-in">
         <div>
           <h3 className="text-lg font-heading font-bold text-cream">Request Keg Return</h3>
           <p className="text-xs text-cream/35 mt-1">Enter the quantity you&rsquo;re returning for each size.</p>
