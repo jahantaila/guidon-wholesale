@@ -135,10 +135,18 @@ export async function PUT(request: NextRequest) {
 
   // APPROVAL: upgrade the applicant into a real wholesale customer.
   // 1. Check whether a customer with this email already exists (idempotent).
-  // 2. If not, create a file/DB customer row and generate a temp password.
+  // 2. If not, create a file/DB customer row with a fixed temp password.
   // 3. If Supabase is configured, provision a Supabase Auth user with the
   //    same temp password so they can log into /portal immediately.
   // All failures are logged but don't block the admin's approve action.
+  //
+  // Temp password is fixed at "guidon" per brewery preference (2026-04-29).
+  // The auto-generated word-list passwords ("oak-drift-flag-33") were causing
+  // ongoing customer support issues — copy/paste artifacts, em-dash vs hyphen
+  // confusion, leading whitespace, etc. A fixed string the admin can dictate
+  // verbally over the phone is more reliable. The mustChangePassword flag
+  // below forces an immediate change on first login, so "guidon" is never the
+  // customer's actual long-term password — it's a one-shot bootstrap value.
   if (body.status === 'approved') {
     try {
       const existingCustomers = await getCustomers();
@@ -147,7 +155,7 @@ export async function PUT(request: NextRequest) {
       );
 
       if (!alreadyCustomer) {
-        tempPassword = generateTempPassword();
+        tempPassword = TEMP_PASSWORD;
         const newCustomer: Customer = {
           id: generateId('cust'),
           businessName: app.businessName,
@@ -257,19 +265,14 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * Generate a human-typable temp password: 3 short words + 2 digits.
- * Readable over the phone in case the email ends up in spam and the
- * admin needs to relay it. Low bits of entropy but fine as a one-time
- * reset credential; the portal prompts for a password change on first
- * login (future work) and these are always replaceable via the reset
- * flow.
+ * Fixed temporary password issued to every newly-approved customer. The
+ * mustChangePassword flag on the customer record forces an immediate
+ * change on first login — this value is only ever used once.
+ *
+ * Switched from auto-generated word lists (e.g. "oak-drift-flag-33") to
+ * a fixed string on 2026-04-29 because the generated passwords were
+ * causing ongoing customer support issues: copy/paste whitespace,
+ * em-dash vs hyphen confusion, etc. A single word the admin can verbally
+ * relay is more reliable, and the must-change flow keeps it one-use.
  */
-function generateTempPassword(): string {
-  const words = [
-    'amber', 'brass', 'hops', 'malt', 'pine', 'cask', 'reed', 'barn',
-    'field', 'stone', 'ridge', 'flag', 'oak', 'drift', 'clove', 'wheat',
-  ];
-  const pick = () => words[Math.floor(Math.random() * words.length)];
-  const digits = Math.floor(10 + Math.random() * 90);
-  return `${pick()}-${pick()}-${pick()}-${digits}`;
-}
+const TEMP_PASSWORD = 'guidon';

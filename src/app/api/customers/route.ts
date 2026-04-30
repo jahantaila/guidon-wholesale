@@ -66,7 +66,12 @@ export async function POST(request: NextRequest) {
       preferredPaymentMethod: allowedPayment.includes(body.preferredPaymentMethod)
         ? (body.preferredPaymentMethod as (typeof allowedPayment)[number])
         : 'no_preference',
-      password: body.password || '',
+      password: body.password || 'guidon',
+      // Admin-created customers always start in must-change mode so the
+      // customer is forced to set their own password on first login. Same
+      // contract as the application-approval flow. Brewery never wants a
+      // shared/admin-known password to persist.
+      mustChangePassword: true,
       createdAt: new Date().toISOString(),
     };
     try {
