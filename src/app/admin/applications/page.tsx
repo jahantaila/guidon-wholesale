@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { WholesaleApplication, Customer } from '@/lib/types';
 import { formatDate, cn, getStatusColor, US_STATES, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 
 // Use the shared badge-status-* classes so the paper-theme colors match
 // everywhere (orders, invoices, keg ledger, applications). Unknown status
@@ -33,6 +34,11 @@ export default function ApplicationsPage() {
 
   // Customer creation modal
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  // Lock the page scroll while the modal is open so the user's scrolling
+  // happens inside the modal (not the underlying applications table).
+  // Critical when admin loads the app inside a wholesale-page iframe — the
+  // page below the modal would otherwise scroll while the modal stayed put.
+  useBodyScrollLock(showCreateCustomer);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     businessName: '', contactName: '', email: '', phone: '',
     streetAddress: '', city: '', state: '', zip: '', password: '',
@@ -296,7 +302,7 @@ export default function ApplicationsPage() {
       {/* Create Customer Modal */}
       {showCreateCustomer && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl max-w-lg w-full p-6 animate-scale-in">
+          <div className="bg-charcoal-100 border border-white/[0.08] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 animate-scale-in">
             <h3 className="font-heading text-lg font-bold text-cream mb-1">Create Customer Account</h3>
             <p className="text-xs text-cream/25 mb-5">Pre-filled from the approved application. Adjust if needed.</p>
 
