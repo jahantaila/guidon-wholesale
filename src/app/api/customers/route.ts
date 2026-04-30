@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       state: body.state || '',
       zip: body.zip || '',
       abcPermitNumber: body.abcPermitNumber || '',
+      customerIdentification: typeof body.customerIdentification === 'string' ? body.customerIdentification : '',
       preferredPaymentMethod: allowedPayment.includes(body.preferredPaymentMethod)
         ? (body.preferredPaymentMethod as (typeof allowedPayment)[number])
         : 'no_preference',

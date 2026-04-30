@@ -142,8 +142,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const safeArr = async (r: Response) => (r.ok ? r.json().catch(() => []) : []);
         const [orders, apps] = await Promise.all([safeArr(ordersRes), safeArr(appsRes)]);
         if (stop) return;
+        // Sidebar "Orders" badge counts ONLY pending orders — orders the
+        // admin hasn't acknowledged yet. Once admin confirms, the order
+        // is no longer "new" from their POV; it stops counting toward
+        // the badge. Reverted from previously including 'confirmed' too
+        // (2026-04-30) — the badge wouldn't drop after the admin
+        // confirmed an order, which read as "the confirm button doesn't
+        // work" since the count never changed.
         const pendingOrders = Array.isArray(orders)
-          ? orders.filter((o: { status: string }) => o.status === 'pending' || o.status === 'confirmed').length
+          ? orders.filter((o: { status: string }) => o.status === 'pending').length
           : 0;
         const pendingApps = Array.isArray(apps)
           ? apps.filter((a: { status?: string }) => !a.status || a.status === 'pending').length

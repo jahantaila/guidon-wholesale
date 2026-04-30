@@ -382,7 +382,7 @@ export async function notifyApplicationSubmitted(args: {
         ${
           args.preferredPaymentMethod && args.preferredPaymentMethod !== 'no_preference'
             ? `<div><strong>Payment preference:</strong> ${
-                args.preferredPaymentMethod === 'check' ? 'Check' : 'Fintech (ACH/Zelle/card)'
+                args.preferredPaymentMethod === 'check' ? 'Check' : 'Fintech'
               }</div>`
             : ''
         }

@@ -52,6 +52,7 @@ function rowToCustomer(row: any): Customer {
     state,
     zip,
     abcPermitNumber: row.abc_permit_number ?? '',
+    customerIdentification: row.customer_identification ?? '',
     preferredPaymentMethod:
       ppm === 'check' || ppm === 'fintech' ? ppm : 'no_preference',
     notes: row.notes ?? '',
@@ -230,6 +231,7 @@ export async function createCustomer(customer: Customer): Promise<Customer> {
       // column is dropped.
       address: formatAddress(customer),
       abc_permit_number: customer.abcPermitNumber || '',
+      customer_identification: customer.customerIdentification || '',
       preferred_payment_method: customer.preferredPaymentMethod || 'no_preference',
       // Persist the force-change-password flag when the approval flow sets
       // it. Default of false in the DB handles the admin-creates-customer
@@ -283,6 +285,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
       row.address = formatAddress(merged);
     }
     if (updates.abcPermitNumber !== undefined) row.abc_permit_number = updates.abcPermitNumber;
+    if (updates.customerIdentification !== undefined) row.customer_identification = updates.customerIdentification;
     if (updates.preferredPaymentMethod !== undefined) row.preferred_payment_method = updates.preferredPaymentMethod;
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.tags !== undefined) row.tags = updates.tags;

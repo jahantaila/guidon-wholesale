@@ -242,7 +242,7 @@ export default function ApplicationsPage() {
                       <span className="text-cream/25">Payment:</span>
                       <p className="text-cream/60 mt-0.5">
                         {app.preferredPaymentMethod === 'check' && 'Check'}
-                        {app.preferredPaymentMethod === 'fintech' && 'Fintech (ACH/Zelle/card)'}
+                        {app.preferredPaymentMethod === 'fintech' && 'Fintech'}
                         {(app.preferredPaymentMethod === 'no_preference' || !app.preferredPaymentMethod) && 'No preference'}
                       </p>
                     </div>

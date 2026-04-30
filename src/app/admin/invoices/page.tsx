@@ -165,7 +165,7 @@ export default function InvoicesPage() {
     const kegReturns = sourceOrder?.kegReturns || [];
     const paymentLabel: Record<string, string> = {
       check: 'Check',
-      fintech: 'Fintech (ACH / Zelle / card)',
+      fintech: 'Fintech',
       no_preference: 'No preference',
     };
     return (
