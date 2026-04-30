@@ -21,10 +21,16 @@ interface CustomerForm {
   password: string;
 }
 
+// Default temp password for admin-created customers. Matches the value
+// used by the application-approval flow; the customer is forced to change
+// it on first login via mustChangePassword. Admin can override here if
+// they want to set a specific value before the customer logs in.
+const TEMP_PASSWORD_DEFAULT = 'guidon';
+
 const emptyForm: CustomerForm = {
   businessName: '', contactName: '', email: '', phone: '',
   streetAddress: '', city: '', state: '', zip: '',
-  abcPermitNumber: '', preferredPaymentMethod: 'no_preference', password: '',
+  abcPermitNumber: '', preferredPaymentMethod: 'no_preference', password: TEMP_PASSWORD_DEFAULT,
 };
 
 type ViewMode = 'table' | 'cards' | 'kanban';
