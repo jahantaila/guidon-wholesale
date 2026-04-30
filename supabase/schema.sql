@@ -228,6 +228,13 @@ alter table customers add column if not exists archived_at timestamptz;
 -- approval). Portal forces a change-password modal on login until cleared.
 alter table customers add column if not exists must_change_password boolean not null default false;
 
+-- Brewery-internal customer identifier. Admin-only — never returned to
+-- the customer's portal session. Use case: state license number / ABC
+-- account ID / internal customer code that the brewery tracks for
+-- compliance + bookkeeping but doesn't want to display to the customer
+-- alongside their public-facing details.
+alter table customers add column if not exists customer_identification text not null default '';
+
 -- Brewing schedule: admin records "I'm brewing Bandera 1/2bbl on Apr 25,
 -- expected yield 20 kegs". Production page shows the earliest scheduled
 -- brew date per product+size as "back in stock by" so customers + sales

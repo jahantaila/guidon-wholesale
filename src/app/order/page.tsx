@@ -81,10 +81,17 @@ export default function OrderPage() {
   // from customer detail to "place an order for this customer." Using
   // window.location directly (not useSearchParams) to avoid Next's
   // static-bailout + Suspense requirement.
+  // ?adminMode=1 also signals "admin is placing this on behalf of the
+  // customer" — hides the customer selector + new-customer toggle and
+  // pins the order to the chosen customer. Admin can't fat-finger swap
+  // the selected customer mid-cart.
+  const [adminMode, setAdminMode] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const id = new URLSearchParams(window.location.search).get('customerId');
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('customerId');
     if (id) setSelectedCustomerId(id);
+    if (params.get('adminMode') === '1') setAdminMode(true);
   }, []);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
@@ -788,6 +795,29 @@ export default function OrderPage() {
               {/* Customer Selection */}
               <div>
                 <span className="section-label mb-3 block">Customer</span>
+                {adminMode ? (
+                  // Admin-on-behalf-of flow: customer is pinned to the
+                  // ?customerId= URL param. No selector, no new-customer
+                  // toggle — switching customers mid-cart is a footgun.
+                  (() => {
+                    const pinned = customers.find((c) => c.id === selectedCustomerId);
+                    return (
+                      <div className="rounded-xl px-4 py-3"
+                        style={{ background: 'color-mix(in srgb, var(--brass) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--brass) 35%, transparent)' }}>
+                        <div className="text-[10px] uppercase tracking-wide font-bold mb-0.5" style={{ color: 'var(--brass)' }}>Admin: placing order on behalf of</div>
+                        {pinned ? (
+                          <>
+                            <div className="font-heading font-bold text-cream">{pinned.businessName}</div>
+                            <div className="text-xs text-cream/50">{pinned.contactName} &middot; {pinned.email}</div>
+                          </>
+                        ) : (
+                          <div className="text-xs italic text-cream/50">Customer not found — return to /admin/customers and try again.</div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <>
                 <div className="flex gap-2 mb-3">
                   <button onClick={() => setIsNewCustomer(false)}
                     className={cn('text-xs font-heading font-bold px-4 py-2 rounded-lg transition-all', !isNewCustomer ? 'bg-gold text-charcoal' : 'bg-charcoal-300 text-cream/40 hover:text-cream/60')}>
@@ -833,6 +863,8 @@ export default function OrderPage() {
                         onChange={(e) => setNewCustomer((prev) => ({ ...prev, zip: e.target.value }))} className="input" />
                     </div>
                   </div>
+                )}
+                  </>
                 )}
               </div>
 

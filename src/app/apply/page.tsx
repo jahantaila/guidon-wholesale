@@ -192,7 +192,7 @@ export default function ApplyPage() {
             <div className="grid grid-cols-3 gap-2">
               {([
                 { value: 'check', label: 'Check', hint: 'Paper check' },
-                { value: 'fintech', label: 'Fintech', hint: 'ACH / Zelle / card' },
+                { value: 'fintech', label: 'Fintech', hint: '' },
                 { value: 'no_preference', label: 'Either', hint: 'No preference' },
               ] as const).map((opt) => {
                 const selected = form.preferredPaymentMethod === opt.value;

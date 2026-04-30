@@ -262,6 +262,12 @@ export default function CustomerDetailPage() {
               <span style={{ color: 'var(--faint)' }}>ABC Permit:</span>{' '}
               <span className="font-mono">{customer.abcPermitNumber || 'N/A'}</span>
             </span>
+            {customer.customerIdentification && (
+              <span>
+                <span style={{ color: 'var(--faint)' }}>Customer Identification:</span>{' '}
+                <span className="font-mono">{customer.customerIdentification}</span>
+              </span>
+            )}
             <span>
               <span style={{ color: 'var(--faint)' }}>Payment:</span>{' '}
               {(() => {
@@ -269,17 +275,36 @@ export default function CustomerDetailPage() {
                 return labels[customer.preferredPaymentMethod || 'no_preference'];
               })()}
             </span>
+            {customer.autoSendInvoices && (
+              <span style={{ color: 'var(--pine)' }}>
+                <span style={{ color: 'var(--faint)' }}>Auto-send invoices:</span>{' '}
+                <span className="font-semibold">on</span>
+              </span>
+            )}
           </div>
+          {Array.isArray(customer.tags) && customer.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {customer.tags.map((t) => (
+                <span key={t} className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+                  style={{ background: 'color-mix(in srgb, var(--brass) 15%, transparent)', color: 'var(--brass)' }}>{t}</span>
+              ))}
+            </div>
+          )}
+          {customer.notes && (
+            <p className="mt-2 text-xs italic max-w-xl" style={{ color: 'var(--muted)' }}>
+              <span style={{ color: 'var(--faint)' }}>Notes:</span> {customer.notes}
+            </p>
+          )}
           <p className="mt-1 text-xs" style={{ color: 'var(--faint)' }}>
             Customer since {formatDate(customer.createdAt)}
           </p>
         </div>
         <div className="flex flex-col gap-2 shrink-0">
           <Link
-            href={`/order?customerId=${customer.id}`}
+            href={`/order?customerId=${customer.id}&adminMode=1`}
             className="btn-primary text-sm text-center"
           >
-            Create order &rarr;
+            Place order &rarr;
           </Link>
           {totalKegsOut > 0 && (
             <button

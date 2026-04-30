@@ -17,7 +17,16 @@ interface CustomerForm {
   state: string;
   zip: string;
   abcPermitNumber: string;
+  // Brewery-internal — admin-only. Customer never sees this.
+  customerIdentification: string;
   preferredPaymentMethod: 'check' | 'fintech' | 'no_preference';
+  // Brewery-internal — never sent in the portal session payload.
+  notes: string;
+  // Comma-separated tags for filtering / kanban grouping.
+  tagsCsv: string;
+  // Auto-fire invoice email when an order is confirmed (vs. admin
+  // manually clicking Send on the invoice).
+  autoSendInvoices: boolean;
   password: string;
 }
 
@@ -30,7 +39,10 @@ const TEMP_PASSWORD_DEFAULT = 'guidon';
 const emptyForm: CustomerForm = {
   businessName: '', contactName: '', email: '', phone: '',
   streetAddress: '', city: '', state: '', zip: '',
-  abcPermitNumber: '', preferredPaymentMethod: 'no_preference', password: TEMP_PASSWORD_DEFAULT,
+  abcPermitNumber: '', customerIdentification: '',
+  preferredPaymentMethod: 'no_preference',
+  notes: '', tagsCsv: '', autoSendInvoices: false,
+  password: TEMP_PASSWORD_DEFAULT,
 };
 
 type ViewMode = 'table' | 'cards' | 'kanban';
@@ -147,7 +159,11 @@ export default function CustomersPage() {
       state: customer.state,
       zip: customer.zip,
       abcPermitNumber: customer.abcPermitNumber || '',
+      customerIdentification: customer.customerIdentification || '',
       preferredPaymentMethod: customer.preferredPaymentMethod || 'no_preference',
+      notes: customer.notes || '',
+      tagsCsv: (customer.tags || []).join(', '),
+      autoSendInvoices: customer.autoSendInvoices === true,
       password: '',
     });
     setEditingId(customer.id); setModalOpen(true);
@@ -157,11 +173,54 @@ export default function CustomersPage() {
     e.preventDefault(); setSaving(true);
     try {
       const method = editingId ? 'PUT' : 'POST';
-      const body = editingId ? { id: editingId, ...form } : form;
+      // Convert form-only fields (tagsCsv) into the API shape (tags[]).
+      // Drop empty strings so we don't end up with [""] for empty input.
+      const tags = form.tagsCsv
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const apiBody: Record<string, unknown> = {
+        ...form,
+        tags,
+        // Don't send tagsCsv to the API — internal form state only.
+        tagsCsv: undefined,
+      };
+      // Strip empty password on edits — the openEdit form starts with
+      // password='', and sending it through would (a) be useless and
+      // (b) wrongly trigger the API's "password was set, clear
+      // mustChangePassword" branch and undo a freshly-flagged temp pw
+      // just because admin hit Save without touching the password.
+      if (editingId && !form.password) {
+        delete apiBody.password;
+      }
+      const body = editingId ? { id: editingId, ...apiBody } : apiBody;
       const res = await adminFetch('/api/customers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) { setModalOpen(false); setForm(emptyForm); setEditingId(null); await loadCustomers(); }
     } catch (err) { console.error('Failed to save customer', err); }
     finally { setSaving(false); }
+  };
+
+  // Reset a customer's password to the default temp value ('guidon') and
+  // re-flag must_change_password so they're forced to set a new one on
+  // next login. Used when admin gets a "I'm locked out" call.
+  const handleResetPassword = async (id: string) => {
+    if (!confirm('Reset this customer’s password to "guidon" and force them to change it on next login?')) return;
+    try {
+      const res = await adminFetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password: 'guidon', mustChangePassword: true }),
+      });
+      if (res.ok) {
+        alert('Password reset. Tell the customer their temporary password is "guidon" — they’ll be prompted to change it on first login.');
+        await loadCustomers();
+      } else {
+        alert('Could not reset password.');
+      }
+    } catch (err) {
+      console.error('Failed to reset password', err);
+      alert('Network error resetting password.');
+    }
   };
 
   const [deleteError, setDeleteError] = useState('');
@@ -193,7 +252,8 @@ export default function CustomersPage() {
     }
   };
 
-  const updateField = (field: keyof CustomerForm, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof CustomerForm, value: string | boolean) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
   // Shared filter for all three views.
   const filtered = useMemo(() => {
@@ -362,15 +422,62 @@ export default function CustomersPage() {
                     onChange={(e) => updateField('preferredPaymentMethod', e.target.value as CustomerForm['preferredPaymentMethod'])}>
                     <option value="no_preference">No preference</option>
                     <option value="check">Check</option>
-                    <option value="fintech">Fintech (ACH / Zelle / card)</option>
+                    <option value="fintech">Fintech</option>
                   </select>
                 </div>
               </div>
+
+              {/* Brewery-internal section. The customer never sees these. */}
+              <div className="pt-3 border-t border-divider">
+                <span className="section-label mb-2 block">Brewery-internal</span>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="cust-customerIdentification" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Customer Identification</label>
+                    <input id="cust-customerIdentification" className="input font-mono" placeholder="State license #, internal code, etc."
+                      value={form.customerIdentification} onChange={(e) => updateField('customerIdentification', e.target.value)} />
+                    <p className="text-[10px] mt-1 italic" style={{ color: 'var(--faint)' }}>Admin-only. Customer never sees this.</p>
+                  </div>
+                  <div>
+                    <label htmlFor="cust-notes" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Notes</label>
+                    <textarea id="cust-notes" rows={3} className="input resize-none"
+                      placeholder="Anything the brewery needs to remember about this account."
+                      value={form.notes} onChange={(e) => updateField('notes', e.target.value)} />
+                  </div>
+                  <div>
+                    <label htmlFor="cust-tags" className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Tags</label>
+                    <input id="cust-tags" className="input" placeholder="priority, net-30, tasting-room"
+                      value={form.tagsCsv} onChange={(e) => updateField('tagsCsv', e.target.value)} />
+                    <p className="text-[10px] mt-1 italic" style={{ color: 'var(--faint)' }}>Comma-separated. Used for filtering + grouping in the customer list.</p>
+                  </div>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5"
+                      checked={form.autoSendInvoices}
+                      onChange={(e) => updateField('autoSendInvoices', e.target.checked)} />
+                    <span className="text-sm" style={{ color: 'var(--muted)' }}>
+                      <strong>Auto-send invoices</strong>
+                      <span className="block text-[11px] italic" style={{ color: 'var(--faint)' }}>
+                        When checked, the invoice email fires automatically the moment an order is confirmed. Off = admin clicks Send manually.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               {!editingId && (
                 <div>
                   <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Password</label>
                   <input type="text" className="input" placeholder="Set a login password" value={form.password} onChange={(e) => updateField('password', e.target.value)} required />
-                  <p className="text-[10px] mt-1 italic" style={{ color: 'var(--faint)' }}>Share this with the customer so they can log into the portal.</p>
+                  <p className="text-[10px] mt-1 italic" style={{ color: 'var(--faint)' }}>Default is &ldquo;guidon&rdquo;. The customer is forced to change it on first login.</p>
+                </div>
+              )}
+              {editingId && (
+                <div className="pt-3 border-t border-divider">
+                  <button type="button"
+                    onClick={() => editingId && handleResetPassword(editingId)}
+                    className="text-xs font-semibold underline-offset-2 hover:underline"
+                    style={{ color: 'var(--ruby)' }}>
+                    Reset password to &ldquo;guidon&rdquo; + force change on next login
+                  </button>
                 </div>
               )}
               <div className="flex justify-end gap-3 pt-3">
@@ -469,6 +576,7 @@ function TableView({
                         </>
                       ) : (
                         <>
+                          <Link href={`/order?customerId=${c.id}&adminMode=1`} className="text-sm font-semibold" style={{ color: 'var(--pine)' }} title="Place an order on behalf of this customer">Place Order</Link>
                           <Link href={`/admin/customers/${c.id}`} className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>Details</Link>
                           <button onClick={() => openEdit(c)} className="text-sm font-semibold" style={{ color: 'var(--brass)' }}>Edit</button>
                           {deleteConfirm === c.id ? (
@@ -597,6 +705,7 @@ function CardsView({
                     Details →
                   </Link>
                   <div className="flex items-center gap-2">
+                    <Link href={`/order?customerId=${c.id}&adminMode=1`} className="btn-ghost text-xs" style={{ color: 'var(--pine)' }}>Place Order</Link>
                     <button onClick={() => openEdit(c)} className="btn-ghost text-xs" style={{ color: 'var(--brass)' }}>Edit</button>
                     {deleteConfirm === c.id ? (
                       <>

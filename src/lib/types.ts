@@ -13,6 +13,11 @@ export interface Customer {
    * Account tab (read-only) and on invoices. Empty string for legacy
    * customers approved before this column existed — display as 'N/A'. */
   abcPermitNumber: string;
+  /** Brewery-internal identifier (state license number, ABC account
+   * ID, internal code, etc.). Admin-only — never sent to the customer's
+   * portal session, never displayed on customer-facing pages or
+   * invoices. Editable only from the admin Customer Edit modal. */
+  customerIdentification?: string;
   /** How the customer plans to pay. Defaults to 'no_preference' for
    * legacy rows so the type stays narrow without optional. */
   preferredPaymentMethod: PreferredPaymentMethod;

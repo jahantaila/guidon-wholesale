@@ -52,6 +52,36 @@ export default function PortalPage() {
       .finally(() => setCheckingSession(false));
   }, []);
 
+  // Refetch the customer record from /api/portal/me whenever the tab
+  // regains focus or becomes visible. This catches admin-side edits
+  // (ABC permit, payment method, contact info, address, archived flag)
+  // and propagates them to the customer's portal view without forcing
+  // a re-login. The "real-time" the brewery asked for: admin saves on
+  // their tab, customer alt-tabs back to their portal, sees fresh data.
+  useEffect(() => {
+    if (!customer) return;
+    let cancelled = false;
+    const refetch = async () => {
+      try {
+        const r = await fetch('/api/portal/me', { cache: 'no-store' });
+        if (!r.ok) return;
+        const fresh = await r.json();
+        if (!cancelled && fresh && fresh.id) setCustomer(fresh);
+      } catch { /* ignore — background refresh, last good state stays */ }
+    };
+    const onFocus = () => refetch();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [customer?.id]);
+
   const handleLogout = async () => {
     await fetch('/api/portal/login', { method: 'DELETE' });
     setCustomer(null);
@@ -1735,7 +1765,7 @@ function InvoicesTab({ invoices, orders, loading, customer }: { invoices: Invoic
     const kegReturns = sourceOrder?.kegReturns || [];
     const paymentLabel: Record<string, string> = {
       check: 'Check',
-      fintech: 'Fintech (ACH / Zelle / card)',
+      fintech: 'Fintech',
       no_preference: 'No preference',
     };
     return (
