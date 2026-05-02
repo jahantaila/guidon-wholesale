@@ -8,6 +8,31 @@ import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } fro
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
+import { getAdminToken } from '@/lib/admin-fetch';
+
+/**
+ * Order page is reachable two ways:
+ *   - portal customer placing their own order (cookie auth)
+ *   - admin placing on behalf via /order?customerId=X&adminMode=1
+ *
+ * In the second case, the admin may be loading the page inside an
+ * iframe (Derby Digital portal embedding /admin), where 3rd-party
+ * cookies are silently dropped. Without this Bearer fallback, the
+ * admin auth probe falls back to "not signed in" and bounces the
+ * admin to /portal — where they get prompted for the customer's
+ * password. The brewery rightly considers that broken.
+ *
+ * authedFetch attaches the admin Bearer token (from localStorage)
+ * to every same-origin request the order page makes, so the auth
+ * context survives the cookie blackout.
+ */
+function authedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = typeof window !== 'undefined' ? getAdminToken() : null;
+  if (!token) return fetch(input, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
 
 const KEG_SIZES: KegSize[] = ['1/2bbl', '1/4bbl', '1/6bbl'];
 const SIZE_LABELS: Record<KegSize, string> = { '1/2bbl': '1/2 Barrel', '1/4bbl': '1/4 Barrel', '1/6bbl': '1/6 Barrel' };
@@ -116,7 +141,10 @@ export default function OrderPage() {
     let cancelled = false;
     Promise.all([
       fetch('/api/portal/login'),
-      fetch('/api/admin/login'),
+      // Bearer token (via authedFetch) covers the iframe-cookie-blocked
+      // case — without it admin loading /order in an embed gets bounced
+      // to /portal and prompted for the customer's password.
+      authedFetch('/api/admin/login'),
     ]).then(([portal, admin]) => {
       if (cancelled) return;
       if (!portal.ok && !admin.ok) router.replace('/portal');
@@ -132,7 +160,9 @@ export default function OrderPage() {
       try {
         const [prodRes, custRes] = await Promise.all([
           fetch('/api/products', { cache: 'no-store' }),
-          fetch('/api/customers', { cache: 'no-store' }),
+          // Bearer fallback so the customer list populates when admin
+          // is loading /order in an iframe (cookies blocked).
+          authedFetch('/api/customers', { cache: 'no-store' }),
         ]);
         if (!prodRes.ok) throw new Error(`products ${prodRes.status}`);
         if (!custRes.ok) throw new Error(`customers ${custRes.status}`);
@@ -269,7 +299,7 @@ export default function OrderPage() {
     setSubmitting(true);
     try {
       if (isNewCustomer) {
-        const custRes = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCustomer) });
+        const custRes = await authedFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCustomer) });
         if (!custRes.ok) {
           const data = await custRes.json().catch(() => ({}));
           throw new Error(data?.error || `Failed to create customer (HTTP ${custRes.status})`);
@@ -281,7 +311,7 @@ export default function OrderPage() {
         productId: item.productId, productName: item.productName, size: item.size,
         quantity: item.quantity, unitPrice: item.unitPrice, deposit: item.deposit,
       }));
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await authedFetch('/api/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
