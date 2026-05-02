@@ -320,7 +320,14 @@ export default function OrderPage() {
         throw new Error(data?.error || `Failed to create order (HTTP ${orderRes.status})`);
       }
       const order = await orderRes.json();
-      router.push(`/order/confirmation?orderId=${order.id}`);
+      // Preserve adminMode in the confirmation redirect so the next page
+      // shows admin-back-to-customer-detail buttons instead of customer-
+      // portal buttons. Without this, admin lands on confirmation and
+      // gets bounced to /portal again with no way home.
+      const confirmUrl = adminMode
+        ? `/order/confirmation?orderId=${order.id}&adminMode=1&customerId=${customerId}`
+        : `/order/confirmation?orderId=${order.id}`;
+      router.push(confirmUrl);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -336,7 +343,7 @@ export default function OrderPage() {
       {/* Header */}
       <header className="sticky top-0 z-30 bg-charcoal/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href={adminMode ? `/admin/customers/${selectedCustomerId}` : '/'} className="flex items-center gap-3 group">
             <Image src="/logo.png" alt="Guidon Brewing Co." width={350} height={194} className="h-8 w-auto rounded-lg" />
             <div className="hidden sm:block">
               <h1 className="font-heading text-sm font-bold text-cream tracking-wide">GUIDON BREWING CO.</h1>
@@ -344,26 +351,58 @@ export default function OrderPage() {
             </div>
           </Link>
 
-          <button
-            onClick={() => setCartOpen(true)}
-            className={cn(
-              'relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200',
-              cartCount > 0
-                ? 'bg-gold/10 border border-gold/30 text-gold hover:bg-gold/15'
-                : 'bg-white/5 border border-white/10 text-cream/50 hover:bg-white/10'
+          <div className="flex items-center gap-3">
+            {/* Admin escape hatch — without this, admin who clicked "Place
+                Order" by mistake had no way out except browser back. */}
+            {adminMode && (
+              <Link
+                href={selectedCustomerId ? `/admin/customers/${selectedCustomerId}` : '/admin/customers'}
+                className="hidden sm:flex items-center gap-1.5 text-xs font-heading font-bold px-3 py-2 rounded-lg transition-all"
+                style={{
+                  color: 'var(--brass)',
+                  background: 'color-mix(in srgb, var(--brass) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--brass) 35%, transparent)',
+                }}
+              >
+                <span aria-hidden="true">&larr;</span> Back to admin
+              </Link>
             )}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-            </svg>
-            {cartCount > 0 ? (
-              <span className="text-sm font-heading font-bold">{cartCount} &middot; {formatCurrency(total)}</span>
-            ) : (
-              <span className="hidden sm:inline text-sm font-medium">Cart</span>
-            )}
-          </button>
+
+            <button
+              onClick={() => setCartOpen(true)}
+              className={cn(
+                'relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200',
+                cartCount > 0
+                  ? 'bg-gold/10 border border-gold/30 text-gold hover:bg-gold/15'
+                  : 'bg-white/5 border border-white/10 text-cream/50 hover:bg-white/10'
+              )}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+              </svg>
+              {cartCount > 0 ? (
+                <span className="text-sm font-heading font-bold">{cartCount} &middot; {formatCurrency(total)}</span>
+              ) : (
+                <span className="hidden sm:inline text-sm font-medium">Cart</span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Mobile-visible "Back to admin" since the desktop pill is hidden on
+          small screens — admin in a phone-width iframe still needs to escape. */}
+      {adminMode && (
+        <div className="sm:hidden bg-charcoal/95 border-b border-white/[0.06] px-4 py-2">
+          <Link
+            href={selectedCustomerId ? `/admin/customers/${selectedCustomerId}` : '/admin/customers'}
+            className="text-xs font-heading font-bold inline-flex items-center gap-1.5"
+            style={{ color: 'var(--brass)' }}
+          >
+            <span aria-hidden="true">&larr;</span> Back to admin
+          </Link>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page header */}

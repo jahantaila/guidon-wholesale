@@ -69,6 +69,12 @@ function OrderStepper({ status }: { status: OrderStatus }) {
 function ConfirmationContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
+  // Admin context flows through from /order via the redirect URL — used to
+  // route the post-success buttons back to the customer detail page in
+  // /admin instead of the public /portal (which would prompt admin for
+  // the customer's password).
+  const adminMode = searchParams.get('adminMode') === '1';
+  const adminCustomerId = searchParams.get('customerId') || '';
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -213,10 +219,27 @@ function ConfirmationContent() {
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Link href="/portal" className="btn-primary flex-1 text-center py-3">Place Another Order</Link>
-          <Link href="/portal" className="btn-secondary flex-1 text-center py-3">Customer Portal</Link>
-        </div>
+        {adminMode ? (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link
+              href={adminCustomerId ? `/admin/customers/${adminCustomerId}` : '/admin/customers'}
+              className="btn-primary flex-1 text-center py-3"
+            >
+              &larr; Back to customer
+            </Link>
+            <Link
+              href={`/order?customerId=${adminCustomerId}&adminMode=1`}
+              className="btn-secondary flex-1 text-center py-3"
+            >
+              Place another order for this customer
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link href="/portal" className="btn-primary flex-1 text-center py-3">Place Another Order</Link>
+            <Link href="/portal" className="btn-secondary flex-1 text-center py-3">Customer Portal</Link>
+          </div>
+        )}
       </main>
     </div>
   );
