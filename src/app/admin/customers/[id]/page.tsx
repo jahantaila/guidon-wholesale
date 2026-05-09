@@ -515,9 +515,13 @@ export default function CustomerDetailPage() {
                     className="py-3 border-b border-divider flex items-baseline justify-between gap-4"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold" style={{ color: 'var(--ink)' }}>
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="font-semibold hover:underline"
+                        style={{ color: 'var(--brass)' }}
+                      >
                         {order.id}
-                      </p>
+                      </Link>
                       <p className="text-sm" style={{ color: 'var(--muted)' }}>
                         {formatDate(order.createdAt)} &middot; {order.items.length} item
                         {order.items.length === 1 ? '' : 's'}

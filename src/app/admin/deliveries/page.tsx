@@ -585,11 +585,11 @@ export default function DeliveriesPage() {
                         </button>
                       )}
                       <Link
-                        href={`/admin/orders?orderId=${order.id}`}
+                        href={`/admin/orders/${order.id}`}
                         className="block text-xs italic no-print mt-1"
                         style={{ color: 'var(--brass)' }}
                       >
-                        &rarr; View in orders
+                        &rarr; Open order
                       </Link>
                       {order.notes && (
                         <p className="text-xs italic mt-2" style={{ color: 'var(--muted)' }}>
