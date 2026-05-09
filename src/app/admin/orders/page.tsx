@@ -480,6 +480,13 @@ function CardsView({
               >
                 {isExpanded ? 'Hide details' : 'Details ↓'}
               </button>
+              <Link
+                href={`/admin/orders/${order.id}`}
+                className="btn-ghost text-xs"
+                style={{ color: 'var(--muted)' }}
+              >
+                Open →
+              </Link>
               {action.next ? (
                 <button
                   onClick={() => onStatusChange(order, action.next!)}
@@ -625,7 +632,16 @@ function TableView({
                 style={{ cursor: 'pointer' }}
                 className="transition-colors"
               >
-                <td className="table-cell font-semibold">{order.id}</td>
+                <td className="table-cell font-semibold">
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:underline"
+                    style={{ color: 'var(--brass)' }}
+                  >
+                    {order.id}
+                  </Link>
+                </td>
                 <td className="table-cell">
                   {customerMap.get(order.customerId)?.businessName || order.customerId}
                 </td>
