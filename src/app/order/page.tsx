@@ -101,6 +101,13 @@ export default function OrderPage() {
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   useBodyScrollLock(checkoutOpen);
+  // Customer must explicitly confirm their keg returns line — even if the
+  // count is zero. Brewery directive: too many orders were shipping with no
+  // returns information at all because the section sat at "0 / 0 / 0" by
+  // default and got skipped without thought. The checkbox below gates the
+  // Place Order button and resets every time the checkout modal opens so
+  // multi-edit flows can't accidentally re-use a stale confirmation.
+  const [kegReturnsConfirmed, setKegReturnsConfirmed] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   // Pre-select a customer when ?customerId= is on the URL. Admin uses this
   // from customer detail to "place an order for this customer." Using
@@ -287,7 +294,14 @@ export default function OrderPage() {
 
   const removeReturn = (size: KegSize) => setKegReturns((prev) => prev.filter((r) => r.size !== size));
 
-  const handleCheckout = () => { if (cart.length === 0) return; setCheckoutOpen(true); setCartOpen(false); };
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    // Reset the keg-returns confirmation every time checkout opens so users
+    // can't carry a stale tick from a prior cart edit through to submit.
+    setKegReturnsConfirmed(false);
+    setCheckoutOpen(true);
+    setCartOpen(false);
+  };
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -295,6 +309,10 @@ export default function OrderPage() {
     if (!isNewCustomer && !customerId) { setSubmitError('Please select a customer.'); return; }
     if (isNewCustomer && (!newCustomer.businessName || !newCustomer.contactName || !newCustomer.email)) {
       setSubmitError('Business name, contact name, and email are required.'); return;
+    }
+    if (!kegReturnsConfirmed) {
+      setSubmitError('Please confirm your keg returns above before placing the order.');
+      return;
     }
     setSubmitting(true);
     try {
@@ -951,6 +969,41 @@ export default function OrderPage() {
                   placeholder="Special instructions, loading dock info, etc." rows={3} className="input resize-none" />
               </div>
 
+              {/* Keg Returns confirmation — required even when zero. The cart
+                  sidebar exposes the per-size inputs; this is the explicit
+                  acknowledgment that gates submit so brewery never gets a
+                  silent "I forgot to check" outcome. */}
+              <div>
+                <span className="section-label mb-2 block">Keg Returns</span>
+                <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-2">
+                  {kegReturns.length === 0 ? (
+                    <p className="text-sm text-cream/50">No empty kegs to return on this delivery.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {kegReturns.map((r) => (
+                        <div key={r.size} className="flex justify-between text-sm">
+                          <span className="text-cream/60">{SIZE_LABELS[r.size]}</span>
+                          <span className="text-cream font-medium">{r.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="flex items-start gap-2.5 pt-2 mt-1 border-t border-white/[0.06] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={kegReturnsConfirmed}
+                      onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
+                      className="mt-1 h-4 w-4 shrink-0 accent-gold cursor-pointer"
+                    />
+                    <span className="text-xs text-cream/60 leading-snug">
+                      I&rsquo;ve reviewed my keg returns for this delivery
+                      {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
+                      {' '}If this isn&rsquo;t right, tap <strong>Back</strong> and adjust on the cart.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               {/* Order Summary */}
               <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-1.5">
                 <span className="section-label mb-2 block">Order Summary</span>
@@ -983,8 +1036,9 @@ export default function OrderPage() {
               <button onClick={() => { setCheckoutOpen(false); setCartOpen(true); }} className="btn-secondary flex-1 text-center">
                 Back
               </button>
-              <button onClick={handleSubmit} disabled={submitting}
-                className={cn('btn-primary flex-1', submitting && 'opacity-60 cursor-not-allowed')}>
+              <button onClick={handleSubmit} disabled={submitting || !kegReturnsConfirmed}
+                className={cn('btn-primary flex-1', (submitting || !kegReturnsConfirmed) && 'opacity-60 cursor-not-allowed')}
+                title={!kegReturnsConfirmed ? 'Confirm your keg returns above first' : undefined}>
                 {submitting ? 'Placing Order...' : 'Place Order'}
               </button>
             </div>

@@ -701,6 +701,8 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         </div>
       )}
 
+      <PriceIncreasePopup />
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {tab === 'overview' && (
           <OverviewTab
@@ -752,6 +754,80 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
           onClose={() => setShowReturnModal(false)}
           onSuccess={() => { setShowReturnModal(false); fetchBalances(); }} />
       )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  PRICE INCREASE POPUP                                              */
+/* ================================================================== */
+
+/**
+ * One-time advisory popup announcing the keg price increase. Runs for 3
+ * weeks from the brewery's announcement (2026-05-15 through 2026-06-05).
+ * Dismissal is sticky per browser via localStorage; the end-date check is
+ * the hard kill so dev clocks rolling forward don't surface a stale popup.
+ *
+ * Naming the localStorage key with the announcement date makes it easy
+ * to run a second campaign later without colliding with this one's
+ * dismissal state.
+ */
+const PRICE_NOTICE_KEY = 'guidon-price-notice-dismissed-2026-05';
+const PRICE_NOTICE_END = new Date('2026-06-05T23:59:59');
+
+function PriceIncreasePopup() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (Date.now() > PRICE_NOTICE_END.getTime()) return;
+    try {
+      if (window.localStorage.getItem(PRICE_NOTICE_KEY) === '1') return;
+    } catch {
+      // localStorage blocked (private mode, etc.) — show the popup anyway.
+      // It just won't stick across reloads, which is acceptable for a
+      // 3-week advisory.
+    }
+    setOpen(true);
+  }, []);
+
+  useBodyScrollLock(open);
+
+  if (!open) return null;
+
+  const dismiss = () => {
+    try {
+      window.localStorage.setItem(PRICE_NOTICE_KEY, '1');
+    } catch { /* ignore */ }
+    setOpen(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="price-notice-title">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={dismiss} />
+      <div className="relative bg-charcoal-100 rounded-2xl border border-gold/30 w-full max-w-md animate-scale-in shadow-xl">
+        <div className="px-6 py-5 border-b border-white/[0.06]">
+          <span className="section-label" style={{ color: 'var(--brass)' }}>Important Notice</span>
+          <h3 id="price-notice-title" className="font-heading text-xl font-bold text-cream mt-1">
+            Keg Price Update
+          </h3>
+        </div>
+        <div className="px-6 py-5 space-y-3 text-sm text-cream/70 leading-relaxed">
+          <p>
+            We&rsquo;ve increased our keg prices effective immediately. Updated pricing is
+            reflected on every product when you browse the catalog.
+          </p>
+          <p className="text-cream/50">
+            Thanks for continuing to carry Guidon. Reach out to the brewery directly with any
+            questions.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-white/[0.06] flex justify-end">
+          <button onClick={dismiss} className="btn-primary px-5 py-2 text-sm">
+            Got it
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -955,6 +1031,11 @@ function ProductsTab({
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
   useBodyScrollLock(showCheckout);
+  // Required explicit acknowledgment that the customer has reviewed their
+  // keg returns. Brewery directive: orders were going through with no
+  // returns counted because the defaults sit at zero and customers skip
+  // the section. Resets when the checkout modal opens.
+  const [kegReturnsConfirmed, setKegReturnsConfirmed] = useState(false);
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; items: OrderItem[]; createdAt: string }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
@@ -1153,6 +1234,10 @@ function ProductsTab({
 
   const handleSubmitOrder = async () => {
     setSubmitError('');
+    if (!kegReturnsConfirmed) {
+      setSubmitError('Please confirm your keg returns above before placing the order.');
+      return;
+    }
     setSubmitting(true);
     try {
       const items = cart.map((item) => ({
@@ -1169,6 +1254,7 @@ function ProductsTab({
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
       setCart([]); setKegReturns([]); setShowCheckout(false); setNotes('');
+      setKegReturnsConfirmed(false);
       onOrderPlaced();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -1196,7 +1282,7 @@ function ProductsTab({
             </button>
           )}
           {cartCount > 0 && (
-            <button onClick={() => setShowCheckout(true)} className="btn-primary">
+            <button onClick={() => { setKegReturnsConfirmed(false); setShowCheckout(true); }} className="btn-primary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
               </svg>
@@ -1538,6 +1624,22 @@ function ProductsTab({
                     );
                   })}
                 </div>
+                {/* Required acknowledgment — gates the Place Order button.
+                    Even when there are no empties to return, the customer
+                    has to actively check this so brewery never gets a
+                    silently-skipped returns line. */}
+                <label className="flex items-start gap-2.5 mt-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={kegReturnsConfirmed}
+                    onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 accent-gold cursor-pointer"
+                  />
+                  <span className="text-xs text-cream/60 leading-snug">
+                    I&rsquo;ve reviewed my keg returns above
+                    {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
+                  </span>
+                </label>
               </div>
 
               {/* Delivery — auto-assigned to the next Thursday or Friday.
@@ -1580,8 +1682,9 @@ function ProductsTab({
 
             <div className="px-6 py-4 border-t border-white/[0.06] flex gap-3">
               <button onClick={() => setShowCheckout(false)} className="btn-secondary flex-1 text-center">Back</button>
-              <button onClick={handleSubmitOrder} disabled={submitting || cart.length === 0}
-                className={cn('btn-primary flex-1', submitting && 'opacity-60 cursor-not-allowed')}>
+              <button onClick={handleSubmitOrder} disabled={submitting || cart.length === 0 || !kegReturnsConfirmed}
+                className={cn('btn-primary flex-1', (submitting || !kegReturnsConfirmed) && 'opacity-60 cursor-not-allowed')}
+                title={!kegReturnsConfirmed ? 'Confirm your keg returns above first' : undefined}>
                 {submitting ? 'Placing Order...' : 'Place Order'}
               </button>
             </div>

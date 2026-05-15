@@ -85,8 +85,16 @@ export default function ApplicationsPage() {
         // the modal AND surface it if the admin hits Skip. The API already
         // created the customer + emailed the password; the modal is mostly
         // a convenience for override.
-        const data = await res.json().catch(() => ({} as { tempPassword?: string }));
-        const generated = typeof data?.tempPassword === 'string' ? data.tempPassword : '';
+        const data = await res.json().catch(
+          () => ({} as { tempPassword?: string; approvalError?: string }),
+        );
+        // Surface server-side failures from the auto-customer-creation step.
+        // The application is still marked approved, but the admin needs to
+        // know they should hand-create the customer via the modal below.
+        if (typeof data?.approvalError === 'string' && data.approvalError) {
+          alert(`Application approved, but auto-creating the customer failed:\n\n${data.approvalError}\n\nUse the form below to create the customer manually.`);
+        }
+        const generated = typeof data?.tempPassword === 'string' ? data.tempPassword : 'guidon';
         setTempPassword(generated);
         // Pre-fill customer creation form
         setCustomerForm({
