@@ -972,33 +972,56 @@ export default function OrderPage() {
               {/* Keg Returns confirmation — required even when zero. The cart
                   sidebar exposes the per-size inputs; this is the explicit
                   acknowledgment that gates submit so brewery never gets a
-                  silent "I forgot to check" outcome. */}
+                  silent "I forgot to check" outcome. Painted red until ticked
+                  so customers can't visually skip past it; flips to a calm
+                  emerald confirmation once acknowledged. */}
               <div>
-                <span className="section-label mb-2 block">Keg Returns</span>
-                <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="section-label">Keg Returns</span>
+                  {!kegReturnsConfirmed && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
+                      Required
+                    </span>
+                  )}
+                </div>
+                <div className={cn(
+                  'rounded-xl p-4 space-y-2 transition-colors',
+                  kegReturnsConfirmed
+                    ? 'bg-emerald-500/5 border border-emerald-500/30'
+                    : 'bg-red-500/5 border-2 border-red-500/50 animate-pulse-slow',
+                )}>
                   {kegReturns.length === 0 ? (
-                    <p className="text-sm text-cream/50">No empty kegs to return on this delivery.</p>
+                    <p className="text-sm text-cream/60">No empty kegs to return on this delivery.</p>
                   ) : (
                     <div className="space-y-1.5">
                       {kegReturns.map((r) => (
                         <div key={r.size} className="flex justify-between text-sm">
-                          <span className="text-cream/60">{SIZE_LABELS[r.size]}</span>
+                          <span className="text-cream/70">{SIZE_LABELS[r.size]}</span>
                           <span className="text-cream font-medium">{r.quantity}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                  <label className="flex items-start gap-2.5 pt-2 mt-1 border-t border-white/[0.06] cursor-pointer">
+                  <label className={cn(
+                    'flex items-start gap-3 pt-3 mt-1 border-t cursor-pointer',
+                    kegReturnsConfirmed ? 'border-emerald-500/20' : 'border-red-500/30',
+                  )}>
                     <input
                       type="checkbox"
                       checked={kegReturnsConfirmed}
                       onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
-                      className="mt-1 h-4 w-4 shrink-0 accent-gold cursor-pointer"
+                      className={cn(
+                        'mt-0.5 h-5 w-5 shrink-0 cursor-pointer',
+                        kegReturnsConfirmed ? 'accent-emerald-500' : 'accent-red-500',
+                      )}
                     />
-                    <span className="text-xs text-cream/60 leading-snug">
+                    <span className={cn(
+                      'text-sm leading-snug font-medium',
+                      kegReturnsConfirmed ? 'text-emerald-300' : 'text-red-200',
+                    )}>
                       I&rsquo;ve reviewed my keg returns for this delivery
                       {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
-                      {' '}If this isn&rsquo;t right, tap <strong>Back</strong> and adjust on the cart.
+                      {' '}<span className="font-normal text-cream/50">If this isn&rsquo;t right, tap <strong>Back</strong> and adjust on the cart.</span>
                     </span>
                   </label>
                 </div>

@@ -1253,6 +1253,13 @@ function ProductsTab({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
+      // Clear localStorage BEFORE the state updates / tab switch. The
+      // cart-sync useEffect runs after render, but onOrderPlaced() flips
+      // the parent tab which unmounts this component — so the effect never
+      // commits with cart=[]. Without this explicit removal, the next time
+      // the customer visits the Browse & Order tab the cart re-hydrates
+      // from the stale localStorage entry and looks "stuck."
+      try { window.localStorage.removeItem(cartStorageKey); } catch { /* ignore */ }
       setCart([]); setKegReturns([]); setShowCheckout(false); setNotes('');
       setKegReturnsConfirmed(false);
       onOrderPlaced();
@@ -1584,10 +1591,24 @@ function ProductsTab({
               {/* Keg Returns — rows are derived from the customer's
                   outstanding-keg balance (each size they actually have
                   out). Falls back to the legacy 3 sizes if they have no
-                  outstanding kegs yet. */}
-              <div>
-                <span className="section-label mb-2 block">Keg Returns</span>
-                <p className="text-xs text-cream/35 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
+                  outstanding kegs yet. Wrapped in a red box until the
+                  acknowledgment below is ticked so customers can't visually
+                  skip past the required confirmation. */}
+              <div className={cn(
+                'rounded-xl p-4 transition-colors',
+                kegReturnsConfirmed
+                  ? 'bg-emerald-500/5 border border-emerald-500/30'
+                  : 'bg-red-500/5 border-2 border-red-500/50 animate-pulse-slow',
+              )}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="section-label">Keg Returns</span>
+                  {!kegReturnsConfirmed && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
+                      Required
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-cream/40 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
                 <div className="space-y-2">
                   {(() => {
                     const outstandingSizes = balances
@@ -1627,15 +1648,26 @@ function ProductsTab({
                 {/* Required acknowledgment — gates the Place Order button.
                     Even when there are no empties to return, the customer
                     has to actively check this so brewery never gets a
-                    silently-skipped returns line. */}
-                <label className="flex items-start gap-2.5 mt-3 cursor-pointer">
+                    silently-skipped returns line. Red/emerald styling
+                    matches the surrounding container so the whole section
+                    reads as one prominent gate. */}
+                <label className={cn(
+                  'flex items-start gap-3 mt-3 pt-3 border-t cursor-pointer',
+                  kegReturnsConfirmed ? 'border-emerald-500/20' : 'border-red-500/30',
+                )}>
                   <input
                     type="checkbox"
                     checked={kegReturnsConfirmed}
                     onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-gold cursor-pointer"
+                    className={cn(
+                      'mt-0.5 h-5 w-5 shrink-0 cursor-pointer',
+                      kegReturnsConfirmed ? 'accent-emerald-500' : 'accent-red-500',
+                    )}
                   />
-                  <span className="text-xs text-cream/60 leading-snug">
+                  <span className={cn(
+                    'text-sm leading-snug font-medium',
+                    kegReturnsConfirmed ? 'text-emerald-300' : 'text-red-200',
+                  )}>
                     I&rsquo;ve reviewed my keg returns above
                     {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
                   </span>
