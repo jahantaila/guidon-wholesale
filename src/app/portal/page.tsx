@@ -1593,24 +1593,44 @@ function ProductsTab({
               {/* Keg Returns — rows are derived from the customer's
                   outstanding-keg balance (each size they actually have
                   out). Falls back to the legacy 3 sizes if they have no
-                  outstanding kegs yet. Wrapped in a red box until the
-                  acknowledgment below is ticked so customers can't visually
-                  skip past the required confirmation. */}
-              <div className={cn(
-                'rounded-xl p-4 transition-colors',
-                kegReturnsConfirmed
-                  ? 'bg-emerald-500/5 border border-emerald-500/30'
-                  : 'bg-red-500/5 border-2 border-red-500/50 animate-pulse-slow',
-              )}>
+                  outstanding kegs yet. Wrapped in a ruby (rust-red)
+                  attention frame until the acknowledgment below is ticked
+                  so customers can't visually skip past the required gate.
+                  Uses DESIGN.md semantic tokens (--ruby / --pine) so the
+                  contrast lands on the paper theme. */}
+              <div
+                className={cn(
+                  'rounded-xl p-4 transition-colors',
+                  !kegReturnsConfirmed && 'animate-pulse-slow',
+                )}
+                style={
+                  kegReturnsConfirmed
+                    ? {
+                        background: 'color-mix(in srgb, var(--pine) 8%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--pine) 45%, transparent)',
+                      }
+                    : {
+                        background: 'color-mix(in srgb, var(--ruby) 12%, transparent)',
+                        border: '2px solid var(--ruby)',
+                      }
+                }
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="section-label">Keg Returns</span>
                   {!kegReturnsConfirmed && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
+                      style={{
+                        color: 'var(--paper)',
+                        background: 'var(--ruby)',
+                        border: '1px solid var(--ruby)',
+                      }}
+                    >
                       Required
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-cream/40 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
+                <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
                 <div className="space-y-2">
                   {(() => {
                     const outstandingSizes = balances
@@ -1650,26 +1670,27 @@ function ProductsTab({
                 {/* Required acknowledgment — gates the Place Order button.
                     Even when there are no empties to return, the customer
                     has to actively check this so brewery never gets a
-                    silently-skipped returns line. Red/emerald styling
-                    matches the surrounding container so the whole section
-                    reads as one prominent gate. */}
-                <label className={cn(
-                  'flex items-start gap-3 mt-3 pt-3 border-t cursor-pointer',
-                  kegReturnsConfirmed ? 'border-emerald-500/20' : 'border-red-500/30',
-                )}>
+                    silently-skipped returns line. Ruby/pine semantic tokens
+                    so the contrast holds on the paper theme. */}
+                <label
+                  className="flex items-start gap-3 mt-3 pt-3 border-t cursor-pointer"
+                  style={{
+                    borderColor: kegReturnsConfirmed
+                      ? 'color-mix(in srgb, var(--pine) 30%, transparent)'
+                      : 'color-mix(in srgb, var(--ruby) 35%, transparent)',
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={kegReturnsConfirmed}
                     onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
-                    className={cn(
-                      'mt-0.5 h-5 w-5 shrink-0 cursor-pointer',
-                      kegReturnsConfirmed ? 'accent-emerald-500' : 'accent-red-500',
-                    )}
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer"
+                    style={{ accentColor: kegReturnsConfirmed ? 'var(--pine)' : 'var(--ruby)' }}
                   />
-                  <span className={cn(
-                    'text-sm leading-snug font-medium',
-                    kegReturnsConfirmed ? 'text-emerald-300' : 'text-red-200',
-                  )}>
+                  <span
+                    className="text-sm leading-snug font-semibold"
+                    style={{ color: kegReturnsConfirmed ? 'var(--pine)' : 'var(--ruby)' }}
+                  >
                     I&rsquo;ve reviewed my keg returns above
                     {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
                   </span>
