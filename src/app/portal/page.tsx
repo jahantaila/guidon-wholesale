@@ -701,7 +701,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         </div>
       )}
 
-      <PriceIncreasePopup />
+      <WholesaleAlertPopup />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {tab === 'overview' && (
@@ -759,68 +759,70 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 }
 
 /* ================================================================== */
-/*  PRICE INCREASE POPUP                                              */
+/*  WHOLESALE ALERT POPUP                                             */
 /* ================================================================== */
 
-/**
- * One-time advisory popup announcing the keg price increase. Runs for 3
- * weeks from the brewery's announcement (2026-05-15 through 2026-06-05).
- * Dismissal is sticky per browser via localStorage; the end-date check is
- * the hard kill so dev clocks rolling forward don't surface a stale popup.
- *
- * Naming the localStorage key with the announcement date makes it easy
- * to run a second campaign later without colliding with this one's
- * dismissal state.
- */
-const PRICE_NOTICE_KEY = 'guidon-price-notice-dismissed-2026-05';
-const PRICE_NOTICE_END = new Date('2026-06-05T23:59:59');
+type PublicAlert = { id: string; title: string; body: string; endsAt: string | null };
 
-function PriceIncreasePopup() {
+/**
+ * Brewery-authored popup shown to wholesale customers on the portal home.
+ * Replaces the hardcoded price-increase popup with a dynamic CMS-backed one
+ * the admin manages via /admin/alerts.
+ *
+ * Visibility rules (server-side filter): inactive alerts never reach us, and
+ * past-endsAt alerts are dropped before they hit the wire — so any alert we
+ * receive here is one we should show, provided this browser hasn't dismissed
+ * THIS specific id. Per-id dismissal means admin can publish a brand-new
+ * alert and everyone sees it again, even people who acknowledged the prior
+ * one.
+ */
+function WholesaleAlertPopup() {
+  const [alert, setAlert] = useState<PublicAlert | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (Date.now() > PRICE_NOTICE_END.getTime()) return;
-    try {
-      if (window.localStorage.getItem(PRICE_NOTICE_KEY) === '1') return;
-    } catch {
-      // localStorage blocked (private mode, etc.) — show the popup anyway.
-      // It just won't stick across reloads, which is acceptable for a
-      // 3-week advisory.
-    }
-    setOpen(true);
+    let cancelled = false;
+    fetch('/api/alerts', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: PublicAlert | null) => {
+        if (cancelled || !data || !data.id) return;
+        try {
+          if (window.localStorage.getItem(`guidon-alert-dismissed-${data.id}`) === '1') return;
+        } catch {
+          // localStorage blocked (private mode, etc.) — show anyway; it just
+          // won't stick across reloads, acceptable for a brief advisory.
+        }
+        setAlert(data);
+        setOpen(true);
+      })
+      .catch(() => { /* network blip — skip the popup quietly */ });
+    return () => { cancelled = true; };
   }, []);
 
   useBodyScrollLock(open);
 
-  if (!open) return null;
+  if (!open || !alert) return null;
 
   const dismiss = () => {
     try {
-      window.localStorage.setItem(PRICE_NOTICE_KEY, '1');
+      window.localStorage.setItem(`guidon-alert-dismissed-${alert.id}`, '1');
     } catch { /* ignore */ }
     setOpen(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="price-notice-title">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="alert-popup-title">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={dismiss} />
       <div className="relative bg-charcoal-100 rounded-2xl border border-gold/30 w-full max-w-md animate-scale-in shadow-xl">
         <div className="px-6 py-5 border-b border-white/[0.06]">
           <span className="section-label" style={{ color: 'var(--brass)' }}>Important Notice</span>
-          <h3 id="price-notice-title" className="font-heading text-xl font-bold text-cream mt-1">
-            Keg Price Update
+          <h3 id="alert-popup-title" className="font-heading text-xl font-bold text-cream mt-1">
+            {alert.title}
           </h3>
         </div>
-        <div className="px-6 py-5 space-y-3 text-sm text-cream/70 leading-relaxed">
-          <p>
-            We&rsquo;ve increased our keg prices effective immediately. Updated pricing is
-            reflected on every product when you browse the catalog.
-          </p>
-          <p className="text-cream/50">
-            Thanks for continuing to carry Guidon. Reach out to the brewery directly with any
-            questions.
-          </p>
+        <div className="px-6 py-5 text-sm text-cream/70 leading-relaxed whitespace-pre-line">
+          {alert.body}
         </div>
         <div className="px-6 py-4 border-t border-white/[0.06] flex justify-end">
           <button onClick={dismiss} className="btn-primary px-5 py-2 text-sm">

@@ -258,6 +258,24 @@ export interface AdminStats {
   pendingApplications: number;
 }
 
+/** A single brewery-authored announcement shown as a popup on the wholesale
+ * portal. Only one alert is active at a time — keeps the UX simple and avoids
+ * popup pile-ons. Admin authors it via /admin/alerts. The portal dismisses
+ * via localStorage keyed on `id`, so when admin clicks "Reset dismissals" the
+ * id changes and everyone sees the alert again. */
+export interface WholesaleAlert {
+  id: string;
+  title: string;
+  body: string;
+  /** Master kill switch. When false, the portal hides the popup even if the
+   * end date hasn't been reached yet — useful for pausing without deleting. */
+  active: boolean;
+  /** ISO date string. When set and in the past, the popup is suppressed even
+   * if active=true. null means "no expiry — show until admin disables." */
+  endsAt: string | null;
+  updatedAt: string;
+}
+
 export const KEG_DEPOSITS: Record<KegSize, number> = {
   '1/2bbl': 50,
   '1/4bbl': 40,
