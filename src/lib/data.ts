@@ -795,6 +795,50 @@ export async function getNotificationEmails(): Promise<string[]> {
   return Array.isArray(saved) && saved.length > 0 ? saved : fallback;
 }
 
+// ─── Wholesale Alerts ─────────────────────────────────────────────────────────
+
+const ALERT_SETTINGS_KEY = 'wholesale_alert';
+
+/**
+ * Default alert seeded into the system: the keg-price-increase notice the
+ * brewery launched on 2026-05-15. Originally hardcoded into the portal popup
+ * with a 2026-06-05 expiry; on 2026-05-20 the brewery asked for "3 more
+ * weeks," so the seed expiry moves to 2026-06-26.
+ *
+ * Returned by getAlert() ONLY when no admin-saved record exists. The moment
+ * the admin saves anything via /admin/alerts (even to disable), that saved
+ * record takes over — the seed is just a transition shim so the popup keeps
+ * displaying through the deploy without manual intervention.
+ */
+const DEFAULT_ALERT_SEED: import('./types').WholesaleAlert = {
+  id: 'price-increase-2026-05',
+  title: 'Keg Price Update',
+  body: 'We’ve increased our keg prices effective immediately. Updated pricing is reflected on every product when you browse the catalog.\n\nThanks for continuing to carry Guidon. Reach out to the brewery directly with any questions.',
+  active: true,
+  endsAt: '2026-06-26',
+  updatedAt: '2026-05-20T00:00:00.000Z',
+};
+
+export async function getAlert(): Promise<import('./types').WholesaleAlert | null> {
+  const saved = await getSetting<import('./types').WholesaleAlert | null>(
+    ALERT_SETTINGS_KEY,
+    null,
+  );
+  if (saved && typeof saved === 'object' && 'id' in saved) return saved;
+  // No admin-saved record — fall through to the seed so customers don't lose
+  // the in-flight price-increase popup the moment this code deploys.
+  // Suppress the seed once its own end date passes so the seed doesn't
+  // resurrect itself indefinitely.
+  if (DEFAULT_ALERT_SEED.endsAt && Date.now() > new Date(DEFAULT_ALERT_SEED.endsAt).getTime()) {
+    return null;
+  }
+  return DEFAULT_ALERT_SEED;
+}
+
+export async function setAlert(alert: import('./types').WholesaleAlert): Promise<void> {
+  await setSetting(ALERT_SETTINGS_KEY, alert);
+}
+
 // ─── Keg Ledger ────────────────────────────────────────────────────────────────
 
 export async function getKegLedger(): Promise<KegLedgerEntry[]> {
