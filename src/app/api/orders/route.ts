@@ -41,15 +41,84 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
   const body = await request.json();
+  const { admin, portalCustomerId } = authContext(request);
+
+  // Auth: admin or a portal-logged-in customer. Anonymous POSTs were
+  // creating $0 orders in the brewery's pipeline because no validation
+  // gate existed — anyone who guessed a customerId could spam the queue.
+  if (!admin && !portalCustomerId) {
+    return NextResponse.json({ error: 'Authentication required to place an order.' }, { status: 401 });
+  }
+
+  // Validate customerId. Trim + require non-empty so the previous Postgres
+  // FK error leak ("violates not-null constraint" with raw row contents)
+  // never reaches the client.
+  const customerId = typeof body?.customerId === 'string' ? body.customerId.trim() : '';
+  if (!customerId) {
+    return NextResponse.json({ error: 'customerId is required.' }, { status: 400 });
+  }
+
+  // Portal customer can only place orders for themselves. Admin (incl.
+  // admin-on-behalf-of flow) can place for any customer.
+  if (!admin && portalCustomerId && customerId !== portalCustomerId) {
+    return NextResponse.json(
+      { error: 'You can only place orders for your own account.' },
+      { status: 403 },
+    );
+  }
+
+  // Empty orders shouldn't enter the pipeline — they pollute the queue
+  // and make no real-world sense (nothing to ship).
+  if (!Array.isArray(body?.items) || body.items.length === 0) {
+    return NextResponse.json(
+      { error: 'Order must include at least one item.' },
+      { status: 400 },
+    );
+  }
+
+  // Per-item shape check. Loose on price/deposit (those come from the
+  // server-side product catalog client-side; defending against bad shapes
+  // is enough), strict on the identifying fields.
+  for (let i = 0; i < (body.items as unknown[]).length; i++) {
+    const it = (body.items as unknown[])[i] as Record<string, unknown>;
+    if (
+      typeof it.productId !== 'string' || !it.productId.trim() ||
+      typeof it.productName !== 'string' || !it.productName.trim() ||
+      typeof it.size !== 'string' || !it.size.trim() ||
+      typeof it.quantity !== 'number' || !Number.isFinite(it.quantity) || it.quantity < 1
+    ) {
+      return NextResponse.json(
+        { error: `Item ${i + 1} is missing required fields (productId, productName, size, quantity).` },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Verify the customer exists BEFORE the insert. Same goal as the
+  // customerId trim above: surface a clean 404 instead of a raw Postgres
+  // FK violation. Include archived in the lookup so we can return a
+  // distinct "archived account" message rather than "not found."
+  const allCustomers = await getCustomers(true);
+  const matchedCustomer = allCustomers.find((c) => c.id === customerId);
+  if (!matchedCustomer) {
+    return NextResponse.json({ error: 'Customer not found.' }, { status: 404 });
+  }
+  if (matchedCustomer.archivedAt) {
+    return NextResponse.json(
+      { error: 'This account is archived. Contact the brewery to reactivate.' },
+      { status: 403 },
+    );
+  }
+
   const order: Order = {
     id: generateId('ord'),
-    customerId: body.customerId,
+    customerId,
     status: 'pending',
     items: body.items,
     kegReturns: body.kegReturns || [],
-    subtotal: body.subtotal,
-    totalDeposit: body.totalDeposit,
-    total: body.total,
+    subtotal: typeof body.subtotal === 'number' ? body.subtotal : 0,
+    totalDeposit: typeof body.totalDeposit === 'number' ? body.totalDeposit : 0,
+    total: typeof body.total === 'number' ? body.total : 0,
     // Per-order delivery dates were removed in 2026-04-29; brewery delivers
     // Thursdays + Fridays and admin schedules from the queue.
     deliveryDate: null,
@@ -82,10 +151,10 @@ export async function POST(request: NextRequest) {
   // Await email so Vercel's serverless runtime doesn't cut it off when the
   // response is sent. Fire-and-forget promises don't reliably complete in
   // prod. The notify function catches internal errors, so we can safely
-  // await without risking the order creation.
+  // await without risking the order creation. Reuse the customer record we
+  // already looked up above instead of doing a second round-trip.
   try {
-    const customers = await getCustomers();
-    const customer = customers.find((c) => c.id === order.customerId);
+    const customer = matchedCustomer;
     if (customer) {
       await notifyOrderPlaced({
         orderId: order.id,
