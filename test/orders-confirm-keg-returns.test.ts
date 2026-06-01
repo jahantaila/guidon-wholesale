@@ -1,23 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Regression: ISSUE — REQ-5 from 2026-04-29 client request batch.
-// Confirming an order with kegReturns must persist the return ledger
-// entries as status:'pending', NOT 'approved' (the prior behavior).
-// Returns must wait for physical receipt + admin approval from the Keg
-// Tracker pending queue before they decrement the customer's outstanding
-// balance.
+// Behavior (2026-05 change): confirming an order auto-posts keg DEPOSITS to
+// the customer's ledger, but never posts RETURNS. Keg returns are recorded
+// manually by the brewery from the Keg Tracker once the empties are in hand —
+// they are never derived from the order. This replaces the prior behavior
+// where customer-declared returns posted as status:'pending'.
 //
-// The bug shape: order has kegReturns: [{size:'1/2bbl', quantity:1}],
-// admin clicks Confirm, ledger entries created. If status is 'approved'
-// (or absent, which defaults to approved), balance drops immediately
-// even though the brewery hasn't seen the empties yet — that's the
-// regression this test exists to catch.
-//
-// Found by /qa on 2026-04-29
-// Report: .gstack/qa-reports/qa-report-guidon-wholesale-2026-04-29.md
+// Even if a (legacy) order carries kegReturns, confirming it must NOT create
+// any return ledger entries.
 
-// vi.hoisted so the mock factories can reference these spies (factories
-// run before module-level code).
 const {
   addKegLedgerEntrySpy,
   getOrderSpy,
@@ -70,6 +61,7 @@ const PENDING_ORDER_WITH_RETURNS = {
   customerId: "cust-test",
   status: "pending",
   items: [{ productId: "prod-1", productName: "Test", size: "1/2bbl", quantity: 2, unitPrice: 100, deposit: 50 }],
+  // Legacy field — even if present, confirming must not post return entries.
   kegReturns: [{ size: "1/2bbl", quantity: 1 }],
   subtotal: 200,
   totalDeposit: 100,
@@ -78,26 +70,21 @@ const PENDING_ORDER_WITH_RETURNS = {
   createdAt: new Date().toISOString(),
 };
 
-describe("PUT /api/orders confirmation — kegReturns ledger entries", () => {
+describe("PUT /api/orders confirmation — keg ledger entries", () => {
   beforeEach(() => {
     addKegLedgerEntrySpy.mockClear();
     getOrderSpy.mockReset();
     getKegLedgerByCustomerSpy.mockResolvedValue([]);
   });
 
-  it("creates RETURN ledger entries with status:'pending' (NOT approved)", async () => {
+  it("does NOT create any RETURN ledger entries on confirm (returns are manual)", async () => {
     getOrderSpy.mockResolvedValue(PENDING_ORDER_WITH_RETURNS);
     const res = await PUT(makeRequest({ id: "ord-test", status: "confirmed" }) as never);
     expect(res.status).toBe(200);
 
-    // Pull all calls to addKegLedgerEntry. Filter to type:'return'.
     const calls = addKegLedgerEntrySpy.mock.calls.map((args) => args[0] as Record<string, unknown>);
     const returnEntries = calls.filter((c) => c.type === "return");
-    expect(returnEntries.length).toBe(1);
-    expect(returnEntries[0].status).toBe("pending");
-    // Tracking field — make sure the size + quantity are preserved.
-    expect(returnEntries[0].size).toBe("1/2bbl");
-    expect(returnEntries[0].quantity).toBe(1);
+    expect(returnEntries.length).toBe(0);
   });
 
   it("creates DEPOSIT ledger entries with the default 'approved' status (deposits count immediately)", async () => {
@@ -107,27 +94,20 @@ describe("PUT /api/orders confirmation — kegReturns ledger entries", () => {
     const calls = addKegLedgerEntrySpy.mock.calls.map((args) => args[0] as Record<string, unknown>);
     const depositEntries = calls.filter((c) => c.type === "deposit");
     expect(depositEntries.length).toBe(1);
-    // Deposits should NOT carry status:'pending' — they count toward balance
-    // the moment the order is confirmed (kegs go OUT to the customer).
+    // Deposits go OUT to the customer the moment the order is confirmed, so
+    // they must not be flagged pending.
     expect(depositEntries[0].status).not.toBe("pending");
+    expect(depositEntries[0].size).toBe("1/2bbl");
+    expect(depositEntries[0].quantity).toBe(2);
   });
 
-  it("notes field on the return entry mentions awaiting brewery confirmation", async () => {
-    getOrderSpy.mockResolvedValue(PENDING_ORDER_WITH_RETURNS);
-    await PUT(makeRequest({ id: "ord-test", status: "confirmed" }) as never);
-
-    const calls = addKegLedgerEntrySpy.mock.calls.map((args) => args[0] as Record<string, unknown>);
-    const returnEntries = calls.filter((c) => c.type === "return");
-    expect(returnEntries[0].notes).toMatch(/awaiting brewery confirmation/i);
-  });
-
-  it("handles an order with NO kegReturns without creating any return entries", async () => {
+  it("handles an order with NO kegReturns and still posts deposits", async () => {
     const orderWithoutReturns = { ...PENDING_ORDER_WITH_RETURNS, kegReturns: [] };
     getOrderSpy.mockResolvedValue(orderWithoutReturns);
     await PUT(makeRequest({ id: "ord-test", status: "confirmed" }) as never);
 
     const calls = addKegLedgerEntrySpy.mock.calls.map((args) => args[0] as Record<string, unknown>);
-    const returnEntries = calls.filter((c) => c.type === "return");
-    expect(returnEntries.length).toBe(0);
+    expect(calls.filter((c) => c.type === "return").length).toBe(0);
+    expect(calls.filter((c) => c.type === "deposit").length).toBe(1);
   });
 });

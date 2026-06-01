@@ -237,6 +237,11 @@ export async function PUT(request: NextRequest) {
     // Keg ledger deposits: one row per line item. These count against the
     // customer's outstanding-keg balance until they return the empties.
     // Skip if we already posted entries for this order (re-confirm flow).
+    //
+    // RETURNS are intentionally NOT posted here. Per client (2026-05): keg
+    // returns are recorded manually by the brewery from the Keg Tracker once
+    // the empties are physically in hand — they are never derived from the
+    // order. Deposits still auto-apply on confirm; returns are 100% manual.
     if (!alreadyLedgered) {
       const now = new Date().toISOString();
       for (const item of existingOrder.items) {
@@ -251,31 +256,6 @@ export async function PUT(request: NextRequest) {
           totalAmount: item.deposit * item.quantity,
           date: now,
           notes: `Order ${existingOrder.id} confirmed`,
-        };
-        await addKegLedgerEntry(entry);
-      }
-      // Returns the customer declared at checkout. CRITICAL: these are
-      // posted as `pending`, not `approved`, so they do NOT subtract from
-      // the customer's outstanding-keg balance until the brewery physically
-      // receives the empties and admin manually approves the return from
-      // the keg-tracker pending queue. Per client (2026-04-29): "keg returns
-      // are still adjusting automatically based on what the order says. We
-      // don't want keg returns calculated until they are in our possession
-      // and we manually confirm the returns. THIS IS VERY IMPORTANT."
-      for (const ret of existingOrder.kegReturns) {
-        const depositAmounts: Record<string, number> = { '1/2bbl': 50, '1/4bbl': 40, '1/6bbl': 30 };
-        const entry: KegLedgerEntry = {
-          id: generateId('kl'),
-          customerId: existingOrder.customerId,
-          orderId: existingOrder.id,
-          type: 'return',
-          size: ret.size,
-          quantity: ret.quantity,
-          depositAmount: depositAmounts[ret.size] || 0,
-          totalAmount: -((depositAmounts[ret.size] || 0) * ret.quantity),
-          date: now,
-          notes: `Customer declared on order ${existingOrder.id} — awaiting brewery confirmation`,
-          status: 'pending',
         };
         await addKegLedgerEntry(entry);
       }

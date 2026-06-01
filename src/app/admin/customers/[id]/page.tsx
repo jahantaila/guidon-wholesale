@@ -24,6 +24,8 @@ export default function CustomerDetailPage() {
   const [notesDraft, setNotesDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
   const [autoSendDraft, setAutoSendDraft] = useState(false);
+  const [followupDateDraft, setFollowupDateDraft] = useState('');
+  const [followupNotesDraft, setFollowupNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [recurringName, setRecurringName] = useState('');
   const [recurringInterval, setRecurringInterval] = useState<number>(7);
@@ -46,6 +48,8 @@ export default function CustomerDetailPage() {
           setNotesDraft(c.notes || '');
           setTagsDraft((c.tags || []).join(', '));
           setAutoSendDraft(c.autoSendInvoices === true);
+          setFollowupDateDraft(c.nextFollowupDate || '');
+          setFollowupNotesDraft(c.nextFollowupNotes || '');
         }
         setOrders(await ordersRes.json());
         setInvoices(await invoicesRes.json());
@@ -72,6 +76,18 @@ export default function CustomerDetailPage() {
 
   const totalKegsOut = balance['1/2bbl'] + balance['1/4bbl'] + balance['1/6bbl'];
   const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
+  // Last activity = the customer's most recent order date. Derived live from
+  // the orders list so it's always accurate without a stored column.
+  const lastOrderDate = useMemo(
+    () =>
+      orders.length === 0
+        ? null
+        : orders.reduce((latest, o) => (o.createdAt > latest ? o.createdAt : latest), orders[0].createdAt),
+    [orders],
+  );
+  // Follow-up is "due" when the scheduled date is today or in the past.
+  const followupDue =
+    !!customer?.nextFollowupDate && customer.nextFollowupDate <= new Date().toISOString().slice(0, 10);
   const shippedOrders = orders.filter((o) => o.status === 'confirmed' || o.status === 'completed');
   const outstandingInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue');
   const outstandingAmount = outstandingInvoices.reduce((s, i) => s + i.total, 0);
@@ -148,7 +164,14 @@ export default function CustomerDetailPage() {
       const res = await adminFetch('/api/customers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: customer.id, notes: notesDraft, tags, autoSendInvoices: autoSendDraft }),
+        body: JSON.stringify({
+          id: customer.id,
+          notes: notesDraft,
+          tags,
+          autoSendInvoices: autoSendDraft,
+          nextFollowupDate: followupDateDraft || null,
+          nextFollowupNotes: followupNotesDraft,
+        }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -281,6 +304,17 @@ export default function CustomerDetailPage() {
                 <span className="font-semibold">on</span>
               </span>
             )}
+            <span>
+              <span style={{ color: 'var(--faint)' }}>Last activity:</span>{' '}
+              {lastOrderDate ? formatDate(lastOrderDate) : <span className="italic">Never ordered</span>}
+            </span>
+            {customer.nextFollowupDate && (
+              <span style={{ color: followupDue ? 'var(--ember)' : 'var(--muted)' }}>
+                <span style={{ color: 'var(--faint)' }}>Next follow-up:</span>{' '}
+                <span className="font-semibold">{formatDate(customer.nextFollowupDate)}</span>
+                {followupDue && ' (due)'}
+              </span>
+            )}
           </div>
           {Array.isArray(customer.tags) && customer.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -384,8 +418,35 @@ export default function CustomerDetailPage() {
             disabled={savingNotes}
             className="btn-primary text-sm"
           >
-            {savingNotes ? 'Saving...' : 'Save Notes'}
+            {savingNotes ? 'Saving...' : 'Save'}
           </button>
+        </div>
+        {/* CRM: next scheduled visit / follow-up + comments. Saved together
+            with notes + tags on the Save button above. */}
+        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-3 mt-4 pt-4 border-t border-divider">
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>
+              Next visit / follow-up
+            </label>
+            <input
+              type="date"
+              value={followupDateDraft}
+              onChange={(e) => setFollowupDateDraft(e.target.value)}
+              className="input w-full text-sm font-variant-tabular"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>
+              Follow-up comments
+            </label>
+            <input
+              type="text"
+              value={followupNotesDraft}
+              onChange={(e) => setFollowupNotesDraft(e.target.value)}
+              placeholder="e.g. Check in about the fall seasonal order"
+              className="input w-full text-sm"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-3 mt-4 pt-4 border-t border-divider">
           <input

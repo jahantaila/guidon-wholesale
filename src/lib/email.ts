@@ -411,48 +411,8 @@ export async function notifyApplicationSubmitted(args: {
 }
 
 /**
- * Keg-return request from the customer portal. Admin gets an email so they
- * know to schedule pickup; the entry lands in the keg tracker's pending
- * queue for approve/reject. The customer doesn't get a copy — they already
- * saw the "submitted" confirmation in the portal modal.
- */
-export async function notifyKegReturnRequested(args: {
-  customerEmail: string;
-  customerName: string;
-  businessName: string;
-  size: string;
-  quantity: number;
-  notes?: string;
-}): Promise<void> {
-  const adminTo = await adminRecipients();
-  if (adminTo.length === 0) return;
-  const appUrl = cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app';
-  await send({
-    to: adminTo,
-    subject: `Keg return request: ${args.businessName} (${args.quantity} x ${args.size})`,
-    replyTo: args.customerEmail,
-    html: emailShell({
-      title: 'New keg return request',
-      preheader: `${args.businessName} wants to return ${args.quantity} x ${args.size}.`,
-      body: `
-        <p><strong>${escapeHtml(args.businessName)}</strong> (${escapeHtml(args.customerName)}) requested a keg return:</p>
-        <div style="margin:12px 0;font-size:14px;">
-          <div><strong>Quantity:</strong> <span style="font-family:monospace;">${args.quantity}</span> &middot; <strong>Size:</strong> <span style="font-family:monospace;">${escapeHtml(args.size)}</span></div>
-          ${args.notes ? `<div style="margin-top:8px;color:#6B5F48;font-style:italic;">Customer note: ${escapeHtml(args.notes)}</div>` : ''}
-        </div>
-        <p style="margin:12px 0;">The balance won&rsquo;t drop until you approve the pickup in the keg tracker. That prevents phantom negatives when kegs are still at the customer&rsquo;s location.</p>
-        <p style="margin:16px 0;">
-          <a href="${appUrl}/admin/kegs" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Review in keg tracker &rarr;</a>
-        </p>
-      `,
-    }),
-  });
-}
-
-/**
  * Keg-return reminder. Admin clicks a button on a confirmed/completed order;
- * this emails the customer asking them to put in a return request on the
- * portal.
+ * this emails the customer a nudge to have their empties ready for pickup.
  */
 export async function notifyKegReminder(args: {
   orderId: string;

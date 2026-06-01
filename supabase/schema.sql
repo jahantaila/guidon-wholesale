@@ -235,6 +235,15 @@ alter table customers add column if not exists must_change_password boolean not 
 -- alongside their public-facing details.
 alter table customers add column if not exists customer_identification text not null default '';
 
+-- CRM follow-up tracking (admin-only). next_followup_date is the next
+-- scheduled visit / check-in the brewery wants to make; next_followup_notes
+-- holds free-form context for that follow-up. Neither is sent to the
+-- customer portal. "Last activity" is derived at render time from the
+-- customer's most recent order — no column needed.
+alter table customers
+  add column if not exists next_followup_date date,
+  add column if not exists next_followup_notes text not null default '';
+
 -- Brewing schedule: admin records "I'm brewing Bandera 1/2bbl on Apr 25,
 -- expected yield 20 kegs". Production page shows the earliest scheduled
 -- brew date per product+size as "back in stock by" so customers + sales
@@ -325,12 +334,12 @@ create table if not exists keg_ledger (
   notes text not null default ''
 );
 
--- Customer-initiated keg return requests post as status='pending' so they
--- don't decrement the balance until an admin approves the pickup. Admin-
--- initiated entries (deposits from order confirmation, manual adjustments)
--- default to 'approved' and count immediately. Without this column the
--- portal return request would drop the balance while the empties were still
--- physically at the customer's location, producing phantom negatives.
+-- The approve/reject workflow for customer-initiated returns was retired in
+-- 2026-05: customers no longer declare/request returns, and the brewery
+-- records every return manually from the Keg Tracker (which posts as
+-- 'approved'). The status column is KEPT for back-compat so any legacy
+-- 'pending'/'rejected' rows still don't count toward the balance, but no new
+-- non-approved rows are created. Deposits still auto-post on order confirm.
 alter table keg_ledger
   add column if not exists status text not null default 'approved'
   check (status in ('pending', 'approved', 'rejected'));

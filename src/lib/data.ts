@@ -60,6 +60,8 @@ function rowToCustomer(row: any): Customer {
     autoSendInvoices: row.auto_send_invoices === true,
     archivedAt: row.archived_at ?? null,
     mustChangePassword: row.must_change_password === true,
+    nextFollowupDate: row.next_followup_date ?? null,
+    nextFollowupNotes: row.next_followup_notes ?? '',
     createdAt: row.created_at,
   };
 }
@@ -291,6 +293,10 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     if (updates.tags !== undefined) row.tags = updates.tags;
     if (updates.autoSendInvoices !== undefined) row.auto_send_invoices = updates.autoSendInvoices;
     if (updates.archivedAt !== undefined) row.archived_at = updates.archivedAt;
+    // CRM follow-up fields. nextFollowupDate accepts '' from the form which we
+    // normalize to null so the date column clears cleanly.
+    if (updates.nextFollowupDate !== undefined) row.next_followup_date = updates.nextFollowupDate || null;
+    if (updates.nextFollowupNotes !== undefined) row.next_followup_notes = updates.nextFollowupNotes;
     // must_change_password is tracked on the customer row so we can prompt
     // the user on login. Approval flow sets it true (temp password issued);
     // the change-password flow clears it.
@@ -881,32 +887,6 @@ export async function addKegLedgerEntry(entry: KegLedgerEntry): Promise<KegLedge
   return row;
 }
 
-/** Flip a keg ledger entry's status. Used by admin to approve or reject a
- * customer-initiated return request. Returns the updated row, or null if
- * no row with that id exists. */
-export async function updateKegLedgerStatus(
-  id: string,
-  status: KegLedgerStatus,
-): Promise<KegLedgerEntry | null> {
-  if (isSupabaseConfigured()) {
-    const sb = createAdminClient();
-    const { data, error } = await sb
-      .from('keg_ledger')
-      .update({ status })
-      .eq('id', id)
-      .select('*')
-      .maybeSingle();
-    if (error) throw error;
-    return data ? rowToKegEntry(data) : null;
-  }
-  const ledger = readJSON<KegLedgerEntry[]>('keg-ledger.json');
-  const idx = ledger.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-  ledger[idx] = { ...ledger[idx], status };
-  writeJSON('keg-ledger.json', ledger);
-  return ledger[idx];
-}
-
 export async function getKegLedgerByCustomer(customerId: string): Promise<KegLedgerEntry[]> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
@@ -938,13 +918,6 @@ export async function getAllKegBalances(): Promise<Record<string, Record<string,
     result[customerId] = computeKegBalance(entries);
   });
   return result;
-}
-
-/** All pending keg-return requests across customers, newest first. Admin
- * keg tracker uses this to show the approval queue. */
-export async function getPendingKegReturns(): Promise<KegLedgerEntry[]> {
-  const ledger = await getKegLedger();
-  return ledger.filter((e) => e.type === 'return' && (e.status ?? 'approved') === 'pending');
 }
 
 // ─── Wholesale Applications ────────────────────────────────────────────────────

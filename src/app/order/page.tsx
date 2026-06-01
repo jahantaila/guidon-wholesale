@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
-import { KEG_DEPOSITS } from '@/lib/types';
+import type { Product, ProductSize, CartItem, KegSize, Customer } from '@/lib/types';
 import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import { getAdminToken } from '@/lib/admin-fetch';
@@ -92,7 +91,6 @@ export default function OrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   useBodyScrollLock(cartOpen);
-  const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [toastMsg, setToastMsg] = useState('');
 
   const [selections, setSelections] = useState<
@@ -101,13 +99,6 @@ export default function OrderPage() {
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   useBodyScrollLock(checkoutOpen);
-  // Customer must explicitly confirm their keg returns line — even if the
-  // count is zero. Brewery directive: too many orders were shipping with no
-  // returns information at all because the section sat at "0 / 0 / 0" by
-  // default and got skipped without thought. The checkbox below gates the
-  // Place Order button and resets every time the checkout modal opens so
-  // multi-edit flows can't accidentally re-use a stale confirmation.
-  const [kegReturnsConfirmed, setKegReturnsConfirmed] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   // Pre-select a customer when ?customerId= is on the URL. Admin uses this
   // from customer detail to "place an order for this customer." Using
@@ -228,8 +219,9 @@ export default function OrderPage() {
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [cart]);
   const depositFromItems = useMemo(() => cart.reduce((sum, item) => sum + item.deposit * item.quantity, 0), [cart]);
-  const depositFromReturns = useMemo(() => kegReturns.reduce((sum, ret) => sum + KEG_DEPOSITS[ret.size] * ret.quantity, 0), [kegReturns]);
-  const totalDeposit = depositFromItems - depositFromReturns;
+  // Returns are recorded manually by the brewery (not declared at checkout),
+  // so the customer always pays the full keg deposit up front.
+  const totalDeposit = depositFromItems;
   const total = subtotal + totalDeposit;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -279,29 +271,7 @@ export default function OrderPage() {
     setCart((prev) => prev.map((item, i) => (i === index ? { ...item, quantity: qty } : item)));
   };
 
-  const addKegReturn = (size: KegSize) => {
-    setKegReturns((prev) => {
-      const existing = prev.find((r) => r.size === size);
-      if (existing) return prev.map((r) => r.size === size ? { ...r, quantity: r.quantity + 1 } : r);
-      return [...prev, { size, quantity: 1 }];
-    });
-  };
-
-  const updateReturnQty = (size: KegSize, qty: number) => {
-    if (qty < 1) { setKegReturns((prev) => prev.filter((r) => r.size !== size)); return; }
-    setKegReturns((prev) => prev.map((r) => (r.size === size ? { ...r, quantity: qty } : r)));
-  };
-
-  const removeReturn = (size: KegSize) => setKegReturns((prev) => prev.filter((r) => r.size !== size));
-
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
-    // Reset the keg-returns confirmation every time checkout opens so users
-    // can't carry a stale tick from a prior cart edit through to submit.
-    setKegReturnsConfirmed(false);
-    setCheckoutOpen(true);
-    setCartOpen(false);
-  };
+  const handleCheckout = () => { if (cart.length === 0) return; setCheckoutOpen(true); setCartOpen(false); };
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -309,10 +279,6 @@ export default function OrderPage() {
     if (!isNewCustomer && !customerId) { setSubmitError('Please select a customer.'); return; }
     if (isNewCustomer && (!newCustomer.businessName || !newCustomer.contactName || !newCustomer.email)) {
       setSubmitError('Business name, contact name, and email are required.'); return;
-    }
-    if (!kegReturnsConfirmed) {
-      setSubmitError('Please confirm your keg returns above before placing the order.');
-      return;
     }
     setSubmitting(true);
     try {
@@ -331,7 +297,7 @@ export default function OrderPage() {
       }));
       const orderRes = await authedFetch('/api/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns: [], subtotal, totalDeposit, total, notes }),
       });
       if (!orderRes.ok) {
         const data = await orderRes.json().catch(() => ({}));
@@ -798,39 +764,6 @@ export default function OrderPage() {
                 </div>
               ))}
 
-              {/* Keg Returns — always visible with 3 size rows at 0. */}
-              <div className="pt-4">
-                <span className="section-label mb-2 block">Keg Returns</span>
-                <p className="text-xs text-cream/25 mb-3">How many empty kegs are you returning this delivery? (0 if none.)</p>
-                <div className="space-y-2">
-                  {KEG_SIZES.map((size) => {
-                    const existing = kegReturns.find((r) => r.size === size);
-                    const qty = existing?.quantity ?? 0;
-                    const setQty = (n: number) => {
-                      if (n <= 0) {
-                        setKegReturns((prev) => prev.filter((r) => r.size !== size));
-                      } else if (existing) {
-                        updateReturnQty(size, n);
-                      } else {
-                        setKegReturns((prev) => [...prev, { size, quantity: n }]);
-                      }
-                    };
-                    return (
-                      <div key={size} className="flex items-center gap-3">
-                        <span className="text-sm text-cream/60 flex-1">
-                          {SIZE_LABELS[size]}{' '}
-                          <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[size])}/ea)</span>
-                        </span>
-                        <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                          <button type="button" onClick={() => setQty(qty - 1)} disabled={qty === 0} className="px-2 py-1 text-cream/30 hover:text-cream text-xs disabled:opacity-30">-</button>
-                          <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{qty}</span>
-                          <button type="button" onClick={() => setQty(qty + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </>
           )}
         </div>
@@ -846,12 +779,6 @@ export default function OrderPage() {
               <span className="text-cream/35">Keg Deposits</span>
               <span className="text-cream font-medium">{formatCurrency(depositFromItems)}</span>
             </div>
-            {depositFromReturns > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-emerald-400/60">Return Credits</span>
-                <span className="text-emerald-400 font-medium">-{formatCurrency(depositFromReturns)}</span>
-              </div>
-            )}
             <div className="flex justify-between text-lg font-heading font-black pt-3 border-t border-white/[0.06]">
               <span className="text-cream">Total</span>
               <span className="text-gold">{formatCurrency(total)}</span>
@@ -969,85 +896,6 @@ export default function OrderPage() {
                   placeholder="Special instructions, loading dock info, etc." rows={3} className="input resize-none" />
               </div>
 
-              {/* Keg Returns confirmation — required even when zero. The cart
-                  sidebar exposes the per-size inputs; this is the explicit
-                  acknowledgment that gates submit so brewery never gets a
-                  silent "I forgot to check" outcome. Uses the DESIGN.md
-                  semantic tokens (--ruby for destructive/attention, --pine
-                  for confirmed/success) so the contrast lands on both the
-                  paper theme here and any future dark-theme route. */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="section-label">Keg Returns</span>
-                  {!kegReturnsConfirmed && (
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
-                      style={{
-                        color: 'var(--paper)',
-                        background: 'var(--ruby)',
-                        border: '1px solid var(--ruby)',
-                      }}
-                    >
-                      Required
-                    </span>
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    'rounded-xl p-4 space-y-2 transition-colors',
-                    !kegReturnsConfirmed && 'animate-pulse-slow',
-                  )}
-                  style={
-                    kegReturnsConfirmed
-                      ? {
-                          background: 'color-mix(in srgb, var(--pine) 8%, transparent)',
-                          border: '1px solid color-mix(in srgb, var(--pine) 45%, transparent)',
-                        }
-                      : {
-                          background: 'color-mix(in srgb, var(--ruby) 12%, transparent)',
-                          border: '2px solid var(--ruby)',
-                        }
-                  }
-                >
-                  {kegReturns.length === 0 ? (
-                    <p className="text-sm" style={{ color: 'var(--ink)' }}>No empty kegs to return on this delivery.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {kegReturns.map((r) => (
-                        <div key={r.size} className="flex justify-between text-sm">
-                          <span style={{ color: 'var(--ink)' }}>{SIZE_LABELS[r.size]}</span>
-                          <span className="font-semibold" style={{ color: 'var(--ink)' }}>{r.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label
-                    className="flex items-start gap-3 pt-3 mt-1 border-t cursor-pointer"
-                    style={{
-                      borderColor: kegReturnsConfirmed
-                        ? 'color-mix(in srgb, var(--pine) 30%, transparent)'
-                        : 'color-mix(in srgb, var(--ruby) 35%, transparent)',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={kegReturnsConfirmed}
-                      onChange={(e) => setKegReturnsConfirmed(e.target.checked)}
-                      className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer"
-                      style={{ accentColor: kegReturnsConfirmed ? 'var(--pine)' : 'var(--ruby)' }}
-                    />
-                    <span
-                      className="text-sm leading-snug font-semibold"
-                      style={{ color: kegReturnsConfirmed ? 'var(--pine)' : 'var(--ruby)' }}
-                    >
-                      I&rsquo;ve reviewed my keg returns for this delivery
-                      {kegReturns.length === 0 ? ' and have no empties to return.' : '.'}
-                      {' '}<span className="font-normal" style={{ color: 'var(--muted)' }}>If this isn&rsquo;t right, tap <strong>Back</strong> and adjust on the cart.</span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-
               {/* Order Summary */}
               <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-1.5">
                 <span className="section-label mb-2 block">Order Summary</span>
@@ -1080,9 +928,8 @@ export default function OrderPage() {
               <button onClick={() => { setCheckoutOpen(false); setCartOpen(true); }} className="btn-secondary flex-1 text-center">
                 Back
               </button>
-              <button onClick={handleSubmit} disabled={submitting || !kegReturnsConfirmed}
-                className={cn('btn-primary flex-1', (submitting || !kegReturnsConfirmed) && 'opacity-60 cursor-not-allowed')}
-                title={!kegReturnsConfirmed ? 'Confirm your keg returns above first' : undefined}>
+              <button onClick={handleSubmit} disabled={submitting}
+                className={cn('btn-primary flex-1', submitting && 'opacity-60 cursor-not-allowed')}>
                 {submitting ? 'Placing Order...' : 'Place Order'}
               </button>
             </div>
