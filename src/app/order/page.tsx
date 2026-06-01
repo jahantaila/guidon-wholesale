@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
-import { KEG_DEPOSITS } from '@/lib/types';
+import type { Product, ProductSize, CartItem, KegSize, Customer } from '@/lib/types';
 import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import { getAdminToken } from '@/lib/admin-fetch';
@@ -92,7 +91,6 @@ export default function OrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   useBodyScrollLock(cartOpen);
-  const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [toastMsg, setToastMsg] = useState('');
 
   const [selections, setSelections] = useState<
@@ -221,8 +219,9 @@ export default function OrderPage() {
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [cart]);
   const depositFromItems = useMemo(() => cart.reduce((sum, item) => sum + item.deposit * item.quantity, 0), [cart]);
-  const depositFromReturns = useMemo(() => kegReturns.reduce((sum, ret) => sum + KEG_DEPOSITS[ret.size] * ret.quantity, 0), [kegReturns]);
-  const totalDeposit = depositFromItems - depositFromReturns;
+  // Returns are recorded manually by the brewery (not declared at checkout),
+  // so the customer always pays the full keg deposit up front.
+  const totalDeposit = depositFromItems;
   const total = subtotal + totalDeposit;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -272,21 +271,6 @@ export default function OrderPage() {
     setCart((prev) => prev.map((item, i) => (i === index ? { ...item, quantity: qty } : item)));
   };
 
-  const addKegReturn = (size: KegSize) => {
-    setKegReturns((prev) => {
-      const existing = prev.find((r) => r.size === size);
-      if (existing) return prev.map((r) => r.size === size ? { ...r, quantity: r.quantity + 1 } : r);
-      return [...prev, { size, quantity: 1 }];
-    });
-  };
-
-  const updateReturnQty = (size: KegSize, qty: number) => {
-    if (qty < 1) { setKegReturns((prev) => prev.filter((r) => r.size !== size)); return; }
-    setKegReturns((prev) => prev.map((r) => (r.size === size ? { ...r, quantity: qty } : r)));
-  };
-
-  const removeReturn = (size: KegSize) => setKegReturns((prev) => prev.filter((r) => r.size !== size));
-
   const handleCheckout = () => { if (cart.length === 0) return; setCheckoutOpen(true); setCartOpen(false); };
 
   const handleSubmit = async () => {
@@ -313,7 +297,7 @@ export default function OrderPage() {
       }));
       const orderRes = await authedFetch('/api/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns: [], subtotal, totalDeposit, total, notes }),
       });
       if (!orderRes.ok) {
         const data = await orderRes.json().catch(() => ({}));
@@ -780,39 +764,6 @@ export default function OrderPage() {
                 </div>
               ))}
 
-              {/* Keg Returns — always visible with 3 size rows at 0. */}
-              <div className="pt-4">
-                <span className="section-label mb-2 block">Keg Returns</span>
-                <p className="text-xs text-cream/25 mb-3">How many empty kegs are you returning this delivery? (0 if none.)</p>
-                <div className="space-y-2">
-                  {KEG_SIZES.map((size) => {
-                    const existing = kegReturns.find((r) => r.size === size);
-                    const qty = existing?.quantity ?? 0;
-                    const setQty = (n: number) => {
-                      if (n <= 0) {
-                        setKegReturns((prev) => prev.filter((r) => r.size !== size));
-                      } else if (existing) {
-                        updateReturnQty(size, n);
-                      } else {
-                        setKegReturns((prev) => [...prev, { size, quantity: n }]);
-                      }
-                    };
-                    return (
-                      <div key={size} className="flex items-center gap-3">
-                        <span className="text-sm text-cream/60 flex-1">
-                          {SIZE_LABELS[size]}{' '}
-                          <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[size])}/ea)</span>
-                        </span>
-                        <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                          <button type="button" onClick={() => setQty(qty - 1)} disabled={qty === 0} className="px-2 py-1 text-cream/30 hover:text-cream text-xs disabled:opacity-30">-</button>
-                          <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{qty}</span>
-                          <button type="button" onClick={() => setQty(qty + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </>
           )}
         </div>
@@ -828,12 +779,6 @@ export default function OrderPage() {
               <span className="text-cream/35">Keg Deposits</span>
               <span className="text-cream font-medium">{formatCurrency(depositFromItems)}</span>
             </div>
-            {depositFromReturns > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-emerald-400/60">Return Credits</span>
-                <span className="text-emerald-400 font-medium">-{formatCurrency(depositFromReturns)}</span>
-              </div>
-            )}
             <div className="flex justify-between text-lg font-heading font-black pt-3 border-t border-white/[0.06]">
               <span className="text-cream">Total</span>
               <span className="text-gold">{formatCurrency(total)}</span>

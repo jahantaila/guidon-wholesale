@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
-import { KEG_DEPOSITS } from '@/lib/types';
+import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, RecurringOrder } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import HelpView from '@/components/HelpView';
@@ -529,8 +528,6 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
       .catch(() => { /* ignore */ });
   }, [customer.id]);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [showReturnModal, setShowReturnModal] = useState(false);
-  useBodyScrollLock(showReturnModal);
 
   const fetchInvoices = useCallback(() => {
     setLoadingInvoices(true);
@@ -710,7 +707,6 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             loadingOrders={loadingOrders}
             expandedOrderId={expandedOrderId}
             setExpandedOrderId={setExpandedOrderId}
-            onShowReturn={() => setShowReturnModal(true)}
             onSwitchTab={setTab}
             totalSpent={totalSpent}
             totalKegsOut={totalKegsOut}
@@ -723,7 +719,6 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             onOrderPlaced={() => { fetchOrders(); fetchBalances(); setTab('orders'); }}
             seedCart={reorderSeed}
             onSeedConsumed={() => setReorderSeed(null)}
-            balances={balances}
           />
         )}
         {tab === 'orders' && (
@@ -746,12 +741,6 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
         )}
         {tab === 'help' && <PortalHelpTab />}
       </main>
-
-      {showReturnModal && (
-        <KegReturnModal customerId={customer.id}
-          onClose={() => setShowReturnModal(false)}
-          onSuccess={() => { setShowReturnModal(false); fetchBalances(); }} />
-      )}
     </div>
   );
 }
@@ -761,7 +750,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
 /* ================================================================== */
 
 function OverviewTab({
-  balances, loadingBalances, orders, loadingOrders, expandedOrderId, setExpandedOrderId, onShowReturn, onSwitchTab, totalSpent, totalKegsOut, onReorder,
+  balances, loadingBalances, orders, loadingOrders, expandedOrderId, setExpandedOrderId, onSwitchTab, totalSpent, totalKegsOut, onReorder,
 }: {
   balances: KegBalance | null;
   loadingBalances: boolean;
@@ -769,7 +758,6 @@ function OverviewTab({
   loadingOrders: boolean;
   expandedOrderId: string | null;
   setExpandedOrderId: (id: string | null) => void;
-  onShowReturn: () => void;
   onSwitchTab: (tab: Tab) => void;
   totalSpent: number;
   totalKegsOut: number;
@@ -834,9 +822,6 @@ function OverviewTab({
         <button onClick={() => onSwitchTab('products')} className="btn-primary py-3 px-6">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" /></svg>
           Browse &amp; Order
-        </button>
-        <button onClick={onShowReturn} className="btn-secondary py-3 px-6">
-          Request Keg Return
         </button>
         {orders.length > 0 && (
           <button onClick={() => onReorder()} className="btn-outline py-3 px-6">
@@ -917,13 +902,11 @@ function ProductsTab({
   onOrderPlaced,
   seedCart,
   onSeedConsumed,
-  balances,
 }: {
   customerId: string;
   onOrderPlaced: () => void;
   seedCart?: { nonce: number; items: OrderItem[] } | null;
   onSeedConsumed?: () => void;
-  balances?: KegBalance | null;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -951,7 +934,6 @@ function ProductsTab({
       else window.localStorage.setItem(cartStorageKey, JSON.stringify(cart));
     } catch { /* storage full, ignore */ }
   }, [cart, cartStorageKey]);
-  const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
   useBodyScrollLock(showCheckout);
@@ -1079,8 +1061,9 @@ function ProductsTab({
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [cart]);
   const depositFromItems = useMemo(() => cart.reduce((sum, item) => sum + item.deposit * item.quantity, 0), [cart]);
-  const depositFromReturns = useMemo(() => kegReturns.reduce((sum, ret) => sum + KEG_DEPOSITS[ret.size] * ret.quantity, 0), [kegReturns]);
-  const totalDeposit = depositFromItems - depositFromReturns;
+  // Returns are recorded manually by the brewery (not declared at checkout),
+  // so the customer always pays the full keg deposit up front.
+  const totalDeposit = depositFromItems;
   const total = subtotal + totalDeposit;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -1133,20 +1116,6 @@ function ProductsTab({
     setCart((prev) => prev.map((item, i) => (i === index ? { ...item, quantity: qty } : item)));
   };
 
-  const addKegReturn = (size: KegSize) => {
-    setKegReturns((prev) => {
-      const existing = prev.find((r) => r.size === size);
-      if (existing) return prev.map((r) => r.size === size ? { ...r, quantity: r.quantity + 1 } : r);
-      return [...prev, { size, quantity: 1 }];
-    });
-  };
-
-  const removeReturn = (size: KegSize) => setKegReturns((prev) => prev.filter((r) => r.size !== size));
-  const updateReturnQty = (size: KegSize, qty: number) => {
-    if (qty < 1) { removeReturn(size); return; }
-    setKegReturns((prev) => prev.map((r) => (r.size === size ? { ...r, quantity: qty } : r)));
-  };
-
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 1);
   const minDateStr = minDate.toISOString().split('T')[0];
@@ -1162,13 +1131,13 @@ function ProductsTab({
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns: [], subtotal, totalDeposit, total, notes }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
-      setCart([]); setKegReturns([]); setShowCheckout(false); setNotes('');
+      setCart([]); setShowCheckout(false); setNotes('');
       onOrderPlaced();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -1495,51 +1464,6 @@ function ProductsTab({
                 ))}
               </div>
 
-              {/* Keg Returns — rows are derived from the customer's
-                  outstanding-keg balance (each size they actually have
-                  out). Falls back to the legacy 3 sizes if they have no
-                  outstanding kegs yet. */}
-              <div>
-                <span className="section-label mb-2 block">Keg Returns</span>
-                <p className="text-xs text-cream/35 mb-2">Enter how many empty kegs you&rsquo;re returning this delivery (0 if none).</p>
-                <div className="space-y-2">
-                  {(() => {
-                    const outstandingSizes = balances
-                      ? Object.entries(balances).filter(([, n]) => (n as number) > 0).map(([k]) => k)
-                      : [];
-                    const sizesToRender = outstandingSizes.length > 0
-                      ? outstandingSizes
-                      : ['1/2bbl', '1/4bbl', '1/6bbl'];
-                    return sizesToRender;
-                  })().map((size) => {
-                    const existing = kegReturns.find((r) => r.size === size);
-                    const qty = existing?.quantity ?? 0;
-                    const setQty = (n: number) => {
-                      if (n <= 0) {
-                        setKegReturns((prev) => prev.filter((r) => r.size !== size));
-                      } else if (existing) {
-                        updateReturnQty(size, n);
-                      } else {
-                        setKegReturns((prev) => [...prev, { size, quantity: n }]);
-                      }
-                    };
-                    return (
-                      <div key={size} className="flex items-center gap-3">
-                        <span className="text-sm text-cream/60 flex-1">
-                          {SIZE_SHORT[size]}{' '}
-                          <span className="text-xs text-emerald-400/60">(-{formatCurrency(KEG_DEPOSITS[size])}/ea)</span>
-                        </span>
-                        <div className="flex items-center border border-white/[0.08] rounded-lg overflow-hidden">
-                          <button type="button" onClick={() => setQty(qty - 1)} disabled={qty === 0} className="px-2 py-1 text-cream/30 hover:text-cream text-xs disabled:opacity-30">-</button>
-                          <span className="px-2 py-1 text-xs font-bold text-cream bg-charcoal-300 min-w-[1.8rem] text-center">{qty}</span>
-                          <button type="button" onClick={() => setQty(qty + 1)} className="px-2 py-1 text-cream/30 hover:text-cream text-xs">+</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Delivery — auto-assigned to the next Thursday or Friday.
                   Customer doesn't pick a date. They just see the info note. */}
               <div>
@@ -1567,9 +1491,6 @@ function ProductsTab({
               <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-1.5">
                 <div className="flex justify-between text-sm"><span className="text-cream/30">Subtotal</span><span className="text-cream/60">{formatCurrency(subtotal)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-cream/30">Keg Deposits</span><span className="text-cream/60">{formatCurrency(depositFromItems)}</span></div>
-                {depositFromReturns > 0 && (
-                  <div className="flex justify-between text-sm"><span className="text-emerald-400/60">Return Credits</span><span className="text-emerald-400">-{formatCurrency(depositFromReturns)}</span></div>
-                )}
                 <div className="flex justify-between font-heading font-bold text-cream pt-2 border-t border-white/[0.06]">
                   <span>Total Due on Delivery</span><span className="text-gold">{formatCurrency(total)}</span>
                 </div>
@@ -2127,133 +2048,5 @@ function PortalHelpTab() {
       title="Help & Guides"
       subtitle="Everything you need to know about using the Guidon Brewing Co. wholesale portal."
     />
-  );
-}
-
-/* ================================================================== */
-/*  KEG RETURN MODAL                                                  */
-/* ================================================================== */
-
-// Per-size row for the keg return modal. Customer can request a return
-// for multiple sizes in one submission — previously the form was one
-// size + one quantity and had to be submitted multiple times to return
-// a mixed load.
-type ReturnRow = { size: KegSize; quantity: number };
-
-function KegReturnModal({ customerId, onClose, onSuccess }: { customerId: string; onClose: () => void; onSuccess: () => void }) {
-  const [rows, setRows] = useState<ReturnRow[]>([
-    { size: '1/2bbl', quantity: 0 },
-    { size: '1/4bbl', quantity: 0 },
-    { size: '1/6bbl', quantity: 0 },
-  ]);
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  const updateQty = (idx: number, qty: number) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: Math.max(0, qty) } : r)));
-  };
-  const updateSize = (idx: number, size: KegSize) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, size } : r)));
-  };
-  const addRow = () => setRows((prev) => [...prev, { size: '1/2bbl', quantity: 1 }]);
-  const removeRow = (idx: number) => setRows((prev) => prev.filter((_, i) => i !== idx));
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const toSubmit = rows.filter((r) => r.quantity > 0);
-    if (toSubmit.length === 0) {
-      setError('Enter a quantity for at least one size.');
-      return;
-    }
-    setSubmitting(true); setError('');
-    try {
-      // Submit one ledger entry per size. If any fails, surface the first
-      // error message but don't try to roll back — the partial inserts
-      // still represent real return requests the brewery should see.
-      for (const row of toSubmit) {
-        const res = await fetch('/api/keg-ledger', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customerId, type: 'return', size: row.size, quantity: row.quantity, notes }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.error || `Request failed with status ${res.status}`);
-        }
-      }
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit return request.');
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <form onSubmit={handleSubmit}
-        className="relative bg-charcoal-100 border border-white/[0.08] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-scale-in">
-        <div>
-          <h3 className="text-lg font-heading font-bold text-cream">Request Keg Return</h3>
-          <p className="text-xs text-cream/35 mt-1">Enter the quantity you&rsquo;re returning for each size.</p>
-        </div>
-
-        <div className="space-y-2">
-          {rows.map((row, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <select
-                className="input flex-1"
-                value={row.size}
-                onChange={(e) => updateSize(idx, e.target.value as KegSize)}
-              >
-                <option value="1/2bbl">1/2 Barrel</option>
-                <option value="1/4bbl">1/4 Barrel</option>
-                <option value="1/6bbl">1/6 Barrel</option>
-              </select>
-              <input
-                type="number"
-                className="input w-20 text-center"
-                min={0}
-                value={row.quantity}
-                onChange={(e) => updateQty(idx, Number(e.target.value))}
-              />
-              {rows.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeRow(idx)}
-                  aria-label="Remove row"
-                  className="text-cream/25 hover:text-red-400 px-2 py-1"
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={addRow}
-            className="text-xs italic"
-            style={{ color: 'var(--brass)' }}
-          >
-            + Add another size
-          </button>
-        </div>
-
-        <div>
-          <span className="section-label mb-2 block">Notes (optional)</span>
-          <textarea id="return-notes" className="input resize-none" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
-
-        {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{error}</p>}
-
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="btn-secondary px-4 py-2" disabled={submitting}>Cancel</button>
-          <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? 'Submitting...' : 'Submit Return'}
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }

@@ -317,8 +317,9 @@ export const ADMIN_HELP: HelpTopic[] = [
           <>
             <P>
               Confirmed and completed orders get a <strong>&ldquo;Remind about kegs&rdquo;</strong> button in
-              the expanded card. Clicking it emails the customer asking them to put in a
-              return request via the portal. Good for accounts that are slow to return empties.
+              the expanded card. Clicking it emails the customer a nudge to return their empties.
+              Good for accounts that are slow to return kegs. When the empties come back, record
+              the return manually from the Keg Tracker.
             </P>
             <P>
               You can also send reminders from the
@@ -630,8 +631,9 @@ export const ADMIN_HELP: HelpTopic[] = [
             <P>
               Outstanding kegs = the number of physical kegs the brewery sent to a customer
               that haven&rsquo;t been returned yet. Every confirmed order posts deposit entries to
-              the customer&rsquo;s keg ledger; every return request posts a negative entry. The
-              balance per size is what&rsquo;s still out.
+              the customer&rsquo;s keg ledger; returns are recorded manually by the brewery (which
+              posts a negative entry) once the empties are in hand. The balance per size is
+              what&rsquo;s still out.
             </P>
             <P>
               The <AdminLink href="/admin/kegs">Keg Tracker</AdminLink> page is the brewery&rsquo;s central
@@ -648,8 +650,8 @@ export const ADMIN_HELP: HelpTopic[] = [
         body: (
           <>
             <UL>
-              <li><strong>Remind</strong> — emails the customer asking them to submit a return request for their outstanding kegs.</li>
-              <li><strong>Return</strong> — opens a modal to manually log a keg return (e.g. customer called and said &ldquo;I just dropped off 4 halves&rdquo;). Posts a return entry to their ledger. Use when the customer doesn&rsquo;t go through the portal.</li>
+              <li><strong>Remind</strong> — emails the customer a nudge to return their outstanding kegs.</li>
+              <li><strong>Return</strong> — opens a modal to manually log a keg return (e.g. customer dropped off 4 halves). Posts a return entry to their ledger and updates the balance immediately. This is how all returns are recorded.</li>
               <li><strong>Deposit</strong> — opens a modal to manually add a deposit entry (rare — mostly for bookkeeping corrections).</li>
             </UL>
           </>
@@ -777,7 +779,7 @@ export const PORTAL_HELP: HelpTopic[] = [
               <li>Click <strong>Add to Cart</strong>. The Review Cart button at the top updates.</li>
               <li>Repeat for each beer.</li>
               <li>When you&rsquo;re ready, click <strong>Review Cart · N · $Total</strong>.</li>
-              <li>Optionally enter keg returns and a delivery note.</li>
+              <li>Optionally add a delivery note.</li>
               <li>Click <strong>Place Order</strong>. You&rsquo;ll see the order in your Order History immediately.</li>
             </OL>
           </>
@@ -834,7 +836,7 @@ export const PORTAL_HELP: HelpTopic[] = [
               <li><strong>Order received</strong> — immediately when you place the order. Lists the items and tells you we&rsquo;ll email again when it&rsquo;s confirmed.</li>
               <li><strong>Order confirmed</strong> — when the brewery commits to the order. We deliver Thursdays and Fridays and will schedule yours for the next available day. An invoice follows right after.</li>
               <li><strong>Invoice</strong> — with payment terms. Payment is due on delivery or per your negotiated terms.</li>
-              <li><strong>Keg return reminder</strong> — if we have kegs out from you for a while, the brewery may send a gentle nudge. You can put in a return request from the Overview tab.</li>
+              <li><strong>Keg return reminder</strong> — if we have kegs out from you for a while, the brewery may send a gentle nudge to have your empties ready for the next delivery.</li>
             </UL>
           </>
         ),
@@ -916,22 +918,18 @@ export const PORTAL_HELP: HelpTopic[] = [
       },
       {
         id: 'requesting-return',
-        title: 'Requesting a keg pickup',
+        title: 'Returning empty kegs',
         body: (
           <>
             <P>
-              On the Overview tab click <strong>Request Keg Return</strong>. The modal lets you enter
-              a quantity per size (e.g. 2 of Half Barrel, 1 of Sixth Barrel in one request) —
-              you can return multiple sizes in a single form.
+              Just have your empties ready for your next delivery — we pick up empties when we
+              drop off fulls. No form to fill out.
             </P>
-            <OL>
-              <li>Enter the quantity for each size you&rsquo;re returning. Leave sizes you aren&rsquo;t returning at 0.</li>
-              <li>Optionally add a note (e.g. &ldquo;Ready at loading dock after 2pm Thursday&rdquo;).</li>
-              <li>Click <strong>Submit Return</strong>.</li>
-            </OL>
             <P>
-              The brewery is notified. Returns typically align with your next delivery — we
-              pick up empties when we drop off fulls.
+              The brewery records each return against your account when the kegs are back in
+              hand, and your <strong>Keg Balances</strong> on the Overview tab updates to match.
+              If you have empties to return between deliveries, reply to any order email and
+              we&rsquo;ll arrange a pickup.
             </P>
           </>
         ),

@@ -34,6 +34,11 @@ export interface Customer {
    * generated. Portal shows a forced change-password prompt on login until
    * the customer sets their own password (which clears this flag). */
   mustChangePassword?: boolean;
+  /** CRM: next scheduled visit / follow-up date (YYYY-MM-DD). Admin-only —
+   * never sent to the customer portal. null/undefined = none scheduled. */
+  nextFollowupDate?: string | null;
+  /** CRM: free-form comments for the scheduled follow-up. Admin-only. */
+  nextFollowupNotes?: string;
   createdAt: string;
 }
 
@@ -194,10 +199,11 @@ export interface Invoice {
 
 export type KegLedgerType = 'deposit' | 'return';
 
-/** 'pending' returns are customer-initiated requests awaiting admin pickup
- * approval — they show in the tracker but DO NOT decrement the balance.
- * 'approved' is the default and the only status that affects the balance.
- * 'rejected' returns are kept for audit trail but also don't affect balance. */
+/** 'approved' is the default and the only status that affects the balance.
+ * 'pending' / 'rejected' are LEGACY: the customer-initiated return approval
+ * workflow was retired in 2026-05, so no new non-approved rows are created.
+ * The values are kept so any legacy rows still don't count toward the balance
+ * (see countsTowardBalance / computeKegBalance). */
 export type KegLedgerStatus = 'pending' | 'approved' | 'rejected';
 
 export interface KegLedgerEntry {

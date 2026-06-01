@@ -47,9 +47,6 @@ export default function KegTrackerPage() {
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [adjustError, setAdjustError] = useState('');
   const [toast, setToast] = useState('');
-  // Tracks which pending-return row is currently being approved or rejected
-  // so we can disable the buttons and avoid double-submits on slow networks.
-  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -131,17 +128,6 @@ export default function KegTrackerPage() {
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-  // Pending keg-return requests, newest first. These are customer-submitted
-  // returns awaiting admin confirmation of pickup — they DO NOT decrement
-  // the balance until approved.
-  const pendingReturns = useMemo(
-    () =>
-      [...allLedger]
-        .filter((e) => e.type === 'return' && (e.status ?? 'approved') === 'pending')
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [allLedger],
-  );
-
   const handleExpand = async (customerId: string) => {
     if (expandedId === customerId) { setExpandedId(null); return; }
     setExpandedId(customerId);
@@ -161,41 +147,6 @@ export default function KegTrackerPage() {
     setAdjustError('');
     setAdjustOpen(true);
   };
-
-  const decidePending = useCallback(async (id: string, status: 'approved' | 'rejected') => {
-    setPendingActionId(id);
-    try {
-      const res = await adminFetch('/api/keg-ledger', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setToast(data?.error || 'Update failed.');
-        window.setTimeout(() => setToast(''), 4000);
-        return;
-      }
-      const [bRes, allRes] = await Promise.all([
-        adminFetch('/api/keg-ledger?balances=true'),
-        adminFetch('/api/keg-ledger'),
-      ]);
-      const bData = await bRes.json();
-      const allData = await allRes.json();
-      const balancesArr: CustomerBalance[] = bData && typeof bData === 'object' && !Array.isArray(bData)
-        ? Object.entries(bData).map(([customerId, balance]) => ({ customerId, balance: balance as KegBalance }))
-        : Array.isArray(bData) ? bData : [];
-      setBalances(balancesArr);
-      setAllLedger(Array.isArray(allData) ? allData : []);
-      setToast(status === 'approved' ? 'Return approved. Balance updated.' : 'Return request rejected.');
-      window.setTimeout(() => setToast(''), 3000);
-    } catch {
-      setToast('Update failed. Try again.');
-      window.setTimeout(() => setToast(''), 4000);
-    } finally {
-      setPendingActionId(null);
-    }
-  }, []);
 
   const refreshBalances = useCallback(async () => {
     try {
@@ -283,68 +234,8 @@ export default function KegTrackerPage() {
         </button>
       </div>
 
-      {/* Pending return requests — customer-submitted, awaiting admin pickup.
-          These DON'T decrement the balance until approved, so the admin's
-          tracker stays honest about kegs that are physically at the brewery
-          vs. still at the customer's location. */}
-      {pendingReturns.length > 0 && (
-        <div>
-          <span className="section-label mb-3 block" style={{ color: 'var(--brass)' }}>
-            Pending Return Requests ({pendingReturns.length})
-          </span>
-          <div className="card p-0 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-white/[0.02]">
-                <tr>
-                  <th className="table-header">Customer</th>
-                  <th className="table-header">Requested</th>
-                  <th className="table-header">Size</th>
-                  <th className="table-header text-right">Qty</th>
-                  <th className="table-header">Notes</th>
-                  <th className="table-header text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.06]">
-                {pendingReturns.map((pr) => (
-                  <tr key={pr.id} className="hover:bg-white/[0.02]">
-                    <td className="table-cell font-semibold text-cream">
-                      {customerMap.get(pr.customerId)?.businessName || pr.customerId}
-                    </td>
-                    <td className="table-cell text-cream/50">{formatDate(pr.date)}</td>
-                    <td className="table-cell text-cream/60">{pr.size}</td>
-                    <td className="table-cell text-right text-cream/80 font-variant-tabular">{pr.quantity}</td>
-                    <td className="table-cell text-cream/40 text-xs">{pr.notes || '\u2014'}</td>
-                    <td className="table-cell text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => decidePending(pr.id, 'approved')}
-                          disabled={pendingActionId === pr.id}
-                          className="text-xs font-semibold hover:underline disabled:opacity-50"
-                          style={{ color: 'var(--pine)' }}
-                          title="Mark the kegs as picked up; balance decreases."
-                        >
-                          Approve
-                        </button>
-                        <span className="text-cream/20">·</span>
-                        <button
-                          onClick={() => decidePending(pr.id, 'rejected')}
-                          disabled={pendingActionId === pr.id}
-                          className="text-xs font-semibold hover:underline disabled:opacity-50"
-                          style={{ color: 'var(--ruby)' }}
-                          title="Reject the request; balance stays as-is."
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
+      {/* Pending return queue removed 2026-05 — returns are recorded
+          manually by the brewery; deposits still auto-post on confirm. */}
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
