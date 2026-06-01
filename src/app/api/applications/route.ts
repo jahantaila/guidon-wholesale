@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
-import { getApplications, createApplication, updateApplication, createCustomer, getCustomers } from '@/lib/data';
+import { getApplications, createApplication, updateApplication, createCustomer, updateCustomer, getCustomers } from '@/lib/data';
 import { generateId, isValidUsStateCode } from '@/lib/utils';
 import type { WholesaleApplication, Customer } from '@/lib/types';
 import { notifyApplicationSubmitted, notifyApplicationDecision, portalUrl } from '@/lib/email';
-import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { syncSupabaseAuthPassword } from '@/lib/auth-provision';
 
 export async function GET(request: NextRequest) {
   // Admin-only: applications contain applicant PII and business context.
@@ -132,114 +133,95 @@ export async function PUT(request: NextRequest) {
   }
 
   let tempPassword: string | undefined;
+  let approvalError: string | undefined;
 
   // APPROVAL: upgrade the applicant into a real wholesale customer.
-  // 1. Check whether a customer with this email already exists (idempotent).
-  // 2. If not, create a file/DB customer row with a fixed temp password.
-  // 3. If Supabase is configured, provision a Supabase Auth user with the
-  //    same temp password so they can log into /portal immediately.
-  // All failures are logged but don't block the admin's approve action.
+  // The flow must be robust across these pre-existing states for the email:
+  //   (a) Brand new — no customer row, no auth user
+  //   (b) Active customer row already exists (idempotent re-approval)
+  //   (c) Archived customer row exists (prior soft-delete) — unarchive it
+  //   (d) Auth user exists but no customer row (drift from a partial prior run)
+  //   (e) Customer row exists but no auth user (drift in the other direction)
+  // The previous implementation only handled (a) and (b), so any prior
+  // archive/re-apply cycle or partial failure would silently drop the new
+  // customer and leave the brewery with a "they got the email but it doesn't
+  // work" support ticket. Now we always converge to: customer row present,
+  // not-archived, with auth user provisioned and password synced to
+  // TEMP_PASSWORD + must_change_password=true.
   //
   // Temp password is fixed at "guidon" per brewery preference (2026-04-29).
-  // The auto-generated word-list passwords ("oak-drift-flag-33") were causing
-  // ongoing customer support issues — copy/paste artifacts, em-dash vs hyphen
-  // confusion, leading whitespace, etc. A fixed string the admin can dictate
-  // verbally over the phone is more reliable. The mustChangePassword flag
-  // below forces an immediate change on first login, so "guidon" is never the
-  // customer's actual long-term password — it's a one-shot bootstrap value.
+  // The mustChangePassword flag forces an immediate change on first login,
+  // so "guidon" is never the customer's actual long-term password.
   if (body.status === 'approved') {
     try {
-      const existingCustomers = await getCustomers();
+      tempPassword = TEMP_PASSWORD;
+      const normalizedEmail = app.email.toLowerCase().trim();
+
+      // (b)+(c): check the FULL customer table including archived rows.
+      // Default getCustomers() filters archived, which was the original bug:
+      // an archived row blocked the unique-email insert silently.
+      const existingCustomers = await getCustomers(true);
       const alreadyCustomer = existingCustomers.find(
-        (c) => c.email.toLowerCase() === app.email.toLowerCase(),
+        (c) => c.email.toLowerCase() === normalizedEmail,
       );
 
-      if (!alreadyCustomer) {
-        tempPassword = TEMP_PASSWORD;
+      if (alreadyCustomer) {
+        // Re-approving an existing customer. Bring the row back to the
+        // approved baseline: not archived, mustChangePassword=true so they
+        // get prompted to set a real password on next login. Refresh
+        // application-sourced fields (ABC permit, payment method) in case
+        // the applicant updated them on a re-submission.
+        await updateCustomer(alreadyCustomer.id, {
+          archivedAt: null,
+          mustChangePassword: true,
+          password: tempPassword,
+          abcPermitNumber: app.abcPermitNumber || alreadyCustomer.abcPermitNumber || '',
+          preferredPaymentMethod:
+            app.preferredPaymentMethod || alreadyCustomer.preferredPaymentMethod || 'no_preference',
+        });
+      } else {
+        // (a): brand new. Insert the customer row.
         const newCustomer: Customer = {
           id: generateId('cust'),
           businessName: app.businessName,
           contactName: app.contactName,
-          email: app.email.toLowerCase().trim(),
+          email: normalizedEmail,
           phone: app.phone,
           streetAddress: app.streetAddress,
           city: app.city,
           state: app.state,
           zip: app.zip,
-          // Copy ABC permit + payment preference from the application so the
-          // customer record carries everything the brewery needs to invoice
-          // and license-check without re-fetching the application later.
           abcPermitNumber: app.abcPermitNumber || '',
           preferredPaymentMethod: app.preferredPaymentMethod || 'no_preference',
           password: tempPassword, // only used by file-based fallback auth
-          // Force the customer to change their password on first login —
-          // the auto-generated temp is emailed in plaintext and shouldn't
-          // stay in use.
           mustChangePassword: true,
           createdAt: new Date().toISOString(),
         };
         await createCustomer(newCustomer);
+      }
 
-        // Provision a Supabase Auth user so the portal login (which uses
-        // sb.auth.signInWithPassword) works for this email. If an auth user
-        // already exists (orphaned from a prior approval, a test run, or a
-        // manual admin action), we UPDATE its password to the freshly
-        // generated temp so the email we just sent actually matches what
-        // the auth table stores. Without this update, the old symptom was
-        // "customer gets the email but can't log in."
-        if (isSupabaseConfigured()) {
-          try {
-            const sb = createAdminClient();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const adminApi = (sb.auth as any).admin;
-            if (adminApi?.createUser) {
-              const res = await adminApi.createUser({
-                email: newCustomer.email,
-                password: tempPassword,
-                email_confirm: true,
-                user_metadata: {
-                  business_name: newCustomer.businessName,
-                  contact_name: newCustomer.contactName,
-                },
-              });
-              if (res?.error) {
-                const alreadyExists = /already|exists|registered/i.test(res.error.message);
-                if (alreadyExists && adminApi.listUsers && adminApi.updateUserById) {
-                  // Auth user exists with an unknown password. Sync the new
-                  // temp password in so the email-delivered credential works.
-                  const listRes = await adminApi.listUsers();
-                  const authUser = listRes?.data?.users?.find(
-                    (u: { email?: string }) =>
-                      u.email?.toLowerCase() === newCustomer.email.toLowerCase(),
-                  );
-                  if (authUser) {
-                    const updateRes = await adminApi.updateUserById(authUser.id, {
-                      password: tempPassword,
-                      email_confirm: true,
-                    });
-                    if (updateRes?.error) {
-                      console.error(
-                        '[approval] Supabase auth password sync failed:',
-                        updateRes.error.message,
-                      );
-                    }
-                  } else {
-                    console.error(
-                      '[approval] createUser said "exists" but listUsers could not find the email; auth state is inconsistent.',
-                    );
-                  }
-                } else if (!alreadyExists) {
-                  console.error('[approval] Supabase auth user creation failed:', res.error.message);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('[approval] Supabase auth provisioning failed (non-fatal):', err);
-          }
-        }
+      // Always sync Supabase Auth to the temp password — covers (d) and (e)
+      // and is also the only path that makes login actually work. Previously
+      // this was skipped entirely on the "customer already exists" branch,
+      // which meant a re-approval kept the old (forgotten) auth password
+      // even though the email said "guidon."
+      if (isSupabaseConfigured()) {
+        await syncSupabaseAuthPassword({
+          email: normalizedEmail,
+          password: tempPassword,
+          businessName: app.businessName,
+          contactName: app.contactName,
+        });
       }
     } catch (err) {
-      console.error('[approval] customer creation failed (non-fatal):', err);
+      console.error('[approval] customer creation failed:', err);
+      // Surface the error in the response so the admin UI can show it
+      // instead of silently claiming success while nothing happened.
+      approvalError =
+        err instanceof Error
+          ? err.message
+          : 'Customer creation failed. Check server logs.';
+      tempPassword = undefined; // don't include in the decision email
     }
   }
 
@@ -261,7 +243,7 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, tempPassword });
+  return NextResponse.json({ success: true, tempPassword, approvalError });
 }
 
 /**
