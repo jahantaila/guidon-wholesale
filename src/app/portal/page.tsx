@@ -937,6 +937,9 @@ function ProductsTab({
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
   useBodyScrollLock(showCheckout);
+  // Required keg-return acknowledgment at checkout (manual returns only — a
+  // nudge to account for empties; does not change the keg balance).
+  const [returnsAck, setReturnsAck] = useState(false);
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; items: OrderItem[]; createdAt: string }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
@@ -1122,6 +1125,7 @@ function ProductsTab({
 
   const handleSubmitOrder = async () => {
     setSubmitError('');
+    if (!returnsAck) { setSubmitError('Please confirm the keg return acknowledgment below before placing the order.'); return; }
     setSubmitting(true);
     try {
       const items = cart.map((item) => ({
@@ -1137,7 +1141,7 @@ function ProductsTab({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
-      setCart([]); setShowCheckout(false); setNotes('');
+      setCart([]); setShowCheckout(false); setNotes(''); setReturnsAck(false);
       onOrderPlaced();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -1165,7 +1169,7 @@ function ProductsTab({
             </button>
           )}
           {cartCount > 0 && (
-            <button onClick={() => setShowCheckout(true)} className="btn-primary">
+            <button onClick={() => { setReturnsAck(false); setShowCheckout(true); }} className="btn-primary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
               </svg>
@@ -1499,12 +1503,27 @@ function ProductsTab({
               {submitError && <p className="text-red-400 text-sm bg-red-500/10 rounded-xl px-4 py-2.5 border border-red-500/20">{submitError}</p>}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/[0.06] flex gap-3">
-              <button onClick={() => setShowCheckout(false)} className="btn-secondary flex-1 text-center">Back</button>
-              <button onClick={handleSubmitOrder} disabled={submitting || cart.length === 0}
-                className={cn('btn-primary flex-1', submitting && 'opacity-60 cursor-not-allowed')}>
-                {submitting ? 'Placing Order...' : 'Place Order'}
-              </button>
+            <div className="px-6 py-4 border-t border-white/[0.06] space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={returnsAck}
+                  onChange={(e) => setReturnsAck(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 shrink-0"
+                  style={{ accentColor: 'var(--brass)' }}
+                />
+                <span className={cn('text-xs leading-snug', returnsAck ? 'text-cream/50' : 'text-amber-300')}>
+                  I&rsquo;ve set aside any empty kegs to return with this delivery (or have none).
+                </span>
+              </label>
+              <div className="flex gap-3">
+                <button onClick={() => setShowCheckout(false)} className="btn-secondary flex-1 text-center">Back</button>
+                <button onClick={handleSubmitOrder} disabled={submitting || cart.length === 0 || !returnsAck}
+                  className={cn('btn-primary flex-1', (submitting || !returnsAck) && 'opacity-60 cursor-not-allowed')}
+                  title={!returnsAck ? 'Confirm the keg return acknowledgment above first' : undefined}>
+                  {submitting ? 'Placing Order...' : 'Place Order'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
