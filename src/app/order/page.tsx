@@ -99,6 +99,10 @@ export default function OrderPage() {
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   useBodyScrollLock(checkoutOpen);
+  // Required keg-return acknowledgment at checkout. Manual returns only — this
+  // is a nudge so customers actively account for empties; it does not change
+  // the keg balance.
+  const [returnsAck, setReturnsAck] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   // Pre-select a customer when ?customerId= is on the URL. Admin uses this
   // from customer detail to "place an order for this customer." Using
@@ -271,7 +275,14 @@ export default function OrderPage() {
     setCart((prev) => prev.map((item, i) => (i === index ? { ...item, quantity: qty } : item)));
   };
 
-  const handleCheckout = () => { if (cart.length === 0) return; setCheckoutOpen(true); setCartOpen(false); };
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    // Reset the acknowledgment each time checkout opens so a stale tick from a
+    // prior cart can't carry through to submit.
+    setReturnsAck(false);
+    setCheckoutOpen(true);
+    setCartOpen(false);
+  };
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -280,6 +291,7 @@ export default function OrderPage() {
     if (isNewCustomer && (!newCustomer.businessName || !newCustomer.contactName || !newCustomer.email)) {
       setSubmitError('Business name, contact name, and email are required.'); return;
     }
+    if (!returnsAck) { setSubmitError('Please confirm the keg return acknowledgment below before placing the order.'); return; }
     setSubmitting(true);
     try {
       if (isNewCustomer) {
@@ -924,14 +936,29 @@ export default function OrderPage() {
               {submitError && <p className="text-red-400 text-sm bg-red-500/10 rounded-xl px-4 py-3 border border-red-500/20">{submitError}</p>}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/[0.06] flex gap-3">
-              <button onClick={() => { setCheckoutOpen(false); setCartOpen(true); }} className="btn-secondary flex-1 text-center">
-                Back
-              </button>
-              <button onClick={handleSubmit} disabled={submitting}
-                className={cn('btn-primary flex-1', submitting && 'opacity-60 cursor-not-allowed')}>
-                {submitting ? 'Placing Order...' : 'Place Order'}
-              </button>
+            <div className="px-6 py-4 border-t border-white/[0.06] space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={returnsAck}
+                  onChange={(e) => setReturnsAck(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 shrink-0"
+                  style={{ accentColor: 'var(--brass)' }}
+                />
+                <span className={cn('text-xs leading-snug', returnsAck ? 'text-cream/50' : 'text-amber-300')}>
+                  I&rsquo;ve set aside any empty kegs to return with this delivery (or have none).
+                </span>
+              </label>
+              <div className="flex gap-3">
+                <button onClick={() => { setCheckoutOpen(false); setCartOpen(true); }} className="btn-secondary flex-1 text-center">
+                  Back
+                </button>
+                <button onClick={handleSubmit} disabled={submitting || !returnsAck}
+                  className={cn('btn-primary flex-1', (submitting || !returnsAck) && 'opacity-60 cursor-not-allowed')}
+                  title={!returnsAck ? 'Confirm the keg return acknowledgment above first' : undefined}>
+                  {submitting ? 'Placing Order...' : 'Place Order'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
