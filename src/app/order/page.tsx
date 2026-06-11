@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Product, ProductSize, CartItem, KegSize, Customer } from '@/lib/types';
+import type { Product, ProductSize, CartItem, KegReturn, KegSize, Customer } from '@/lib/types';
 import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import { getAdminToken } from '@/lib/admin-fetch';
@@ -99,9 +99,12 @@ export default function OrderPage() {
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   useBodyScrollLock(checkoutOpen);
-  // Required keg-return acknowledgment at checkout. Manual returns only — this
-  // is a nudge so customers actively account for empties; it does not change
-  // the keg balance.
+  // Per-size empties the customer declares they're returning this delivery.
+  // Captured on the order so the brewery sees what's coming back. Manual only:
+  // does NOT discount the total or change the keg balance — admin records the
+  // actual return in the keg tracker.
+  const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
+  // Required acknowledgment that the customer filled in the empties count.
   const [returnsAck, setReturnsAck] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   // Pre-select a customer when ?customerId= is on the URL. Admin uses this
@@ -309,7 +312,7 @@ export default function OrderPage() {
       }));
       const orderRes = await authedFetch('/api/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns: [], subtotal, totalDeposit, total, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
       if (!orderRes.ok) {
         const data = await orderRes.json().catch(() => ({}));
@@ -902,6 +905,39 @@ export default function OrderPage() {
                 </p>
               </div>
 
+              {/* Keg returns — customer declares how many empties they're
+                  sending back per size. Recorded on the order for the brewery;
+                  does not discount the total or change the balance (manual). */}
+              <div>
+                <span className="section-label mb-2 block">Keg Returns</span>
+                <p className="text-xs text-cream/40 mb-2">How many empty kegs are you returning this delivery? Enter 0 if none.</p>
+                <div className="space-y-2">
+                  {KEG_SIZES.map((size) => {
+                    const qty = kegReturns.find((r) => r.size === size)?.quantity ?? 0;
+                    const setQty = (n: number) => {
+                      const v = Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
+                      setKegReturns((prev) => {
+                        const others = prev.filter((r) => r.size !== size);
+                        return v > 0 ? [...others, { size, quantity: v }] : others;
+                      });
+                    };
+                    return (
+                      <div key={size} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-cream/60">{SIZE_LABELS[size]}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={qty}
+                          onChange={(e) => setQty(parseInt(e.target.value, 10))}
+                          className="input w-20 text-right"
+                          aria-label={`${SIZE_LABELS[size]} empties to return`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <span className="section-label mb-2 block">Order Notes</span>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
@@ -946,7 +982,7 @@ export default function OrderPage() {
                   style={{ accentColor: 'var(--brass)' }}
                 />
                 <span className={cn('text-xs leading-snug', returnsAck ? 'text-cream/50' : 'text-amber-300')}>
-                  I&rsquo;ve set aside any empty kegs to return with this delivery (or have none).
+                  I&rsquo;ve entered the number of empty kegs I&rsquo;m returning above (0 if none).
                 </span>
               </label>
               <div className="flex gap-3">
