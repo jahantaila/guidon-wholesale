@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, RecurringOrder } from '@/lib/types';
+import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import HelpView from '@/components/HelpView';
@@ -937,8 +937,10 @@ function ProductsTab({
   const [selections, setSelections] = useState<Record<string, { size: KegSize; quantity: number }>>({});
   const [showCheckout, setShowCheckout] = useState(false);
   useBodyScrollLock(showCheckout);
-  // Required keg-return acknowledgment at checkout (manual returns only — a
-  // nudge to account for empties; does not change the keg balance).
+  // Per-size empties the customer declares they're returning. Recorded on the
+  // order for the brewery; manual only — no total discount, no balance change.
+  const [kegReturns, setKegReturns] = useState<KegReturn[]>([]);
+  // Required acknowledgment that the customer filled in the empties count.
   const [returnsAck, setReturnsAck] = useState(false);
   const [templates, setTemplates] = useState<Array<{ id: string; name: string; items: OrderItem[]; createdAt: string }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -1135,13 +1137,13 @@ function ProductsTab({
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, items, kegReturns: [], subtotal, totalDeposit, total, notes }),
+        body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
       }
-      setCart([]); setShowCheckout(false); setNotes(''); setReturnsAck(false);
+      setCart([]); setShowCheckout(false); setNotes(''); setReturnsAck(false); setKegReturns([]);
       onOrderPlaced();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -1485,6 +1487,39 @@ function ProductsTab({
                 </div>
               </div>
 
+              {/* Keg returns — customer declares how many empties they're
+                  sending back per size. Recorded on the order for the brewery;
+                  does not discount the total or change the balance (manual). */}
+              <div>
+                <span className="section-label mb-2 block">Keg Returns</span>
+                <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>How many empty kegs are you returning this delivery? Enter 0 if none.</p>
+                <div className="space-y-2">
+                  {KEG_SIZES.map((size) => {
+                    const qty = kegReturns.find((r) => r.size === size)?.quantity ?? 0;
+                    const setQty = (n: number) => {
+                      const v = Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
+                      setKegReturns((prev) => {
+                        const others = prev.filter((r) => r.size !== size);
+                        return v > 0 ? [...others, { size, quantity: v }] : others;
+                      });
+                    };
+                    return (
+                      <div key={size} className="flex items-center justify-between gap-3">
+                        <span className="text-sm" style={{ color: 'var(--ink)' }}>{SIZE_SHORT[size]}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={qty}
+                          onChange={(e) => setQty(parseInt(e.target.value, 10))}
+                          className="input w-20 text-right"
+                          aria-label={`${SIZE_SHORT[size]} empties to return`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <span className="section-label mb-2 block">Order Notes</span>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
@@ -1513,7 +1548,7 @@ function ProductsTab({
                   style={{ accentColor: 'var(--brass)' }}
                 />
                 <span className={cn('text-xs leading-snug', returnsAck ? 'text-cream/50' : 'text-amber-300')}>
-                  I&rsquo;ve set aside any empty kegs to return with this delivery (or have none).
+                  I&rsquo;ve entered the number of empty kegs I&rsquo;m returning above (0 if none).
                 </span>
               </label>
               <div className="flex gap-3">
