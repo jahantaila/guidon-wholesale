@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
+import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import HelpView from '@/components/HelpView';
@@ -1066,9 +1067,13 @@ function ProductsTab({
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [cart]);
   const depositFromItems = useMemo(() => cart.reduce((sum, item) => sum + item.deposit * item.quantity, 0), [cart]);
-  // Returns are recorded manually by the brewery (not declared at checkout),
-  // so the customer always pays the full keg deposit up front.
-  const totalDeposit = depositFromItems;
+  // Declared returns credit the deposit back on the checkout total. Price only —
+  // the keg balance stays manual (admin records the actual return).
+  const depositFromReturns = useMemo(
+    () => kegReturns.reduce((sum, ret) => sum + (KEG_DEPOSITS[ret.size] ?? 0) * ret.quantity, 0),
+    [kegReturns],
+  );
+  const totalDeposit = depositFromItems - depositFromReturns;
   const total = subtotal + totalDeposit;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -1530,6 +1535,9 @@ function ProductsTab({
               <div className="bg-charcoal-200 border border-white/[0.06] rounded-xl p-4 space-y-1.5">
                 <div className="flex justify-between text-sm"><span className="text-cream/30">Subtotal</span><span className="text-cream/60">{formatCurrency(subtotal)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-cream/30">Keg Deposits</span><span className="text-cream/60">{formatCurrency(depositFromItems)}</span></div>
+                {depositFromReturns > 0 && (
+                  <div className="flex justify-between text-sm"><span className="text-emerald-400/60">Return Credits</span><span className="text-emerald-400">-{formatCurrency(depositFromReturns)}</span></div>
+                )}
                 <div className="flex justify-between font-heading font-bold text-cream pt-2 border-t border-white/[0.06]">
                   <span>Total Due on Delivery</span><span className="text-gold">{formatCurrency(total)}</span>
                 </div>
