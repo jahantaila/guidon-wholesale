@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomer } from '@/lib/data';
+import { setPortalSessionCookie } from '@/lib/portal-session';
 
 /**
  * GET /api/portal/me
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
   }
   // Strip admin-only + sensitive fields. Mirror the login route's projection
   // so the customer's portal sees a consistent shape.
-  return NextResponse.json({
+  const response = NextResponse.json({
     id: customer.id,
     businessName: customer.businessName,
     contactName: customer.contactName,
@@ -47,4 +48,8 @@ export async function GET(request: NextRequest) {
     mustChangePassword: customer.mustChangePassword === true,
     createdAt: customer.createdAt,
   });
+  // Slide the 30-day session forward on each focus refetch so active customers
+  // don't lapse mid-session and hit "Authentication required" at checkout.
+  setPortalSessionCookie(response, customer.id);
+  return response;
 }

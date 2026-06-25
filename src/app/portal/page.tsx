@@ -43,6 +43,9 @@ function balanceTextColor(n: number): string {
 export default function PortalPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  // Shown on the login screen when a session lapses mid-use, so customers know
+  // why they're back at sign-in instead of silently hitting a dead session.
+  const [sessionNotice, setSessionNotice] = useState('');
 
   useEffect(() => {
     fetch('/api/portal/login')
@@ -64,10 +67,20 @@ export default function PortalPage() {
     const refetch = async () => {
       try {
         const r = await fetch('/api/portal/me', { cache: 'no-store' });
+        // Session lapsed or revoked: surface the login screen instead of
+        // keeping a stale logged-in UI that would fail at checkout with
+        // "Authentication required to place an order."
+        if (r.status === 401 || r.status === 403) {
+          if (!cancelled) {
+            setSessionNotice('Your session expired. Please sign in again.');
+            setCustomer(null);
+          }
+          return;
+        }
         if (!r.ok) return;
         const fresh = await r.json();
         if (!cancelled && fresh && fresh.id) setCustomer(fresh);
-      } catch { /* ignore — background refresh, last good state stays */ }
+      } catch { /* ignore — transient network error, last good state stays */ }
     };
     const onFocus = () => refetch();
     const onVisibility = () => {
@@ -84,8 +97,17 @@ export default function PortalPage() {
 
   const handleLogout = async () => {
     await fetch('/api/portal/login', { method: 'DELETE' });
+    setSessionNotice('');
     setCustomer(null);
   };
+
+  // Called when an authenticated action (e.g. placing an order) comes back 401.
+  // Drops to the login screen with an explanation so the customer can re-auth
+  // and retry, instead of being stuck on a dashboard whose session is dead.
+  const handleSessionExpired = useCallback(() => {
+    setSessionNotice('Your session expired. Please sign in again to place your order.');
+    setCustomer(null);
+  }, []);
 
   if (checkingSession) {
     return (
@@ -95,7 +117,7 @@ export default function PortalPage() {
     );
   }
 
-  if (!customer) return <LoginScreen onLogin={setCustomer} />;
+  if (!customer) return <LoginScreen onLogin={(c) => { setSessionNotice(''); setCustomer(c); }} notice={sessionNotice} />;
   // Approval flow issues a temp password + emails it in plaintext. Force
   // a change-password modal on first login until they set their own.
   if (customer.mustChangePassword) {
@@ -107,7 +129,7 @@ export default function PortalPage() {
       />
     );
   }
-  return <Dashboard customer={customer} onLogout={handleLogout} />;
+  return <Dashboard customer={customer} onLogout={handleLogout} onSessionExpired={handleSessionExpired} />;
 }
 
 /* ================================================================== */
@@ -228,7 +250,7 @@ function ForceChangePassword({
 /*  LOGIN SCREEN                                                      */
 /* ================================================================== */
 
-function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
+function LoginScreen({ onLogin, notice }: { onLogin: (c: Customer) => void; notice?: string }) {
   // Three-mode login flow:
   //   mode='choose'   → landing screen with Sign In / Become a customer buttons
   //   mode='signin'   → email + password form (revealed after clicking Sign In)
@@ -362,6 +384,12 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
             wholesale customer, or to receive information about wholesale.
           </p>
         </div>
+
+        {notice && (
+          <p className="mb-4 text-sm text-amber-300 bg-amber-500/10 rounded-xl px-4 py-2.5 border border-amber-500/20">
+            {notice}
+          </p>
+        )}
 
         {mode === 'choose' ? (
           <div className="card space-y-3">
@@ -512,7 +540,7 @@ function LoginScreen({ onLogin }: { onLogin: (c: Customer) => void }) {
 
 type Tab = 'overview' | 'products' | 'orders' | 'invoices' | 'settings' | 'help';
 
-function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () => void }) {
+function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Customer; onLogout: () => void; onSessionExpired: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [orders, setOrders] = useState<Order[]>([]);
   const [balances, setBalances] = useState<KegBalance | null>(null);
@@ -720,6 +748,7 @@ function Dashboard({ customer, onLogout }: { customer: Customer; onLogout: () =>
             onOrderPlaced={() => { fetchOrders(); fetchBalances(); setTab('orders'); }}
             seedCart={reorderSeed}
             onSeedConsumed={() => setReorderSeed(null)}
+            onSessionExpired={onSessionExpired}
           />
         )}
         {tab === 'orders' && (
@@ -903,11 +932,13 @@ function ProductsTab({
   onOrderPlaced,
   seedCart,
   onSeedConsumed,
+  onSessionExpired,
 }: {
   customerId: string;
   onOrderPlaced: () => void;
   seedCart?: { nonce: number; items: OrderItem[] } | null;
   onSeedConsumed?: () => void;
+  onSessionExpired: () => void;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1144,6 +1175,15 @@ function ProductsTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
+      // 401 here means the session cookie lapsed while the dashboard stayed
+      // open. Drop to the login screen with a clear prompt instead of showing
+      // the raw "Authentication required to place an order." The cart persists
+      // in localStorage, so re-signing in keeps their order intact.
+      if (res.status === 401) {
+        setSubmitting(false);
+        onSessionExpired();
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || `Failed to place order (HTTP ${res.status})`);
