@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomers } from '@/lib/data';
 import { isSupabaseConfigured, createServerClient } from '@/lib/supabase';
+import { setPortalSessionCookie, clearPortalSessionCookie } from '@/lib/portal-session';
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -67,16 +68,7 @@ export async function POST(request: NextRequest) {
     };
 
     const response = NextResponse.json(customer);
-    response.cookies.set('portal_session', customer.id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      // SameSite=None + Secure in prod so /embed/portal works in cross-site
-      // iframes on the brewery's WordPress site. Lax in dev (HTTP localhost
-      // rejects SameSite=None).
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 60 * 60 * 24,
-      path: '/',
-    });
+    setPortalSessionCookie(response, customer.id);
     return response;
   }
 
@@ -91,13 +83,7 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json(customer);
-  response.cookies.set('portal_session', customer.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24,
-    path: '/',
-  });
+  setPortalSessionCookie(response, customer.id);
 
   return response;
 }
@@ -117,17 +103,15 @@ export async function GET(request: NextRequest) {
   // Strip password before returning
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password, ...safe } = customer;
-  return NextResponse.json(safe);
+  const response = NextResponse.json(safe);
+  // Slide the session forward on every bootstrap so an active customer's
+  // 30-day window keeps renewing instead of lapsing mid-use.
+  setPortalSessionCookie(response, customer.id);
+  return response;
 }
 
 export async function DELETE() {
   const response = NextResponse.json({ success: true });
-  response.cookies.set('portal_session', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 0,
-    path: '/',
-  });
+  clearPortalSessionCookie(response);
   return response;
 }
