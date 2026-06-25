@@ -67,10 +67,11 @@ export default function PortalPage() {
     const refetch = async () => {
       try {
         const r = await fetch('/api/portal/me', { cache: 'no-store' });
-        // Session lapsed or revoked: surface the login screen instead of
+        // Any unusable session — expired/missing (401), archived (403), or the
+        // account no longer exists (404) — surfaces the login screen instead of
         // keeping a stale logged-in UI that would fail at checkout with
         // "Authentication required to place an order."
-        if (r.status === 401 || r.status === 403) {
+        if (r.status === 401 || r.status === 403 || r.status === 404) {
           if (!cancelled) {
             setSessionNotice('Your session expired. Please sign in again.');
             setCustomer(null);
@@ -1175,11 +1176,12 @@ function ProductsTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
       });
-      // 401 here means the session cookie lapsed while the dashboard stayed
-      // open. Drop to the login screen with a clear prompt instead of showing
-      // the raw "Authentication required to place an order." The cart persists
-      // in localStorage, so re-signing in keeps their order intact.
-      if (res.status === 401) {
+      // 401 (cookie lapsed) or 403 (session points at a stale/other account)
+      // both mean the session can no longer place this order. Drop to the login
+      // screen with a clear prompt instead of showing the raw "Authentication
+      // required to place an order." The cart persists in localStorage, so
+      // re-signing in keeps their order intact.
+      if (res.status === 401 || res.status === 403) {
         setSubmitting(false);
         onSessionExpired();
         return;
