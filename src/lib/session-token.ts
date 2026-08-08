@@ -78,9 +78,13 @@ function secretMaterial(): string | null {
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (serviceRole && serviceRole.length >= 16) return serviceRole;
 
-  // Dev/test only. Never in production — an attacker who knows the constant
-  // could mint their own admin token, which is the bug we're fixing.
-  if (process.env.NODE_ENV !== 'production') return 'guidon-dev-session-secret';
+  // Dev/test only, and allow-listed by name rather than "not production".
+  // A `!== 'production'` check fails OPEN: any unexpected or unset NODE_ENV
+  // would silently enable a hardcoded, publicly-known secret, which is a
+  // rebuild of the exact bug this file exists to fix. Naming the environments
+  // means anything unrecognized falls through to null and auth fails closed.
+  const env = process.env.NODE_ENV;
+  if (env === 'development' || env === 'test') return 'guidon-dev-session-secret';
 
   return null;
 }

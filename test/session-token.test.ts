@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 import {
   signSession,
   verifySession,
@@ -92,6 +92,47 @@ describe("secret configuration", () => {
     expect(isSessionSigningConfigured()).toBe(true);
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     resetSigningKeyCache();
+  });
+
+  describe("fail-closed when no secret is configured", () => {
+    const ORIGINAL_ENV = process.env.NODE_ENV;
+
+    // process.env is a special object in Node — Object.defineProperty throws
+    // on it. Plain assignment is the supported way to mutate it.
+    const env = process.env as Record<string, string | undefined>;
+
+    function stripSecrets(nodeEnv: string) {
+      delete env.SESSION_SECRET;
+      delete env.SUPABASE_SERVICE_ROLE_KEY;
+      env.NODE_ENV = nodeEnv;
+      resetSigningKeyCache();
+    }
+
+    afterEach(() => {
+      env.NODE_ENV = ORIGINAL_ENV;
+      resetSigningKeyCache();
+    });
+
+    it("production with no secret: refuses to sign and verifies nothing", async () => {
+      stripSecrets("production");
+      expect(isSessionSigningConfigured()).toBe(false);
+      await expect(signSession("admin", "admin", 60)).rejects.toThrow(/SESSION_SECRET/);
+      expect(await verifySession("anything", "admin")).toBeNull();
+    });
+
+    it("an unrecognized NODE_ENV also fails closed, not open", async () => {
+      // The dev secret is allow-listed by name. A `!== 'production'` check
+      // would hand out a publicly-known signing key here, which is the exact
+      // bug class this module replaced.
+      stripSecrets("staging");
+      expect(isSessionSigningConfigured()).toBe(false);
+      expect(await verifySession("anything", "admin")).toBeNull();
+    });
+
+    it("development with no secret still works so local dev is not blocked", () => {
+      stripSecrets("development");
+      expect(isSessionSigningConfigured()).toBe(true);
+    });
   });
 });
 
