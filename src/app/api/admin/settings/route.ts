@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
 import { getNotificationEmails, getSetting, setSetting } from '@/lib/data';
 
@@ -15,7 +16,11 @@ export const dynamic = 'force-dynamic';
  * Returns all admin-editable settings: notification emails + delivery schedule
  * (which weekdays the brewery delivers on + minimum lead time in days).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+
   try {
     const [notificationEmails, deliveryDays, deliveryLeadDays] = await Promise.all([
       getNotificationEmails(),
@@ -44,6 +49,10 @@ export async function GET() {
  * disappear). Basic email shape validation per address.
  */
 export async function PUT(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+
   try {
   const body = await request.json();
 

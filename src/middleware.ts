@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySession, bearerFrom } from '@/lib/session-token';
+import { verifySession, bearerFrom, isSessionSigningConfigured } from '@/lib/session-token';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,12 +20,29 @@ export async function middleware(request: NextRequest) {
   // would silently exempt any future sibling route such as
   // /api/admin/login-attempts or /api/admin/login-history.
   if (pathname.startsWith('/api/admin/') && pathname !== '/api/admin/login') {
-    const cookie = request.cookies.get('admin_session')?.value;
-    const bearer = bearerFrom(request.headers.get('authorization'));
-    const ok =
-      (await verifySession(cookie, 'admin')) || (await verifySession(bearer, 'admin'));
-    if (!ok) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Middleware is DEFENCE IN DEPTH, not the boundary. Every /api/admin/*
+    // handler calls isAdminRequest() itself.
+    //
+    // That matters because middleware runs on the Edge runtime, which does not
+    // always resolve the same env vars as Node route handlers — with the
+    // signing secret coming from a committed .env.local, Edge could not derive
+    // the key while Node could. Enforcing here regardless produced a
+    // split-brain in production: /api/admin/* 401'd for a legitimately
+    // logged-in admin while /api/customers accepted the same token.
+    //
+    // So when this runtime has no signing key, defer rather than lock the
+    // brewery out. This is not a bypass: an attacker cannot remove the key,
+    // and the route handler re-checks in a runtime where it IS available.
+    if (isSessionSigningConfigured()) {
+      const cookie = request.cookies.get('admin_session')?.value;
+      const bearer = bearerFrom(request.headers.get('authorization'));
+      const ok =
+        (await verifySession(cookie, 'admin')) || (await verifySession(bearer, 'admin'));
+      if (!ok) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      console.error('[middleware] no signing key in this runtime — deferring to route-level auth.');
     }
   }
 

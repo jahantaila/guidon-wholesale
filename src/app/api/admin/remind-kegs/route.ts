@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
 import { getOrder, getOrders, getCustomers } from '@/lib/data';
 import { notifyKegReminder, portalUrl } from '@/lib/email';
@@ -16,6 +17,10 @@ import { notifyKegReminder, portalUrl } from '@/lib/email';
  *   to return all outstanding kegs).
  */
 export async function POST(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+
   const body = await request.json();
   const orderId: string | undefined = body?.orderId;
   const customerId: string | undefined = body?.customerId;

@@ -1,10 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { getOrders, getCustomers, getAllKegBalances, getApplications } from '@/lib/data';
 import type { AdminStats } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+
   const [orders, customers, balances, applications] = await Promise.all([
     getOrders(),
     getCustomers(),

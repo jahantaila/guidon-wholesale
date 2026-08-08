@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth-check';
 import { adjustProductInventory, setProductInventory } from '@/lib/data';
 import type { KegSize } from '@/lib/types';
 
@@ -12,6 +13,10 @@ import type { KegSize } from '@/lib/types';
  * (positive = restock, negative = consume). Returns { inventoryCount }.
  */
 export async function PATCH(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+
   const body = await request.json();
   const { productId, size, count, delta } = body as {
     productId?: string;
