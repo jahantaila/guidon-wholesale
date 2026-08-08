@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * been authored AND the seed alert has expired.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }
   const alert = await getAlert();
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    if (!isAdminRequest(request)) {
+    if (!(await isAdminRequest(request))) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
     const body = await request.json();

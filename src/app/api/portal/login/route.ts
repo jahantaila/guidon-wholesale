@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomers } from '@/lib/data';
 import { isSupabaseConfigured, createServerClient } from '@/lib/supabase';
-import { setPortalSessionCookie, clearPortalSessionCookie } from '@/lib/portal-session';
+import {
+  signPortalToken,
+  attachPortalSessionCookie,
+  clearPortalSessionCookie,
+} from '@/lib/portal-session';
+import { authContext } from '@/lib/auth-check';
+import { isSessionSigningConfigured } from '@/lib/session-token';
 
 export async function POST(request: NextRequest) {
+  // Without a signing secret, signPortalToken throws and the customer sees the
+  // generic "Login failed." string — identical to a wrong password. Say what
+  // is actually broken instead of sending them to reset a working password.
+  if (!isSessionSigningConfigured()) {
+    console.error('[portal/login] no signing secret — set SESSION_SECRET.');
+    return NextResponse.json(
+      { error: 'Sign-in is temporarily unavailable. Please contact the brewery.' },
+      { status: 503 },
+    );
+  }
+
   const { email, password } = await request.json();
 
   if (!email || !password) {
@@ -67,8 +84,12 @@ export async function POST(request: NextRequest) {
       createdAt: customerRow.created_at,
     };
 
-    const response = NextResponse.json(customer);
-    setPortalSessionCookie(response, customer.id);
+    // portalToken rides in the body as well as the cookie. In the WordPress
+    // iframe the cookie is third-party and gets dropped, so the client caches
+    // this and sends it as Authorization: Bearer instead.
+    const token = await signPortalToken(customer.id);
+    const response = NextResponse.json({ ...customer, portalToken: token });
+    attachPortalSessionCookie(response, token);
     return response;
   }
 
@@ -82,20 +103,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
   }
 
-  const response = NextResponse.json(customer);
-  setPortalSessionCookie(response, customer.id);
+  // Strip the password before responding. This path spreads the raw
+  // customers.json row, which carries the plaintext password; the GET handler
+  // below already strips it and this one did not.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password: _pw, ...safeCustomer } = customer;
+  const token = await signPortalToken(customer.id);
+  const response = NextResponse.json({ ...safeCustomer, portalToken: token });
+  attachPortalSessionCookie(response, token);
 
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('portal_session');
-  if (!session?.value) {
+  // Accepts the signed cookie OR the Bearer header, so the bootstrap probe
+  // works in the iframe where the cookie never arrives.
+  const { portalCustomerId } = await authContext(request);
+  if (!portalCustomerId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const customers = await getCustomers();
-  const customer = customers.find((c) => c.id === session.value);
+  const customer = customers.find((c) => c.id === portalCustomerId);
   if (!customer) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 401 });
   }
@@ -103,10 +132,11 @@ export async function GET(request: NextRequest) {
   // Strip password before returning
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password, ...safe } = customer;
-  const response = NextResponse.json(safe);
   // Slide the session forward on every bootstrap so an active customer's
   // 30-day window keeps renewing instead of lapsing mid-use.
-  setPortalSessionCookie(response, customer.id);
+  const token = await signPortalToken(customer.id);
+  const response = NextResponse.json({ ...safe, portalToken: token });
+  attachPortalSessionCookie(response, token);
   return response;
 }
 

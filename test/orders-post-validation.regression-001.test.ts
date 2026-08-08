@@ -42,6 +42,16 @@ const { getCustomersSpy, createOrderSpy } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/data", () => ({
+  // Catalog for the stock gate added 2026-08-07. Generous counts so these
+  // tests keep exercising the validation chain, not inventory.
+  getProducts: vi.fn(async () => [
+    {
+      id: "prod-1",
+      name: "Test Beer",
+      available: true,
+      sizes: [{ size: "1/2bbl", price: 180, deposit: 50, inventoryCount: 99, available: true }],
+    },
+  ]),
   getCustomers: getCustomersSpy,
   createOrder: createOrderSpy,
   createInvoice: vi.fn(async () => undefined),

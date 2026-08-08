@@ -25,7 +25,7 @@ import type { Customer } from '@/lib/types';
  * but don't abort the whole batch — we report them in `skipped`.
  */
 export async function POST(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }
   try {

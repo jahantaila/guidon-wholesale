@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
+import { authContext } from '@/lib/auth-check';
 import { getOrder, updateOrder, getCustomers, adjustProductInventory } from '@/lib/data';
 
 /**
  * POST /api/portal/cancel-order
  * Body: { orderId: string }
  *
- * Customer-initiated cancellation of a pending order. Authorization:
- * the portal_session cookie (set by /api/portal/login) holds the
- * logged-in customer_id server-side. We require that cookie's customerId
- * match the order's customerId. No body-supplied email that could be
- * spoofed.
+ * Customer-initiated cancellation of a pending order. Authorization comes
+ * from authContext, which resolves the customer id out of the signed
+ * portal session (cookie, or Bearer header when the portal is iframed and
+ * the cookie is dropped). We require it to match the order's customerId.
+ * No body-supplied email that could be spoofed.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
     }
 
-    const session = request.cookies.get('portal_session');
-    const sessionCustomerId = session?.value;
+    const { portalCustomerId: sessionCustomerId } = await authContext(request);
     if (!sessionCustomerId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }

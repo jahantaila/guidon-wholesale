@@ -11,7 +11,7 @@ import { formatAddress } from '@/lib/utils';
  * campaigns.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

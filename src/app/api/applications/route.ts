@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   // Admin-only: applications contain applicant PII and business context.
   // isAdminRequest accepts cookie OR Bearer header so iframe-embedded
   // admins (where 3rd-party cookies are blocked) still see their data.
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json([], { status: 200 });
   }
   const applications = await getApplications();
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const admin = isAdminRequest(request);
+  const admin = await isAdminRequest(request);
   if (!admin) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }

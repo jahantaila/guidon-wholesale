@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
-import { getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
+import { getProducts, getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
-    const { admin, portalCustomerId } = authContext(request);
+    const { admin, portalCustomerId } = await authContext(request);
     // Unfiltered (no customerId): admin-only.
     if (!customerId && !admin) {
       return NextResponse.json([], { status: 200 });
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
   const body = await request.json();
-  const { admin, portalCustomerId } = authContext(request);
+  const { admin, portalCustomerId } = await authContext(request);
 
   // Auth: admin or a portal-logged-in customer. Anonymous POSTs were
   // creating $0 orders in the brewery's pipeline because no validation
@@ -108,6 +108,72 @@ export async function POST(request: NextRequest) {
       { error: 'This account is archived. Contact the brewery to reactivate.' },
       { status: 403 },
     );
+  }
+
+  // Stock gate. Until 2026-08-07 there was NO inventory check anywhere in
+  // order placement — stock was only decremented later, when an admin
+  // confirmed the order (see PUT below), and `adjustProductInventory` clamps
+  // at zero. So a size with 1 case on hand happily accepted an order for 2
+  // and the shortfall left no trace. Reported by the brewery after a Kolsch
+  // was oversold.
+  //
+  // Quantities are summed per product+size first, so two line items for the
+  // same keg can't slip through individually under the cap.
+  {
+    const products = await getProducts();
+    // An empty catalog cannot be a real oversell signal — it means the
+    // catalog query came back empty (Supabase hiccup, products.json missing
+    // in file mode, `available` mass-flipped). Enforcing the gate against an
+    // empty map would 409 EVERY order brewery-wide with "no longer in the
+    // catalog", turning a data blip into a total ordering outage and sending
+    // staff hunting for a catalog problem. Fail open, log loudly.
+    if (products.length === 0) {
+      console.error('[orders POST] catalog empty — skipping stock gate for this order.');
+    }
+    const stock = new Map<string, { available: boolean; count: number; label: string }>();
+    for (const p of products) {
+      for (const s of p.sizes || []) {
+        stock.set(`${p.id}::${s.size}`, {
+          available: p.available !== false && s.available !== false,
+          count: s.inventoryCount ?? 0,
+          label: `${p.name} (${s.size})`,
+        });
+      }
+    }
+
+    const wanted = new Map<string, number>();
+    for (const it of body.items as { productId: string; size: string; quantity: number }[]) {
+      const key = `${it.productId}::${it.size}`;
+      wanted.set(key, (wanted.get(key) || 0) + it.quantity);
+    }
+
+    const problems: string[] = [];
+    for (const [key, qty] of Array.from(wanted.entries())) {
+      const entry = stock.get(key);
+      if (!entry) {
+        const [, size] = key.split('::');
+        problems.push(`One of the items (${size}) is no longer in the catalog.`);
+        continue;
+      }
+      if (!entry.available) {
+        problems.push(`${entry.label} is not currently available.`);
+        continue;
+      }
+      if (qty > entry.count) {
+        problems.push(
+          entry.count === 0
+            ? `${entry.label} is out of stock.`
+            : `${entry.label}: only ${entry.count} left, you asked for ${qty}.`,
+        );
+      }
+    }
+
+    if (products.length > 0 && problems.length > 0) {
+      return NextResponse.json(
+        { error: problems.join(' '), outOfStock: problems },
+        { status: 409 },
+      );
+    }
   }
 
   const order: Order = {
@@ -182,7 +248,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-  const admin = isAdminRequest(request);
+  const admin = await isAdminRequest(request);
   if (!admin) {
     return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
   }
