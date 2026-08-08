@@ -75,6 +75,41 @@ export default function CrmPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [newLead, setNewLead] = useState({ businessName: '', contactName: '', phone: '', email: '' });
 
+  // Compose state. One recipient at a time.
+  const [emailTo, setEmailTo] = useState<CrmListRow | null>(null);
+  const [draft, setDraft] = useState({ subject: '', body: '' });
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+
+  async function sendEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailTo) return;
+    setSending(true);
+    setSendError('');
+    try {
+      const res = await adminFetch('/api/admin/crm/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectId: emailTo.id, ...draft }),
+      });
+      const b = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSendError(b?.error || 'Could not send that email.');
+        return;
+      }
+      setFlash(`Email sent to ${emailTo.businessName}. Logged on their history.`);
+      setTimeout(() => setFlash(''), 4000);
+      setEmailTo(null);
+      setDraft({ subject: '', body: '' });
+      // Refresh so the send shows up as the account's latest touch.
+      await load();
+    } catch {
+      setSendError('Could not send that email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -519,6 +554,19 @@ export default function CrmPage() {
                             >
                               Log
                             </button>
+                            {row.email && (
+                              <button
+                                onClick={() => {
+                                  setEmailTo(row);
+                                  setDraft({ subject: '', body: '' });
+                                  setSendError('');
+                                }}
+                                className="text-sm underline"
+                                style={{ color: 'var(--brass)' }}
+                              >
+                                Email
+                              </button>
+                            )}
                             {row.status !== 'customer' && (
                               <button
                                 onClick={() => promote(row)}
@@ -541,9 +589,88 @@ export default function CrmPage() {
         )}
       </div>
 
+      {/* Compose. One recipient, plain text, sent from the brewery's address
+          with replies going to sales@guidonbrewing.com. Sending logs itself on
+          the account, so the history stays current without anyone typing. */}
+      {emailTo && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6"
+          style={{ background: 'rgba(42, 36, 22, 0.45)' }}
+          onClick={() => !sending && setEmailTo(null)}
+        >
+          <form
+            onSubmit={sendEmail}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xl mt-12 p-6"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--divider)',
+              borderRadius: 4,
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            <div className="overline mb-1" style={{ color: 'var(--brass)' }}>
+              Email
+            </div>
+            <h2 className="font-display text-2xl mb-1" style={{ color: 'var(--ink)' }}>
+              {emailTo.businessName}
+            </h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+              To {emailTo.email} · replies come back to sales@guidonbrewing.com
+            </p>
+
+            <label className="label block mb-1">Subject</label>
+            <input
+              className="input w-full mb-3"
+              autoFocus
+              maxLength={200}
+              value={draft.subject}
+              onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+              placeholder="Fall seasonal is ready"
+            />
+
+            <label className="label block mb-1">Message</label>
+            <textarea
+              className="input w-full mb-1"
+              rows={9}
+              maxLength={20000}
+              value={draft.body}
+              onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+              placeholder={`Hi ${emailTo.contactName || 'there'},\n\n`}
+            />
+            <p className="text-xs mb-4" style={{ color: 'var(--faint)' }}>
+              Plain text. It gets wrapped in the Guidon letterhead automatically.
+            </p>
+
+            {sendError && (
+              <p className="text-sm mb-3" style={{ color: 'var(--ruby)' }}>
+                {sendError}
+              </p>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                className="btn-primary"
+                disabled={sending || !draft.subject.trim() || !draft.body.trim()}
+              >
+                {sending ? 'Sending…' : 'Send email'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setEmailTo(null)}
+                disabled={sending}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <p className="mt-4 text-xs" style={{ color: 'var(--faint)' }}>
-        &quot;Last touch&quot; is whichever is more recent: an order they placed, or a call you
-        logged. Orders count automatically, so customers stay current without you typing anything.{' '}
+        &quot;Last touch&quot; is whichever is more recent: an order they placed, an email you sent
+        from here, or a call you logged. Orders count automatically, so customers stay current without you typing anything.{' '}
         <Link href="/admin/customers" className="underline">
           Customers
         </Link>{' '}
