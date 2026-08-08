@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, recordFailure, clearKey, keyForRequest } from '@/lib/rate-limit';
 import { isAdminRequest } from '@/lib/auth-check';
-import { signSession, ADMIN_SESSION_MAX_AGE } from '@/lib/session-token';
+import { signSession, isSessionSigningConfigured, ADMIN_SESSION_MAX_AGE } from '@/lib/session-token';
 
 /**
  * Admin login. Issues an HMAC-signed session token carried in BOTH the
@@ -48,6 +48,19 @@ export async function POST(request: NextRequest) {
         status: 429,
         headers: { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) },
       },
+    );
+  }
+
+  // A missing signing secret makes signSession throw. Uncaught, that surfaces
+  // to the browser as the generic "Login failed. Please try again." string —
+  // indistinguishable from a wrong password, so the brewery would go hunting
+  // for a changed password instead of a misconfigured deploy. Check first and
+  // say what is actually wrong.
+  if (!isSessionSigningConfigured()) {
+    console.error('[admin/login] no signing secret — set SESSION_SECRET.');
+    return NextResponse.json(
+      { error: 'Server auth is misconfigured. Set SESSION_SECRET.' },
+      { status: 503 },
     );
   }
 

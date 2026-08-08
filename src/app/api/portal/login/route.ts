@@ -7,8 +7,20 @@ import {
   clearPortalSessionCookie,
 } from '@/lib/portal-session';
 import { authContext } from '@/lib/auth-check';
+import { isSessionSigningConfigured } from '@/lib/session-token';
 
 export async function POST(request: NextRequest) {
+  // Without a signing secret, signPortalToken throws and the customer sees the
+  // generic "Login failed." string — identical to a wrong password. Say what
+  // is actually broken instead of sending them to reset a working password.
+  if (!isSessionSigningConfigured()) {
+    console.error('[portal/login] no signing secret — set SESSION_SECRET.');
+    return NextResponse.json(
+      { error: 'Sign-in is temporarily unavailable. Please contact the brewery.' },
+      { status: 503 },
+    );
+  }
+
   const { email, password } = await request.json();
 
   if (!email || !password) {
@@ -91,8 +103,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
   }
 
+  // Strip the password before responding. This path spreads the raw
+  // customers.json row, which carries the plaintext password; the GET handler
+  // below already strips it and this one did not.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password: _pw, ...safeCustomer } = customer;
   const token = await signPortalToken(customer.id);
-  const response = NextResponse.json({ ...customer, portalToken: token });
+  const response = NextResponse.json({ ...safeCustomer, portalToken: token });
   attachPortalSessionCookie(response, token);
 
   return response;

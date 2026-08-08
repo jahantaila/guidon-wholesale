@@ -4,7 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // nextFollowupNotes on a customer via PUT /api/customers. Portal self-edits
 // must NOT be able to touch them (admin-only CRM data).
 
-const { updateCustomerSpy, isAdminRequestSpy } = vi.hoisted(() => ({
+// PUT resolves identity through authContext now, not a raw portal_session
+// cookie read. The cookie-to-identity wiring is pinned in auth-check.test.ts;
+// this suite is about WHICH FIELDS each role may write.
+const { updateCustomerSpy, isAdminRequestSpy, authContextSpy } = vi.hoisted(() => ({
+  authContextSpy: vi.fn(async () => ({ admin: true, portalCustomerId: "" })),
   updateCustomerSpy: vi.fn(async (id: string, updates: Record<string, unknown>) => ({
     id,
     businessName: "Test Co",
@@ -26,6 +30,7 @@ vi.mock("@/lib/data", () => ({
 }));
 vi.mock("@/lib/auth-check", () => ({
   isAdminRequest: isAdminRequestSpy,
+  authContext: authContextSpy,
 }));
 vi.mock("@/lib/supabase", () => ({
   isSupabaseConfigured: () => false,
@@ -51,6 +56,7 @@ describe("PUT /api/customers — CRM follow-up fields", () => {
   beforeEach(() => {
     updateCustomerSpy.mockClear();
     isAdminRequestSpy.mockReturnValue(true);
+    authContextSpy.mockResolvedValue({ admin: true, portalCustomerId: "" });
   });
 
   it("admin can set nextFollowupDate + nextFollowupNotes", async () => {
@@ -69,16 +75,14 @@ describe("PUT /api/customers — CRM follow-up fields", () => {
 
   it("portal self-edit cannot set follow-up CRM fields", async () => {
     isAdminRequestSpy.mockReturnValue(false);
+    authContextSpy.mockResolvedValue({ admin: false, portalCustomerId: "cust-1" });
     const res = await PUT(
-      makeRequest(
-        {
-          id: "cust-1",
-          contactName: "Pat New",
-          nextFollowupDate: "2026-07-15",
-          nextFollowupNotes: "sneaky",
-        },
-        "portal_session=cust-1",
-      ) as never,
+      makeRequest({
+        id: "cust-1",
+        contactName: "Pat New",
+        nextFollowupDate: "2026-07-15",
+        nextFollowupNotes: "sneaky",
+      }) as never,
     );
     expect(res.status).toBe(200);
     const [, updates] = updateCustomerSpy.mock.calls[0];

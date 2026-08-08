@@ -1079,6 +1079,14 @@ function rowToRecurring(row: Record<string, unknown>): RecurringOrder {
 }
 
 export async function getRecurringOrders(customerId?: string): Promise<RecurringOrder[]> {
+  // An EXPLICIT empty string means "a caller with no customer identity" and
+  // must match nothing. Only `undefined` means "unfiltered, admin view".
+  // Without this, `getRecurringOrders('')` fell through to the no-filter
+  // branch and returned every row, which turned the ownership check in the
+  // PUT route into a full table read: an anonymous caller could switch off
+  // any customer's standing order. The route guards this too; keeping it
+  // here means the next caller can't reintroduce the same hole.
+  if (customerId === '') return [];
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const query = sb.from('recurring_orders').select('*').order('created_at', { ascending: false });

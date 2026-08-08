@@ -23,13 +23,31 @@ import { getPortalToken } from '@/lib/portal-fetch';
  * exactly the "Your session expired. Please sign in again to place your
  * order." report from Salty Landing and Ecusta Market.
  *
- * authedFetch attaches whichever bearer token is present — admin first
- * (admin-on-behalf outranks a stale customer session), else the portal
- * customer's — so auth survives the cookie blackout in both directions.
+ * authedFetch attaches a bearer token so auth survives the cookie blackout.
+ *
+ * Which token depends on how the page was opened, NOT on which happens to be
+ * in localStorage. An unconditional `getAdminToken() || getPortalToken()`
+ * is wrong in both directions: on a shared brewery machine a leftover admin
+ * token would silently elevate whichever customer browsed next (POST
+ * /api/orders accepts an arbitrary customerId once `admin` is true), and a
+ * customer with a stale admin token would send it instead of their own valid
+ * session and get 401'd at checkout — the very bug this file is fixing.
+ *
+ * So: prefer the token matching the page mode, fall back to the other only
+ * when the preferred one is absent.
  */
+function isAdminMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('adminMode') === '1';
+}
+
 function authedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const token =
-    typeof window !== 'undefined' ? getAdminToken() || getPortalToken() : null;
+  let token: string | null = null;
+  if (typeof window !== 'undefined') {
+    token = isAdminMode()
+      ? getAdminToken() || getPortalToken()
+      : getPortalToken() || getAdminToken();
+  }
   if (!token) return fetch(input, init);
   const headers = new Headers(init?.headers);
   if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);

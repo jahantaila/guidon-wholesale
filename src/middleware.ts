@@ -16,7 +16,10 @@ export async function middleware(request: NextRequest) {
   // exploitable against production on 2026-08-07 (HTTP 200, real customer
   // data) before this fix landed. A cookie is no safer than a header when the
   // caller is curl, so neither may carry a bare marker value.
-  if (pathname.startsWith('/api/admin/') && !pathname.startsWith('/api/admin/login')) {
+  // The login exemption is an EQUALITY check, not a prefix. `startsWith`
+  // would silently exempt any future sibling route such as
+  // /api/admin/login-attempts or /api/admin/login-history.
+  if (pathname.startsWith('/api/admin/') && pathname !== '/api/admin/login') {
     const cookie = request.cookies.get('admin_session')?.value;
     const bearer = bearerFrom(request.headers.get('authorization'));
     const ok =

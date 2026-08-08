@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
-import { isAdminRequest } from '@/lib/auth-check';
+import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { getRecurringOrders, createRecurringOrder, updateRecurringOrder, deleteRecurringOrder } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { RecurringOrder } from '@/lib/types';
@@ -9,8 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId') || undefined;
-    const admin = await isAdminRequest(request);
-    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    const { admin, portalCustomerId } = await authContext(request);
     // Unfiltered: admin-only.
     if (!customerId && !admin) return NextResponse.json([], { status: 200 });
     // Scoped: admin or owning customer.
@@ -77,11 +76,19 @@ export async function PUT(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    const admin = await isAdminRequest(request);
-    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    const { admin, portalCustomerId } = await authContext(request);
     // Portal user: can only toggle active on their own recurring order.
     // Admin: full control.
     if (!admin) {
+      // Anonymous callers must be rejected BEFORE the ownership lookup.
+      // getRecurringOrders treats a falsy customerId as "no filter" and
+      // returns every row, so passing '' here made the .some() ownership
+      // check below succeed for ANY id — an unauthenticated caller could
+      // switch off any customer's standing order. Guarded at the data layer
+      // too; this is the one that matters.
+      if (!portalCustomerId) {
+        return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+      }
       const existing = await getRecurringOrders(portalCustomerId);
       if (!existing.some((r) => r.id === id)) {
         return NextResponse.json({ error: 'Not authorized' }, { status: 403 });

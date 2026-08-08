@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
-import { isAdminRequest } from '@/lib/auth-check';
+import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { getInvoices, createInvoice, updateInvoice, getCustomers, getOrder } from '@/lib/data';
 import { send, formatCurrencyForEmail } from '@/lib/email';
 import { generateId } from '@/lib/utils';
@@ -9,8 +9,7 @@ import type { Invoice } from '@/lib/types';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
-  const admin = await isAdminRequest(request);
-  const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+  const { admin, portalCustomerId } = await authContext(request);
   if (!customerId && !admin) {
     return NextResponse.json([], { status: 200 });
   }

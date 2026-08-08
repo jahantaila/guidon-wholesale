@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminRequest } from '@/lib/auth-check';
+import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getOrders, getInvoices, getKegLedger } from '@/lib/data';
 import { isSupabaseConfigured, createAdminClient } from '@/lib/supabase';
 import { generateId } from '@/lib/utils';
@@ -153,8 +153,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = await isAdminRequest(request);
-    const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+    const { admin, portalCustomerId } = await authContext(request);
     const body = await request.json();
     const { id, ...rawUpdates } = body;
     if (!id) {

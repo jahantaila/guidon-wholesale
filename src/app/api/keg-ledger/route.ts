@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAdminRequest } from '@/lib/auth-check';
+import { isAdminRequest, authContext } from '@/lib/auth-check';
 import {
   getKegLedger,
   getKegLedgerByCustomer,
@@ -14,8 +14,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get('customerId');
   const balances = searchParams.get('balances');
-  const admin = await isAdminRequest(request);
-  const portalCustomerId = request.cookies.get('portal_session')?.value || '';
+  const { admin, portalCustomerId } = await authContext(request);
 
   // Balances and unfiltered ledger: admin-only.
   if (balances === 'true') {

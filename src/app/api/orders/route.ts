@@ -121,6 +121,15 @@ export async function POST(request: NextRequest) {
   // same keg can't slip through individually under the cap.
   {
     const products = await getProducts();
+    // An empty catalog cannot be a real oversell signal — it means the
+    // catalog query came back empty (Supabase hiccup, products.json missing
+    // in file mode, `available` mass-flipped). Enforcing the gate against an
+    // empty map would 409 EVERY order brewery-wide with "no longer in the
+    // catalog", turning a data blip into a total ordering outage and sending
+    // staff hunting for a catalog problem. Fail open, log loudly.
+    if (products.length === 0) {
+      console.error('[orders POST] catalog empty — skipping stock gate for this order.');
+    }
     const stock = new Map<string, { available: boolean; count: number; label: string }>();
     for (const p of products) {
       for (const s of p.sizes || []) {
@@ -159,7 +168,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (problems.length > 0) {
+    if (products.length > 0 && problems.length > 0) {
       return NextResponse.json(
         { error: problems.join(' '), outOfStock: problems },
         { status: 409 },
