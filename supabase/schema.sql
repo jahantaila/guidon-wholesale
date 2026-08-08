@@ -423,3 +423,101 @@ create index if not exists idx_invoices_customer_id on invoices(customer_id);
 create index if not exists idx_invoices_order_id on invoices(order_id);
 create index if not exists idx_keg_ledger_customer_id on keg_ledger(customer_id);
 create index if not exists idx_order_items_order_id on order_items(order_id);
+
+-- ============================================================
+-- CRM: leads, prospects, and contact activity
+-- ============================================================
+-- Leads and prospects live in their own table rather than in `customers`.
+-- A customer row carries a Supabase Auth login, orders, invoices and keg
+-- deposits; a lead is a business name and maybe a phone number. Keeping them
+-- separate avoids a dozen nullable columns on the table that every order,
+-- invoice and keg-ledger row has a foreign key into.
+--
+-- `status` is deliberately only ('lead','prospect'). "Customer" is not a
+-- status here — it is a different table. Promotion writes a customers row and
+-- stamps converted_customer_id, and the CRM list unions the two.
+
+create table if not exists crm_contacts (
+  id text primary key default ('lead-' || substr(md5(random()::text), 1, 8)),
+  business_name text not null,
+  contact_name text not null default '',
+  email text not null default '',
+  phone text not null default '',
+  street_address text not null default '',
+  city text not null default '',
+  state text not null default '',
+  zip text not null default '',
+  status text not null default 'lead' check (status in ('lead', 'prospect')),
+  notes text not null default '',
+  tags jsonb not null default '[]'::jsonb,
+  next_followup_date date,
+  next_followup_notes text not null default '',
+  -- Set when this lead becomes a customer. ON DELETE SET NULL, not the
+  -- default NO ACTION: deleting a mistakenly-converted customer must not fail
+  -- with an opaque FK violation from a table the admin has never heard of.
+  converted_customer_id text references customers(id) on delete set null,
+  converted_at timestamptz,
+  archived_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- Email is intentionally NOT unique and NOT required. Leads legitimately start
+-- as "walked past a bar, no contact details yet". Uniqueness is enforced at
+-- conversion time, against customers.email.
+create index if not exists idx_crm_contacts_status on crm_contacts(status)
+  where archived_at is null and converted_at is null;
+
+-- Contact activity, for both leads and existing customers.
+--
+-- Two nullable FKs with a check constraint rather than a polymorphic
+-- (subject_type, subject_id) pair. Real foreign keys mean the database
+-- enforces that the parent exists, and exactly-one-parent is checked in the
+-- same place. A polymorphic pair gives up both for one fewer column.
+--
+-- ON DELETE SET NULL, not CASCADE: a hard customer delete must not silently
+-- erase the record of every call and sample drop that account received.
+-- Orphans are visible and recoverable; a cascade is neither.
+create table if not exists crm_activities (
+  id uuid primary key default uuid_generate_v4(),
+  customer_id text references customers(id) on delete set null,
+  contact_id  text references crm_contacts(id) on delete set null,
+  type text not null check (type in
+    ('sent_email', 'spoke_phone', 'left_voicemail', 'cold_call', 'dropped_samples')),
+  occurred_at timestamptz not null default now(),
+  notes text not null default '',
+  -- 'admin' for hand-logged entries, 'system' for auto-logged ones (an email
+  -- sent from the CRM). Admin auth is a single shared password, so there is no
+  -- real "who" to record yet.
+  source text not null default 'admin' check (source in ('admin', 'system')),
+  created_at timestamptz not null default now(),
+  constraint crm_activities_one_subject check (
+    (customer_id is not null) <> (contact_id is not null)
+  )
+);
+
+create index if not exists idx_crm_activities_customer
+  on crm_activities(customer_id, occurred_at desc);
+create index if not exists idx_crm_activities_contact
+  on crm_activities(contact_id, occurred_at desc);
+
+-- RLS. Without this, Supabase grants the `anon` role full DML on new public
+-- tables, and NEXT_PUBLIC_SUPABASE_ANON_KEY ships in the browser bundle — so
+-- the entire prospect list would be readable, and deletable, by anyone who
+-- opened devtools. All app access goes through createAdminClient(), which
+-- bypasses RLS, so a service-role-only policy changes nothing functionally.
+alter table crm_contacts enable row level security;
+drop policy if exists "Service role full access" on crm_contacts;
+create policy "Service role full access" on crm_contacts
+  using (true)
+  with check (true);
+
+alter table crm_activities enable row level security;
+drop policy if exists "Service role full access" on crm_activities;
+create policy "Service role full access" on crm_activities
+  using (true)
+  with check (true);
+
+-- Marketing opt-out. Consulted ONLY on CRM/marketing sends. Order
+-- confirmations, invoices and keg reminders ignore it entirely — a customer
+-- who unsubscribes from outreach must still receive their invoice.
+alter table customers add column if not exists marketing_opt_out boolean not null default false;

@@ -298,3 +298,85 @@ export const KEG_DEPOSITS: Record<KegSize, number> = {
   '1/4bbl': 40,
   '1/6bbl': 30,
 };
+
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+
+/** Where a non-customer sits in the pipeline. "Customer" is not a value here:
+ *  a converted lead becomes a row in `customers`, which is a different table. */
+export type CrmStatus = 'lead' | 'prospect';
+
+/** What the CRM list shows per row, once contacts and customers are unioned. */
+export type CrmListStatus = CrmStatus | 'customer';
+
+export type CrmActivityType =
+  | 'sent_email'
+  | 'spoke_phone'
+  | 'left_voicemail'
+  | 'cold_call'
+  | 'dropped_samples';
+
+/** Mike's own words, in his own order. Used for the one-click log buttons. */
+export const CRM_ACTIVITY_LABELS: Record<CrmActivityType, string> = {
+  sent_email: 'Sent email',
+  spoke_phone: 'Spoke on phone',
+  left_voicemail: 'Left voice mail',
+  cold_call: 'Cold call',
+  dropped_samples: 'Dropped off samples',
+};
+
+export const CRM_ACTIVITY_TYPES = Object.keys(CRM_ACTIVITY_LABELS) as CrmActivityType[];
+
+/** A lead or prospect: a business the brewery does not sell to yet. */
+export interface CrmContact {
+  id: string;
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
+  status: CrmStatus;
+  notes: string;
+  tags: string[];
+  nextFollowupDate?: string | null;
+  nextFollowupNotes: string;
+  /** Set once promoted. The contact then drops out of the default CRM list —
+   *  its customer row represents it — but the history is kept. */
+  convertedCustomerId?: string | null;
+  convertedAt?: string | null;
+  archivedAt?: string | null;
+  createdAt: string;
+}
+
+/** One logged touch. Exactly one of customerId / contactId is set. */
+export interface CrmActivity {
+  id: string;
+  customerId?: string | null;
+  contactId?: string | null;
+  type: CrmActivityType;
+  occurredAt: string;
+  notes: string;
+  /** 'system' when the app logged it itself (e.g. an email it sent). */
+  source: 'admin' | 'system';
+  createdAt: string;
+}
+
+/** A unified CRM list row: leads, prospects and customers in one table. */
+export interface CrmListRow {
+  id: string;
+  status: CrmListStatus;
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  /** Latest of (last order placed, last logged activity). Null if neither. */
+  recentActivityAt: string | null;
+  /** What produced recentActivityAt, for the "23d ago · Cold call" label. */
+  recentActivitySource: string | null;
+  nextFollowupDate?: string | null;
+  /** Customers only. Lets the list surface who has gone quiet. */
+  orderCount: number;
+  lastOrderAt: string | null;
+}
