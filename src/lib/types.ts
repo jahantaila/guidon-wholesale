@@ -73,8 +73,11 @@ export interface ProductSize {
   price: number;
   deposit: number;
   /** On-hand keg count for this product+size. Decrements when an order is
-   * confirmed; can be adjusted manually by admin. 0 means out of stock but
-   * checkout doesn't hard-block (brewery can brew-to-order). */
+   * confirmed; can be adjusted manually by admin. Since 2026-08-07 checkout
+   * HARD-BLOCKS on this: ordering more than `inventoryCount` returns 409.
+   * Previously there was no check anywhere, so a size with 1 on hand accepted
+   * an order for 2 (reported after a Kolsch was oversold). To take a
+   * backorder, raise the count first. */
   inventoryCount: number;
   /** Par level: when inventory drops below this threshold, brewing alert
    * fires on the dashboard. null/undefined = use global default (5). */

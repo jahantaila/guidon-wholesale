@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     if (all === 'true') {
       // Unfiltered "all" list is for admin; accepts cookie OR Bearer.
-      if (!isAdminRequest(request)) {
+      if (!(await isAdminRequest(request))) {
         return NextResponse.json([], { status: 200 });
       }
       const products = await getAllProducts();
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }
@@ -88,7 +88,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

@@ -8,7 +8,7 @@ import { getOrders, getCustomers } from '@/lib/data';
  * One row per line item so it's straightforward to pivot in a spreadsheet.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

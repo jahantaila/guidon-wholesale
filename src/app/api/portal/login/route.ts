@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomers } from '@/lib/data';
 import { isSupabaseConfigured, createServerClient } from '@/lib/supabase';
-import { setPortalSessionCookie, clearPortalSessionCookie } from '@/lib/portal-session';
+import {
+  signPortalToken,
+  attachPortalSessionCookie,
+  clearPortalSessionCookie,
+} from '@/lib/portal-session';
+import { authContext } from '@/lib/auth-check';
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -67,8 +72,12 @@ export async function POST(request: NextRequest) {
       createdAt: customerRow.created_at,
     };
 
-    const response = NextResponse.json(customer);
-    setPortalSessionCookie(response, customer.id);
+    // portalToken rides in the body as well as the cookie. In the WordPress
+    // iframe the cookie is third-party and gets dropped, so the client caches
+    // this and sends it as Authorization: Bearer instead.
+    const token = await signPortalToken(customer.id);
+    const response = NextResponse.json({ ...customer, portalToken: token });
+    attachPortalSessionCookie(response, token);
     return response;
   }
 
@@ -82,20 +91,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
   }
 
-  const response = NextResponse.json(customer);
-  setPortalSessionCookie(response, customer.id);
+  const token = await signPortalToken(customer.id);
+  const response = NextResponse.json({ ...customer, portalToken: token });
+  attachPortalSessionCookie(response, token);
 
   return response;
 }
 
 export async function GET(request: NextRequest) {
-  const session = request.cookies.get('portal_session');
-  if (!session?.value) {
+  // Accepts the signed cookie OR the Bearer header, so the bootstrap probe
+  // works in the iframe where the cookie never arrives.
+  const { portalCustomerId } = await authContext(request);
+  if (!portalCustomerId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const customers = await getCustomers();
-  const customer = customers.find((c) => c.id === session.value);
+  const customer = customers.find((c) => c.id === portalCustomerId);
   if (!customer) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 401 });
   }
@@ -103,10 +115,11 @@ export async function GET(request: NextRequest) {
   // Strip password before returning
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password, ...safe } = customer;
-  const response = NextResponse.json(safe);
   // Slide the session forward on every bootstrap so an active customer's
   // 30-day window keeps renewing instead of lapsing mid-use.
-  setPortalSessionCookie(response, customer.id);
+  const token = await signPortalToken(customer.id);
+  const response = NextResponse.json({ ...safe, portalToken: token });
+  attachPortalSessionCookie(response, token);
   return response;
 }
 

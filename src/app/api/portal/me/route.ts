@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCustomer } from '@/lib/data';
-import { setPortalSessionCookie } from '@/lib/portal-session';
+import { signPortalToken, attachPortalSessionCookie } from '@/lib/portal-session';
+import { authContext } from '@/lib/auth-check';
 
 /**
  * GET /api/portal/me
@@ -17,7 +18,10 @@ import { setPortalSessionCookie } from '@/lib/portal-session';
  * customer only sees what they're allowed to manage themselves.
  */
 export async function GET(request: NextRequest) {
-  const customerId = request.cookies.get('portal_session')?.value || '';
+  // Signed cookie OR Bearer header — the header path is what keeps this
+  // working inside the WordPress iframe, where the cookie is third-party and
+  // gets dropped by the browser.
+  const { portalCustomerId: customerId } = await authContext(request);
   if (!customerId) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   }
@@ -31,9 +35,13 @@ export async function GET(request: NextRequest) {
       { status: 403 },
     );
   }
+  // Slide the 30-day session forward on each focus refetch so active customers
+  // don't lapse mid-session and hit "Authentication required" at checkout.
+  const token = await signPortalToken(customer.id);
   // Strip admin-only + sensitive fields. Mirror the login route's projection
   // so the customer's portal sees a consistent shape.
   const response = NextResponse.json({
+    portalToken: token,
     id: customer.id,
     businessName: customer.businessName,
     contactName: customer.contactName,
@@ -48,8 +56,6 @@ export async function GET(request: NextRequest) {
     mustChangePassword: customer.mustChangePassword === true,
     createdAt: customer.createdAt,
   });
-  // Slide the 30-day session forward on each focus refetch so active customers
-  // don't lapse mid-session and hit "Authentication required" at checkout.
-  setPortalSessionCookie(response, customer.id);
+  attachPortalSessionCookie(response, token);
   return response;
 }

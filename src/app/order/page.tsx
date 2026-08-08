@@ -9,25 +9,27 @@ import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, cn, US_STATES } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import { getAdminToken } from '@/lib/admin-fetch';
+import { getPortalToken } from '@/lib/portal-fetch';
 
 /**
  * Order page is reachable two ways:
- *   - portal customer placing their own order (cookie auth)
+ *   - portal customer placing their own order
  *   - admin placing on behalf via /order?customerId=X&adminMode=1
  *
- * In the second case, the admin may be loading the page inside an
- * iframe (Derby Digital portal embedding /admin), where 3rd-party
- * cookies are silently dropped. Without this Bearer fallback, the
- * admin auth probe falls back to "not signed in" and bounces the
- * admin to /portal — where they get prompted for the customer's
- * password. The brewery rightly considers that broken.
+ * Either way the page may be loaded inside an iframe — the brewery's
+ * WordPress site embeds the customer flow, and Derby Digital's management
+ * portal embeds /admin. In an iframe the session cookie is third-party and
+ * browsers silently drop it, so cookie-only auth 401s at checkout. That is
+ * exactly the "Your session expired. Please sign in again to place your
+ * order." report from Salty Landing and Ecusta Market.
  *
- * authedFetch attaches the admin Bearer token (from localStorage)
- * to every same-origin request the order page makes, so the auth
- * context survives the cookie blackout.
+ * authedFetch attaches whichever bearer token is present — admin first
+ * (admin-on-behalf outranks a stale customer session), else the portal
+ * customer's — so auth survives the cookie blackout in both directions.
  */
 function authedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const token = typeof window !== 'undefined' ? getAdminToken() : null;
+  const token =
+    typeof window !== 'undefined' ? getAdminToken() || getPortalToken() : null;
   if (!token) return fetch(input, init);
   const headers = new Headers(init?.headers);
   if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
@@ -146,10 +148,11 @@ export default function OrderPage() {
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/embed')) return;
     let cancelled = false;
     Promise.all([
-      fetch('/api/portal/login'),
-      // Bearer token (via authedFetch) covers the iframe-cookie-blocked
-      // case — without it admin loading /order in an embed gets bounced
-      // to /portal and prompted for the customer's password.
+      // Both probes go through authedFetch so the bearer token covers the
+      // iframe-cookie-blocked case. Without it the CUSTOMER gets bounced to
+      // /portal mid-session, and the ADMIN gets bounced and then prompted for
+      // the customer's password.
+      authedFetch('/api/portal/login'),
       authedFetch('/api/admin/login'),
     ]).then(([portal, admin]) => {
       if (cancelled) return;

@@ -34,6 +34,14 @@ vi.mock("@/lib/supabase", () => ({
 import { POST as loginPOST, GET as loginGET } from "@/app/api/portal/login/route";
 import { GET as meGET } from "@/app/api/portal/me/route";
 import { NextRequest } from "next/server";
+import { signSession, PORTAL_SESSION_MAX_AGE, resetSigningKeyCache } from "@/lib/session-token";
+
+// The session value is now an HMAC-signed token rather than the bare customer
+// id, so tests have to mint a real one.
+process.env.SESSION_SECRET = "portal-session-suite-secret-value";
+resetSigningKeyCache();
+
+const sessionCookie = () => signSession("portal", customer.id, PORTAL_SESSION_MAX_AGE);
 
 function maxAgeOf(res: Response): number | null {
   const sc = res.headers.get("set-cookie") || "";
@@ -56,7 +64,7 @@ describe("portal session cookie — 30-day rolling lifetime", () => {
   it("session bootstrap (GET login) slides the cookie forward 30 days", async () => {
     const req = new NextRequest("https://x.test/api/portal/login", {
       method: "GET",
-      headers: { cookie: `portal_session=${customer.id}` },
+      headers: { cookie: `portal_session=${await sessionCookie()}` },
     });
     const res = await loginGET(req);
     expect(res.status).toBe(200);
@@ -66,7 +74,7 @@ describe("portal session cookie — 30-day rolling lifetime", () => {
   it("/api/portal/me slides the cookie forward on focus refetch", async () => {
     const req = new NextRequest("https://x.test/api/portal/me", {
       method: "GET",
-      headers: { cookie: `portal_session=${customer.id}` },
+      headers: { cookie: `portal_session=${await sessionCookie()}` },
     });
     const res = await meGET(req);
     expect(res.status).toBe(200);
@@ -77,5 +85,43 @@ describe("portal session cookie — 30-day rolling lifetime", () => {
     const req = new NextRequest("https://x.test/api/portal/me", { method: "GET" });
     const res = await meGET(req);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("portal session — iframe header fallback", () => {
+  // The 30-day rolling cookie above never actually reached Salty Landing or
+  // Ecusta Market: the portal is iframed on the brewery's WordPress site, so
+  // portal_session is a third-party cookie and the browser discards it. These
+  // pin the Bearer path that carries the session instead.
+
+  it("login returns a portalToken in the body for iframe clients", async () => {
+    const req = new NextRequest("https://x.test/api/portal/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: customer.email, password: "secret" }),
+    });
+    const res = await loginPOST(req);
+    expect(res.status).toBe(200);
+    expect((await res.json()).portalToken).toBeTruthy();
+  });
+
+  it("/api/portal/me authenticates from the Bearer header with no cookie at all", async () => {
+    const req = new NextRequest("https://x.test/api/portal/me", {
+      method: "GET",
+      headers: { authorization: `Bearer ${await sessionCookie()}` },
+    });
+    const res = await meGET(req);
+    expect(res.status).toBe(200);
+    expect((await res.json()).id).toBe(customer.id);
+  });
+
+  it("REGRESSION: a raw customer id is no longer a valid session", async () => {
+    // Cookies are just headers to curl, so `portal_session=cust-906767` used
+    // to read that customer's profile without a password.
+    const req = new NextRequest("https://x.test/api/portal/me", {
+      method: "GET",
+      headers: { cookie: `portal_session=${customer.id}` },
+    });
+    expect((await meGET(req)).status).toBe(401);
   });
 });

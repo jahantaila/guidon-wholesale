@@ -16,7 +16,7 @@ import type { Customer } from '@/lib/types';
  * an empty list and fall through to the "New Customer" form.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json([], { status: 200 });
   }
   const { searchParams } = new URL(request.url);
@@ -28,8 +28,27 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(safe);
 }
 
+/**
+ * POST /api/customers
+ * Admin-only. Creates a wholesale customer and provisions their Supabase Auth
+ * login.
+ *
+ * This had NO auth check at all until 2026-08-07, while GET/PUT/DELETE in this
+ * same file each had one. It also sits outside /api/admin/*, so the middleware
+ * did not cover it either. Two consequences, both reachable anonymously:
+ *   1. Anyone could mint a working portal login with a password of their
+ *      choosing (see the auth provisioning below, email_confirm: true).
+ *   2. Posting an email that already existed returned that customer's full
+ *      record — an unauthenticated lookup oracle for name, phone, address and
+ *      ABC permit number.
+ * Legitimate callers are the admin applications page and the admin-on-behalf
+ * order flow; both already send admin credentials.
+ */
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdminRequest(request))) {
+      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+    }
     const body = await request.json();
     if (!body.email || !body.businessName || !body.contactName) {
       return NextResponse.json(
@@ -134,7 +153,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     const body = await request.json();
     const { id, ...rawUpdates } = body;
@@ -223,7 +242,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     if (!admin) {
       return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
     }

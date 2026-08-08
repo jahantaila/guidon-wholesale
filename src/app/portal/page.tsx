@@ -7,6 +7,7 @@ import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegB
 import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
+import { portalFetch, setPortalToken } from '@/lib/portal-fetch';
 import HelpView from '@/components/HelpView';
 import { PORTAL_HELP } from '@/lib/help-content';
 
@@ -48,9 +49,17 @@ export default function PortalPage() {
   const [sessionNotice, setSessionNotice] = useState('');
 
   useEffect(() => {
-    fetch('/api/portal/login')
+    portalFetch('/api/portal/login')
       .then((r) => { if (r.ok) return r.json(); return null; })
-      .then((data) => { if (data && data.id) setCustomer(data); })
+      .then((data) => {
+        if (data && data.id) {
+          // Refresh the cached bearer token. In the WordPress iframe this is
+          // the only surviving credential — the cookie is third-party and the
+          // browser drops it.
+          if (data.portalToken) setPortalToken(data.portalToken);
+          setCustomer(data);
+        }
+      })
       .catch(() => {})
       .finally(() => setCheckingSession(false));
   }, []);
@@ -66,13 +75,14 @@ export default function PortalPage() {
     let cancelled = false;
     const refetch = async () => {
       try {
-        const r = await fetch('/api/portal/me', { cache: 'no-store' });
+        const r = await portalFetch('/api/portal/me', { cache: 'no-store' });
         // Any unusable session — expired/missing (401), archived (403), or the
         // account no longer exists (404) — surfaces the login screen instead of
         // keeping a stale logged-in UI that would fail at checkout with
         // "Authentication required to place an order."
         if (r.status === 401 || r.status === 403 || r.status === 404) {
           if (!cancelled) {
+            setPortalToken(null);
             setSessionNotice('Your session expired. Please sign in again.');
             setCustomer(null);
           }
@@ -80,7 +90,10 @@ export default function PortalPage() {
         }
         if (!r.ok) return;
         const fresh = await r.json();
-        if (!cancelled && fresh && fresh.id) setCustomer(fresh);
+        if (!cancelled && fresh && fresh.id) {
+          if (fresh.portalToken) setPortalToken(fresh.portalToken);
+          setCustomer(fresh);
+        }
       } catch { /* ignore — transient network error, last good state stays */ }
     };
     const onFocus = () => refetch();
@@ -97,7 +110,8 @@ export default function PortalPage() {
   }, [customer?.id]);
 
   const handleLogout = async () => {
-    await fetch('/api/portal/login', { method: 'DELETE' });
+    await portalFetch('/api/portal/login', { method: 'DELETE' });
+    setPortalToken(null);
     setSessionNotice('');
     setCustomer(null);
   };
@@ -106,6 +120,7 @@ export default function PortalPage() {
   // Drops to the login screen with an explanation so the customer can re-auth
   // and retry, instead of being stuck on a dashboard whose session is dead.
   const handleSessionExpired = useCallback(() => {
+    setPortalToken(null);
     setSessionNotice('Your session expired. Please sign in again to place your order.');
     setCustomer(null);
   }, []);
@@ -159,7 +174,7 @@ function ForceChangePassword({
     if (newPassword !== confirm) { setError('Passwords do not match.'); return; }
     setSaving(true);
     try {
-      const res = await fetch('/api/customers', {
+      const res = await portalFetch('/api/customers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: customer.id, password: newPassword }),
@@ -362,7 +377,12 @@ function LoginScreen({ onLogin, notice }: { onLogin: (c: Customer) => void; noti
         setError(data?.error || 'Login failed.');
         return;
       }
-      const customer: Customer = await res.json();
+      const customer: Customer & { portalToken?: string } = await res.json();
+      // Cache the bearer token before anything else fires. Inside the
+      // WordPress iframe the session cookie is discarded by the browser, so
+      // this token is the only thing that keeps the customer authenticated
+      // through checkout.
+      if (customer.portalToken) setPortalToken(customer.portalToken);
       onLogin(customer);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -552,7 +572,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
   const [recurring, setRecurring] = useState<RecurringOrder[]>([]);
 
   const fetchRecurring = useCallback(() => {
-    fetch(`/api/recurring-orders?customerId=${customer.id}`, { cache: 'no-store' })
+    portalFetch(`/api/recurring-orders?customerId=${customer.id}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setRecurring(data); })
       .catch(() => { /* ignore */ });
@@ -561,7 +581,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
 
   const fetchInvoices = useCallback(() => {
     setLoadingInvoices(true);
-    fetch(`/api/invoices?customerId=${customer.id}`)
+    portalFetch(`/api/invoices?customerId=${customer.id}`)
       .then((r) => r.json())
       .then((data: Invoice[]) => { setInvoices(Array.isArray(data) ? data : []); setLoadingInvoices(false); })
       .catch(() => setLoadingInvoices(false));
@@ -569,7 +589,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
 
   const fetchOrders = useCallback(() => {
     setLoadingOrders(true);
-    fetch(`/api/orders?customerId=${customer.id}`)
+    portalFetch(`/api/orders?customerId=${customer.id}`)
       .then((r) => r.json())
       .then((data: Order[]) => { setOrders(data); setLoadingOrders(false); })
       .catch(() => setLoadingOrders(false));
@@ -577,7 +597,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
 
   const fetchBalances = useCallback(() => {
     setLoadingBalances(true);
-    fetch(`/api/keg-ledger?customerId=${customer.id}`)
+    portalFetch(`/api/keg-ledger?customerId=${customer.id}`)
       .then((r) => r.json())
       .then((entries: KegLedgerEntry[]) => {
         const bal: KegBalance = { '1/2bbl': 0, '1/4bbl': 0, '1/6bbl': 0 };
@@ -604,7 +624,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
     try {
       // No authEmail in body — server reads portal_session cookie for auth,
       // which is set by /api/portal/login and can't be spoofed by a client.
-      const res = await fetch('/api/portal/cancel-order', {
+      const res = await portalFetch('/api/portal/cancel-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId }),
@@ -622,7 +642,7 @@ function Dashboard({ customer, onLogout, onSessionExpired }: { customer: Custome
 
   const toggleRecurringActive = useCallback(async (rec: RecurringOrder) => {
     try {
-      const res = await fetch('/api/recurring-orders', {
+      const res = await portalFetch('/api/recurring-orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: rec.id, active: !rec.active }),
@@ -984,7 +1004,7 @@ function ProductsTab({
 
   const refreshTemplates = useCallback(async () => {
     try {
-      const res = await fetch(`/api/order-templates?customerId=${customerId}`, { cache: 'no-store' });
+      const res = await portalFetch(`/api/order-templates?customerId=${customerId}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data)) setTemplates(data);
     } catch { /* non-fatal */ }
@@ -997,7 +1017,7 @@ function ProductsTab({
     if (!name || cart.length === 0) return;
     setSavingTemplate(true);
     try {
-      const res = await fetch('/api/order-templates', {
+      const res = await portalFetch('/api/order-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId,
@@ -1033,7 +1053,7 @@ function ProductsTab({
 
   const deleteTemplate = useCallback(async (id: string) => {
     try {
-      const res = await fetch('/api/order-templates', {
+      const res = await portalFetch('/api/order-templates', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
@@ -1171,7 +1191,7 @@ function ProductsTab({
         productId: item.productId, productName: item.productName, size: item.size,
         quantity: item.quantity, unitPrice: item.unitPrice, deposit: item.deposit,
       }));
-      const res = await fetch('/api/orders', {
+      const res = await portalFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items, kegReturns, subtotal, totalDeposit, total, notes }),
@@ -1996,7 +2016,7 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
     setSaving(true);
     setMessage('');
     try {
-      const res = await fetch('/api/customers', {
+      const res = await portalFetch('/api/customers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: customer.id, ...form }),
@@ -2019,7 +2039,7 @@ function SettingsTab({ customer, onLogout }: { customer: Customer; onLogout: () 
     setSavingPassword(true);
     setPasswordMessage('');
     try {
-      const res = await fetch('/api/customers', {
+      const res = await portalFetch('/api/customers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: customer.id, password: passwordForm.newPassword }),

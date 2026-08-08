@@ -9,7 +9,7 @@ import { getInvoices, getCustomers } from '@/lib/data';
  * issued/sent/paid timestamps.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

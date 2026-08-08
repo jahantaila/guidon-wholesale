@@ -1,37 +1,72 @@
 import type { NextResponse } from 'next/server';
+import { signSession, PORTAL_SESSION_MAX_AGE } from './session-token';
 
 /**
- * Portal customer session cookie.
+ * Portal customer session.
  *
- * Was a fixed 24h lifetime, which logged wholesale customers out once a day.
- * Combined with the portal silently keeping its last-good logged-in state when
- * the session check (/api/portal/me) returned 401, an expired cookie surfaced
- * as "Authentication required to place an order." at checkout — the customer
- * still saw the dashboard but the order POST had no session. (Reported by
- * Salty Landing + Green River Brew Depot, 2026-06.)
+ * HISTORY
+ * -------
+ * Originally a fixed 24h lifetime, which logged wholesale customers out once
+ * a day. PR #25 made it a 30-day rolling session; PR #26 improved the error
+ * surfacing. Customers (Salty Landing, Ecusta Market) kept reporting "Your
+ * session expired. Please sign in again to place your order" anyway.
  *
- * Fix: a 30-day rolling session. The cookie is re-set (slid forward) on every
- * authenticated portal hit (login, session bootstrap, /me refetch), so an
- * actively-used account effectively never expires.
+ * Neither fix worked, because neither addressed the actual cause: the portal
+ * is embedded in the brewery's WordPress site via an iframe (/embed/portal),
+ * where `portal_session` is a THIRD-PARTY cookie. Safari has blocked those
+ * outright since 2020 and Chrome now restricts them. SameSite=None + Secure
+ * is necessary but nowhere near sufficient. The cookie was never being stored
+ * at all, so the first authenticated request after login 401'd. "Kicked out
+ * after 30 seconds" was just how long the customer browsed before hitting one.
+ *
+ * Fix: login also returns a signed token that the client caches in
+ * localStorage and sends as `Authorization: Bearer <token>` (see
+ * src/lib/portal-fetch.ts). Same workaround admin already had.
+ *
+ * The cookie now carries that signed token rather than the bare customer id.
+ * A raw id was forgeable by anyone — cookies are just headers, so
+ * `curl -H "Cookie: portal_session=cust-a1b2c3"` read that customer's orders
+ * and invoices without a password.
  */
-export const PORTAL_SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+export { PORTAL_SESSION_MAX_AGE } from './session-token';
 export const PORTAL_SESSION_COOKIE = 'portal_session';
 
 function sameSite(): 'none' | 'lax' {
   // SameSite=None + Secure in prod so the embedded /embed/portal iframe on the
-  // brewery's WordPress site can carry the session. Lax in dev because HTTP
-  // localhost rejects SameSite=None.
+  // brewery's WordPress site can carry the session where third-party cookies
+  // are still permitted. Lax in dev because HTTP localhost rejects None.
   return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
 }
 
-export function setPortalSessionCookie(res: NextResponse, customerId: string): void {
-  res.cookies.set(PORTAL_SESSION_COOKIE, customerId, {
+/** Mints a portal token for a customer. */
+export async function signPortalToken(customerId: string): Promise<string> {
+  return signSession('portal', customerId, PORTAL_SESSION_MAX_AGE);
+}
+
+/**
+ * Attaches an already-signed token as the session cookie.
+ *
+ * Split from signing so the route can put the same token in the JSON body —
+ * iframe clients need it there because their cookie gets dropped.
+ */
+export function attachPortalSessionCookie(res: NextResponse, token: string): void {
+  res.cookies.set(PORTAL_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: sameSite(),
     maxAge: PORTAL_SESSION_MAX_AGE,
     path: '/',
   });
+}
+
+/** Convenience: sign + attach in one call. Returns the token. */
+export async function setPortalSessionCookie(
+  res: NextResponse,
+  customerId: string,
+): Promise<string> {
+  const token = await signPortalToken(customerId);
+  attachPortalSessionCookie(res, token);
+  return token;
 }
 
 export function clearPortalSessionCookie(res: NextResponse): void {

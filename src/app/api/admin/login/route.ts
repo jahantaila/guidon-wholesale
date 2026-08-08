@@ -1,36 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, recordFailure, clearKey, keyForRequest } from '@/lib/rate-limit';
+import { isAdminRequest } from '@/lib/auth-check';
+import { signSession, ADMIN_SESSION_MAX_AGE } from '@/lib/session-token';
 
 /**
- * Shared token for header-based auth. Any code using the Authorization
- * header as a cookie replacement passes this constant — admin.
+ * Admin login. Issues an HMAC-signed session token carried in BOTH the
+ * admin_session cookie and (for clients that need it) the response body.
  *
- * Why: modern browsers (Chrome, Safari ITP) block 3rd-party cookies when
- * the admin dashboard is loaded in an iframe on a different origin (e.g.
- * Derby Digital's management portal embedding /admin). With cookies
- * silently dropped, every admin PUT/DELETE 401'd.
+ * Why the header path exists: modern browsers (Chrome, Safari ITP) block
+ * 3rd-party cookies when the admin dashboard is loaded in an iframe on a
+ * different origin. With cookies silently dropped, every admin PUT/DELETE
+ * 401'd. The client caches the token in localStorage and sends it as
+ * Authorization: Bearer <token>; adminFetch does this transparently.
  *
- * Fix: admin login POST returns a token. The client stores it in localStorage
- * and sends Authorization: Bearer <token> on every admin request.
- * adminFetch handles this transparently. Middleware accepts either the
- * cookie OR the header.
- *
- * Security model is unchanged: the token IS the auth marker, same as the
- * old cookie value was. Stored in the admin-origin localStorage — not
- * exposed to 3rd-party sites even if they iframe the admin.
+ * The token used to be the literal string 'authenticated'. That made the
+ * header path a complete authentication bypass — `curl -H "Authorization:
+ * Bearer authenticated"` returned every customer's PII. Tokens are now signed
+ * and expiring (see src/lib/session-token.ts). Existing sessions from before
+ * this change no longer verify, so admins re-login once. That is the point.
  */
-const ADMIN_TOKEN_VALUE = 'authenticated';
 
 export async function GET(request: NextRequest) {
-  const cookie = request.cookies.get('admin_session')?.value;
-  const auth = request.headers.get('authorization');
-  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (cookie === ADMIN_TOKEN_VALUE || bearer === ADMIN_TOKEN_VALUE) {
-    // Return the token even on GET so clients with an existing cookie-only
-    // session (from before the header auth landed) can backfill their
-    // localStorage token. Subsequent iframe-context requests then work
-    // even when the cookie is blocked.
-    return NextResponse.json({ authenticated: true, token: ADMIN_TOKEN_VALUE });
+  if (await isAdminRequest(request)) {
+    // Re-issue on probe so a cookie-only session can backfill its
+    // localStorage token, and so an actively-used session slides forward
+    // instead of hard-expiring at 7 days.
+    const token = await signSession('admin', 'admin', ADMIN_SESSION_MAX_AGE);
+    return NextResponse.json({ authenticated: true, token });
   }
   return NextResponse.json({ authenticated: false }, { status: 401 });
 }
@@ -63,7 +59,8 @@ export async function POST(request: NextRequest) {
     // Return the token in the body so iframe clients can cache it in
     // localStorage and send it as Authorization: Bearer on subsequent
     // requests (fallback when 3rd-party cookies are blocked).
-    const response = NextResponse.json({ success: true, token: ADMIN_TOKEN_VALUE });
+    const token = await signSession('admin', 'admin', ADMIN_SESSION_MAX_AGE);
+    const response = NextResponse.json({ success: true, token });
     // Cookie attributes:
     // - SameSite=None + Secure in production so the admin keeps working when
     //   iframed from a different origin (the user is testing the app
@@ -74,12 +71,12 @@ export async function POST(request: NextRequest) {
     // - httpOnly so JS on the page can't read the token.
     // - 7-day maxAge so brewery staff don't re-login every morning.
     const isProd = process.env.NODE_ENV === 'production';
-    response.cookies.set('admin_session', 'authenticated', {
+    response.cookies.set('admin_session', token, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'none' : 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: ADMIN_SESSION_MAX_AGE,
     });
     return response;
   }

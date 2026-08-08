@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ error: 'customerId is required' }, { status: 400 });
     }
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin && portalCustomerId !== customerId) {
       return NextResponse.json([], { status: 200 });
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin && portalCustomerId !== body.customerId) {
       return NextResponse.json({ error: 'Not authorized for this customer' }, { status: 403 });
@@ -69,7 +69,7 @@ export async function DELETE(request: NextRequest) {
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    const admin = isAdminRequest(request);
+    const admin = await isAdminRequest(request);
     const portalCustomerId = request.cookies.get('portal_session')?.value || '';
     if (!admin) {
       // Portal user can only delete their own templates.
