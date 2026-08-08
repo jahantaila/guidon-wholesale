@@ -17,6 +17,7 @@ const navItems = [
   { href: '/admin/customers', label: 'Customers', icon: CustomersIcon },
   { href: '/admin/applications', label: 'Applications', icon: ApplicationsIcon },
   { href: '/admin/invoices', label: 'Invoices', icon: InvoicesIcon },
+  { href: '/admin/reports', label: 'Reports', icon: ReportsIcon },
   { href: '/admin/alerts', label: 'Alerts', icon: AlertsIcon },
   { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
   { href: '/admin/help', label: 'Help', icon: HelpIcon },
@@ -50,6 +51,17 @@ function CustomersIcon({ className }: { className?: string }) {
   return (
     <svg className={cn('w-5 h-5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function ReportsIcon({ className }: { className?: string }) {
+  // Size is baked in, like every sibling icon in this file. The nav passes
+  // only a colour class, so an icon without its own w/h expands to fill the
+  // whole row.
+  return (
+    <svg className={cn('w-5 h-5', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 20h18M7 20V10m5 10V4m5 16v-7" />
     </svg>
   );
 }
