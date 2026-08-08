@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule } from './types';
+import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule, CrmContact, CrmActivity } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 import { formatAddress } from './utils';
 
@@ -16,9 +16,29 @@ import { formatAddress } from './utils';
 
 const dataDir = path.join(process.cwd(), 'data');
 
-function readJSON<T>(filename: string): T {
+/**
+ * Reads a JSON collection from data/, returning `fallback` when the file does
+ * not exist.
+ *
+ * A missing file is normal, not exceptional: this path only runs when Supabase
+ * is unconfigured (local dev, CI), and not every entity ships a seed file.
+ * `order-templates.json` and `recurring-orders.json` have never existed, so
+ * those code paths threw ENOENT and 500'd in exactly that configuration —
+ * which is how the CI e2e job runs the app.
+ *
+ * Every store in this file is a collection, so the default is an empty array.
+ * A genuinely corrupt file still throws, because silently returning [] for
+ * malformed JSON would hide real data loss.
+ */
+function readJSON<T>(filename: string, fallback: T = [] as unknown as T): T {
   const filePath = path.join(dataDir, filename);
-  const data = fs.readFileSync(filePath, 'utf-8');
+  let data: string;
+  try {
+    data = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return fallback;
+    throw err;
+  }
   return JSON.parse(data) as T;
 }
 
@@ -1267,4 +1287,229 @@ export async function deleteBrewSchedule(id: string): Promise<boolean> {
     return !error;
   }
   return false;
+}
+
+// ─── CRM: leads/prospects + contact activity ─────────────────────────────────
+
+/**
+ * True when a Supabase error means "that table does not exist yet".
+ *
+ * The CRM tables are created by `bun run migrate`, which needs a
+ * SUPABASE_ACCESS_TOKEN that is not always configured. Until it runs, CRM
+ * READS degrade to empty rather than 500 the whole admin panel. WRITES still
+ * surface the error, because silently swallowing a lead Mike just typed is
+ * worse than showing him a failure.
+ */
+function isMissingTableError(err: unknown): boolean {
+  if (!err) return false;
+  // Supabase rejects with a PLAIN OBJECT, not an Error instance, so
+  // `String(err)` yields "[object Object]" and matching on that silently
+  // fails. Check the structured code first, then the message.
+  //   PGRST205 = PostgREST "table not found in schema cache"
+  //   42P01    = Postgres undefined_table
+  const e = err as { code?: unknown; message?: unknown };
+  if (e.code === 'PGRST205' || e.code === '42P01') return true;
+  const msg =
+    typeof e.message === 'string'
+      ? e.message
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  return /42P01|PGRST205|does not exist|schema cache/i.test(msg);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToCrmContact(row: any): CrmContact {
+  return {
+    id: row.id,
+    businessName: row.business_name,
+    contactName: row.contact_name ?? '',
+    email: row.email ?? '',
+    phone: row.phone ?? '',
+    streetAddress: row.street_address ?? '',
+    city: row.city ?? '',
+    state: row.state ?? '',
+    zip: row.zip ?? '',
+    status: row.status === 'prospect' ? 'prospect' : 'lead',
+    notes: row.notes ?? '',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    nextFollowupDate: row.next_followup_date ?? null,
+    nextFollowupNotes: row.next_followup_notes ?? '',
+    convertedCustomerId: row.converted_customer_id ?? null,
+    convertedAt: row.converted_at ?? null,
+    archivedAt: row.archived_at ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToCrmActivity(row: any): CrmActivity {
+  return {
+    id: row.id,
+    customerId: row.customer_id ?? null,
+    contactId: row.contact_id ?? null,
+    type: row.type,
+    occurredAt: row.occurred_at,
+    notes: row.notes ?? '',
+    source: row.source === 'system' ? 'system' : 'admin',
+    createdAt: row.created_at,
+  };
+}
+
+export async function getCrmContacts(includeArchived = false): Promise<CrmContact[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const sb = createAdminClient();
+      const query = sb.from('crm_contacts').select('*').order('created_at', { ascending: false });
+      if (!includeArchived) query.is('archived_at', null);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(rowToCrmContact);
+    } catch (err) {
+      if (isMissingTableError(err)) {
+        console.warn('[crm] crm_contacts table missing — run `bun run migrate`.');
+        return [];
+      }
+      throw err;
+    }
+  }
+  const all = readJSON<CrmContact[]>('crm-contacts.json');
+  return includeArchived ? all : all.filter((c) => !c.archivedAt);
+}
+
+export async function getCrmContact(id: string): Promise<CrmContact | undefined> {
+  return (await getCrmContacts(true)).find((c) => c.id === id);
+}
+
+export async function createCrmContact(contact: CrmContact): Promise<CrmContact> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('crm_contacts')
+      .insert({
+        id: contact.id,
+        business_name: contact.businessName,
+        contact_name: contact.contactName,
+        email: contact.email,
+        phone: contact.phone,
+        street_address: contact.streetAddress,
+        city: contact.city,
+        state: contact.state,
+        zip: contact.zip,
+        status: contact.status,
+        notes: contact.notes,
+        tags: contact.tags,
+        next_followup_date: contact.nextFollowupDate || null,
+        next_followup_notes: contact.nextFollowupNotes,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return rowToCrmContact(data);
+  }
+  const all = readJSON<CrmContact[]>('crm-contacts.json');
+  all.push(contact);
+  writeJSON('crm-contacts.json', all);
+  return contact;
+}
+
+export async function updateCrmContact(
+  id: string,
+  updates: Partial<CrmContact>,
+): Promise<CrmContact | undefined> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const row: Record<string, unknown> = {};
+    if (updates.businessName !== undefined) row.business_name = updates.businessName;
+    if (updates.contactName !== undefined) row.contact_name = updates.contactName;
+    if (updates.email !== undefined) row.email = updates.email;
+    if (updates.phone !== undefined) row.phone = updates.phone;
+    if (updates.streetAddress !== undefined) row.street_address = updates.streetAddress;
+    if (updates.city !== undefined) row.city = updates.city;
+    if (updates.state !== undefined) row.state = updates.state;
+    if (updates.zip !== undefined) row.zip = updates.zip;
+    if (updates.status !== undefined) row.status = updates.status;
+    if (updates.notes !== undefined) row.notes = updates.notes;
+    if (updates.tags !== undefined) row.tags = updates.tags;
+    if (updates.nextFollowupDate !== undefined) row.next_followup_date = updates.nextFollowupDate || null;
+    if (updates.nextFollowupNotes !== undefined) row.next_followup_notes = updates.nextFollowupNotes;
+    if (updates.convertedCustomerId !== undefined) row.converted_customer_id = updates.convertedCustomerId;
+    if (updates.convertedAt !== undefined) row.converted_at = updates.convertedAt;
+    if (updates.archivedAt !== undefined) row.archived_at = updates.archivedAt;
+    if (Object.keys(row).length === 0) return getCrmContact(id);
+    const { data, error } = await sb.from('crm_contacts').update(row).eq('id', id).select().single();
+    if (error) return undefined;
+    return rowToCrmContact(data);
+  }
+  const all = readJSON<CrmContact[]>('crm-contacts.json');
+  const i = all.findIndex((c) => c.id === id);
+  if (i === -1) return undefined;
+  all[i] = { ...all[i], ...updates };
+  writeJSON('crm-contacts.json', all);
+  return all[i];
+}
+
+export async function getCrmActivities(subjectId?: string): Promise<CrmActivity[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const sb = createAdminClient();
+      const query = sb.from('crm_activities').select('*').order('occurred_at', { ascending: false });
+      if (subjectId) query.or(`customer_id.eq.${subjectId},contact_id.eq.${subjectId}`);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(rowToCrmActivity);
+    } catch (err) {
+      if (isMissingTableError(err)) {
+        console.warn('[crm] crm_activities table missing — run `bun run migrate`.');
+        return [];
+      }
+      throw err;
+    }
+  }
+  const all = readJSON<CrmActivity[]>('crm-activities.json');
+  const rows = subjectId
+    ? all.filter((a) => a.customerId === subjectId || a.contactId === subjectId)
+    : all;
+  return [...rows].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}
+
+export async function createCrmActivity(activity: CrmActivity): Promise<CrmActivity> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('crm_activities')
+      .insert({
+        // id deliberately omitted: the column defaults to uuid_generate_v4().
+        // generateId() is 6 random digits, which collides at roughly 42% by
+        // 1,000 rows, and a PK violation would surface to Mike as "couldn't
+        // log activity" with no explanation.
+        customer_id: activity.customerId || null,
+        contact_id: activity.contactId || null,
+        type: activity.type,
+        occurred_at: activity.occurredAt,
+        notes: activity.notes,
+        source: activity.source,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return rowToCrmActivity(data);
+  }
+  const all = readJSON<CrmActivity[]>('crm-activities.json');
+  all.push(activity);
+  writeJSON('crm-activities.json', all);
+  return activity;
+}
+
+export async function deleteCrmActivity(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb.from('crm_activities').delete().eq('id', id);
+    return !error;
+  }
+  const all = readJSON<CrmActivity[]>('crm-activities.json');
+  const next = all.filter((a) => a.id !== id);
+  if (next.length === all.length) return false;
+  writeJSON('crm-activities.json', next);
+  return true;
 }
