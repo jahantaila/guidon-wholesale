@@ -149,9 +149,13 @@ export async function send(args: SendArgs): Promise<{ ok: boolean; id?: string; 
  * Shared Letterpress-Trade-Portal styled email shell. Matches DESIGN.md
  * tokens so the email feels like the web app.
  */
-function emailShell(opts: { preheader?: string; title: string; body: string; footer?: string }): string {
+export function emailShell(opts: { preheader?: string; title: string; body: string; footer?: string }): string {
+  // Escaped here rather than at each call site. A preheader is inbox preview
+  // text and is always plain by nature, so escaping is always correct — and
+  // interpolating it raw made it a second, easily-missed injection point
+  // alongside `body` below.
   const preheader = opts.preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;">${opts.preheader}</div>`
+    ? `<div style="display:none;max-height:0;overflow:hidden;">${escapeHtml(opts.preheader)}</div>`
     : '';
   const footer =
     opts.footer ||
@@ -188,12 +192,45 @@ function emailShell(opts: { preheader?: string; title: string; body: string; foo
 </html>`;
 }
 
-function escapeHtml(s: string): string {
+/**
+ * Escapes text for interpolation into the templates in this file.
+ *
+ * Exported because any caller composing its own body MUST run text through
+ * this. `emailShell` interpolates `opts.body` RAW (line ~178) — it has to,
+ * since every existing caller passes markup — so unescaped text lands in the
+ * recipient's inbox as live HTML.
+ *
+ * `'` is escaped too. Without it this is unsafe inside single-quoted
+ * attributes, which is precisely where a templated URL ends up.
+ */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * True when a real Resend client can be built and sending is not disabled.
+ *
+ * Any caller that reports a send back to a human must check this FIRST. With
+ * no API key, `send()` deliberately logs to the console and returns
+ * `{ ok: true, id: 'stub' }` so local development isn't blocked. A caller that
+ * trusts `ok` would tell Mike the email went out — and log an activity saying
+ * so — while delivering nothing.
+ */
+export function isEmailConfigured(): boolean {
+  return getClient() !== null && process.env.EMAIL_DISABLED !== 'true';
+}
+
+/** Renders admin-authored plain text as email-safe HTML paragraphs. */
+export function plainTextToHtml(text: string): string {
+  return escapeHtml(text)
+    .split(/\n{2,}/)
+    .map((para) => `<p style="margin:0 0 14px;">${para.replace(/\n/g, '<br />')}</p>`)
+    .join('\n');
 }
 
 export function formatCurrencyForEmail(cents: number): string {
