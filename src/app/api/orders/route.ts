@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
-import { getProducts, getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, adjustProductInventory, getCustomers } from '@/lib/data';
+import { getProducts, getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, deleteOrderKegDeposits, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
-import type { Order, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
+import type { Order, OrderItem, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
+import { KEG_DEPOSITS } from '@/lib/types';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -260,6 +261,159 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
+  // ── Admin item edit ──────────────────────────────────────────────────
+  // A payload carrying `items` edits the order's CONTENTS (add / remove
+  // lines, change quantities) — the "customer texted Mike a change" flow —
+  // as opposed to a status transition. Everything downstream reconciles:
+  // inventory (for a confirmed order), the keg-deposit ledger, and any
+  // non-paid invoice. No customer email is sent (product decision
+  // 2026-08-14: Mike already spoke to them). This branch returns on its own;
+  // an edit never also transitions status in the same request.
+  if (Array.isArray(updates.items)) {
+    if (existingOrder.status === 'completed' || existingOrder.status === 'cancelled') {
+      return NextResponse.json(
+        { error: `This order is ${existingOrder.status} and can no longer be edited.` },
+        { status: 409 },
+      );
+    }
+
+    const rawItems = updates.items as unknown[];
+    if (rawItems.length === 0) {
+      return NextResponse.json(
+        { error: 'An order needs at least one item. Cancel the order instead of removing everything.' },
+        { status: 400 },
+      );
+    }
+    for (let i = 0; i < rawItems.length; i++) {
+      const it = rawItems[i] as Record<string, unknown>;
+      if (
+        typeof it.productId !== 'string' || !it.productId.trim() ||
+        typeof it.productName !== 'string' || !it.productName.trim() ||
+        typeof it.size !== 'string' || !it.size.trim() ||
+        typeof it.quantity !== 'number' || !Number.isFinite(it.quantity) || it.quantity < 1
+      ) {
+        return NextResponse.json(
+          { error: `Item ${i + 1} is missing required fields (productId, productName, size, quantity).` },
+          { status: 400 },
+        );
+      }
+    }
+
+    const items: OrderItem[] = rawItems.map((raw) => {
+      const it = raw as Record<string, unknown>;
+      return {
+        productId: String(it.productId),
+        productName: String(it.productName),
+        size: String(it.size),
+        quantity: Math.max(1, Math.floor(Number(it.quantity))),
+        unitPrice: typeof it.unitPrice === 'number' && Number.isFinite(it.unitPrice) ? it.unitPrice : 0,
+        deposit: typeof it.deposit === 'number' && Number.isFinite(it.deposit) ? it.deposit : 0,
+      };
+    });
+
+    // Keg returns: replace them if the payload supplies an array, otherwise
+    // keep what's already on the order.
+    const kegReturns = Array.isArray(updates.kegReturns)
+      ? (updates.kegReturns as { size: string; quantity: number }[])
+          .filter((r) => r && typeof r.size === 'string' && Number(r.quantity) > 0)
+          .map((r) => ({ size: String(r.size), quantity: Math.floor(Number(r.quantity)) }))
+      : existingOrder.kegReturns;
+
+    // Money is recomputed server-side — never trust client totals.
+    const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+    const depositsOut = items.reduce((s, i) => s + i.deposit * i.quantity, 0);
+    const returnsCredit = kegReturns.reduce((s, r) => {
+      // Credit from the canonical KEG_DEPOSITS table — exactly how checkout
+      // (order/page.tsx) priced the order. Returns are empties from any past
+      // order, NOT necessarily this cart, so matching to a current line item
+      // would silently change the credit (and overbill) when the returned size
+      // isn't among the edited items.
+      return s + (KEG_DEPOSITS[r.size] ?? 0) * r.quantity;
+    }, 0);
+    const totalDeposit = depositsOut - returnsCredit;
+    const total = subtotal + totalDeposit;
+
+    // Inventory + keg ledger only move for a CONFIRMED order: a pending order
+    // hasn't reserved stock or posted deposits yet (both happen on confirm),
+    // so editing it is a pure data change.
+    if (existingOrder.status === 'confirmed') {
+      const sumBySize = (list: { productId: string; size: string; quantity: number }[]) => {
+        const m = new Map<string, { productId: string; size: string; qty: number }>();
+        for (const it of list) {
+          const k = `${it.productId}::${it.size}`;
+          const prev = m.get(k);
+          m.set(k, { productId: it.productId, size: it.size, qty: (prev?.qty ?? 0) + it.quantity });
+        }
+        return m;
+      };
+      const before = sumBySize(existingOrder.items);
+      const after = sumBySize(items);
+      const keys = new Set([...Array.from(before.keys()), ...Array.from(after.keys())]);
+      for (const key of Array.from(keys)) {
+        const b = before.get(key);
+        const a = after.get(key);
+        const ref = (a ?? b)!;
+        const delta = (a?.qty ?? 0) - (b?.qty ?? 0); // +ve = more kegs out now
+        // More kegs out ⇒ inventory drops by that many (negative adjustment).
+        if (delta !== 0) await adjustProductInventory(ref.productId, ref.size, -delta);
+      }
+
+      // Rebuild this order's deposit ledger from the new items so the
+      // customer's outstanding-keg balance matches exactly.
+      await deleteOrderKegDeposits(existingOrder.id);
+      const now = new Date().toISOString();
+      for (const item of items) {
+        const entry: KegLedgerEntry = {
+          id: generateId('kl'),
+          customerId: existingOrder.customerId,
+          orderId: existingOrder.id,
+          type: 'deposit',
+          size: item.size,
+          quantity: item.quantity,
+          depositAmount: item.deposit,
+          totalAmount: item.deposit * item.quantity,
+          date: now,
+          notes: `Order ${existingOrder.id} items edited`,
+        };
+        await addKegLedgerEntry(entry);
+      }
+    }
+
+    const updatedOrder = await updateOrder(id, {
+      items,
+      kegReturns,
+      subtotal,
+      totalDeposit,
+      total,
+      ...(typeof updates.notes === 'string' ? { notes: updates.notes } : {}),
+    });
+
+    // updateOrder returns undefined if the item/return replace failed in the
+    // DB. Inventory + ledger were already adjusted above, so we must NOT
+    // report success — that would tell Mike it saved, and a naive retry would
+    // re-apply the inventory delta from the (now stale) original items.
+    if (!updatedOrder) {
+      return NextResponse.json(
+        { error: 'Could not save the edited order. Reload and check the order before retrying — inventory or keg deposits may have partially adjusted.' },
+        { status: 500 },
+      );
+    }
+
+    // Keep any non-paid invoice for this order in sync. A paid invoice is
+    // left alone — the money already changed hands, and silently rewriting
+    // it would bury a discrepancy Mike needs to see.
+    try {
+      const allInvoices = await getInvoices();
+      for (const inv of allInvoices.filter((i) => i.orderId === existingOrder.id && i.status !== 'paid')) {
+        await updateInvoice(inv.id, { items, subtotal, totalDeposit, total });
+      }
+    } catch (err) {
+      console.error('[order edit] invoice sync failed (non-fatal):', err);
+    }
+
+    return NextResponse.json(updatedOrder);
+  }
+
   // pending -> confirmed: decrement inventory AND post keg ledger deposits +
   // returns. Confirmation is when the brewery commits to the order — kegs
   // are earmarked for the customer, so that's when keg tracking kicks in.
@@ -328,26 +482,31 @@ export async function PUT(request: NextRequest) {
     }
   }
 
-  // Conversely, if an order is cancelled back to pending after confirmation,
-  // restore the inventory. This is symmetric and prevents double-decrements.
+  // Conversely, if an order is reverted to pending after confirmation, restore
+  // inventory AND remove the deposit ledger rows it posted on confirm. Both
+  // matter: without the deposit removal the customer's keg balance stays
+  // inflated, AND the re-confirm idempotency guard above (alreadyLedgered)
+  // would then see the stale rows and skip re-decrementing inventory — leaving
+  // stock permanently too high after a revert→reconfirm cycle.
   if (updates.status === 'pending' && existingOrder.status === 'confirmed') {
     for (const item of existingOrder.items) {
       await adjustProductInventory(item.productId, item.size, item.quantity);
     }
+    await deleteOrderKegDeposits(existingOrder.id);
   }
 
-  // Cancellation: restore inventory if it was confirmed, and void any draft
-  // invoice so it doesn't sit around forever. Keg ledger entries shouldn't
-  // exist yet (those only fire on confirmed), so nothing to roll back there.
+  // Cancellation: if it was confirmed, restore inventory and remove the keg
+  // deposits it posted (the order is dead — those empties will never come back
+  // via this order, so they must not sit on the customer's outstanding
+  // balance). Deposits only exist for a confirmed order, so nothing to remove
+  // when cancelling a pending one. Any draft invoice is left for admin cleanup.
   if (updates.status === 'cancelled' && existingOrder.status !== 'cancelled') {
     if (existingOrder.status === 'confirmed') {
       for (const item of existingOrder.items) {
         await adjustProductInventory(item.productId, item.size, item.quantity);
       }
+      await deleteOrderKegDeposits(existingOrder.id);
     }
-    // Any existing invoice for this order becomes informationally useless
-    // if still draft. Mark paid as-is would be lying; we'll leave it draft
-    // and let admin delete it manually if needed. Keeping this simple.
   }
 
   // pending -> confirmed: also run the auto-send-invoice path since

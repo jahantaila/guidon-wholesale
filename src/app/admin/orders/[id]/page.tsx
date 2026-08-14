@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import type { Order, OrderStatus, Customer, Invoice } from '@/lib/types';
+import type { Order, OrderItem, OrderStatus, Customer, Invoice, Product } from '@/lib/types';
+import { KEG_DEPOSITS } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
@@ -43,6 +44,17 @@ export default function OrderDetailPage() {
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState<OrderStatus | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+
+  // Item-editing state. Mike edits a placed order when a customer texts a
+  // change; saving recalculates inventory, keg deposits and the invoice.
+  const [editing, setEditing] = useState(false);
+  const [draftItems, setDraftItems] = useState<OrderItem[]>([]);
+  const [catalog, setCatalog] = useState<Product[]>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [addProductId, setAddProductId] = useState('');
+  const [addSize, setAddSize] = useState('');
 
   // Fetch the order, its customer, and any linked invoice in parallel.
   // The orders/customers/invoices APIs all return arrays; we find by id.
@@ -122,6 +134,96 @@ export default function OrderDetailPage() {
     }
   };
 
+  // ── Item editing ──────────────────────────────────────────────────────
+  const startEdit = async () => {
+    setEditError('');
+    setDraftItems(order ? order.items.map((i) => ({ ...i })) : []);
+    setAddProductId('');
+    setAddSize('');
+    setEditing(true);
+    if (!catalogLoaded) {
+      try {
+        const res = await adminFetch('/api/products?all=true');
+        const data = await res.json();
+        setCatalog(Array.isArray(data) ? data : []);
+      } catch {
+        // Non-fatal: Mike can still change quantities / remove without the
+        // catalog; he only needs it to ADD a beer that isn't on the order.
+      } finally {
+        setCatalogLoaded(true);
+      }
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditError('');
+    setAddProductId('');
+    setAddSize('');
+  };
+
+  const setDraftQty = (idx: number, qty: number) =>
+    setDraftItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: Math.max(1, qty) } : it)));
+
+  const removeDraftItem = (idx: number) =>
+    setDraftItems((prev) => prev.filter((_, i) => i !== idx));
+
+  const addDraftItem = () => {
+    const prod = catalog.find((p) => p.id === addProductId);
+    if (!prod) return;
+    const sizeInfo = prod.sizes.find((s) => s.size === addSize) || prod.sizes[0];
+    if (!sizeInfo) return;
+    setDraftItems((prev) => {
+      const existing = prev.findIndex((it) => it.productId === prod.id && it.size === sizeInfo.size);
+      if (existing >= 0) {
+        return prev.map((it, i) => (i === existing ? { ...it, quantity: it.quantity + 1 } : it));
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          productName: prod.name,
+          size: sizeInfo.size,
+          quantity: 1,
+          unitPrice: sizeInfo.price,
+          deposit: sizeInfo.deposit,
+        },
+      ];
+    });
+    setAddProductId('');
+    setAddSize('');
+  };
+
+  const saveEdit = async () => {
+    if (!order) return;
+    if (draftItems.length === 0) {
+      setEditError('An order needs at least one item. Cancel the order instead of emptying it.');
+      return;
+    }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await adminFetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id, items: draftItems }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setOrder(data ?? order);
+        setEditing(false);
+        await load();
+        window.dispatchEvent(new Event('guidon:nav-refresh'));
+      } else {
+        setEditError((data && typeof data.error === 'string' && data.error) || `Save failed (HTTP ${res.status}).`);
+      }
+    } catch {
+      setEditError('Network error saving changes. Please retry.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -146,16 +248,28 @@ export default function OrderDetailPage() {
   const itemsSubtotal = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   const depositsSubtotal = order.items.reduce((s, i) => s + i.deposit * i.quantity, 0);
   const returnsCredit = order.kegReturns.reduce((s, r) => {
-    // Lookup the deposit for this size from the FIRST item with the same
-    // size (deposit is set per product+size on the order, so any item
-    // with that size has the right value). Fallback to 0 if the customer
-    // returned a size they didn't order — shouldn't happen but defensive.
-    const matching = order.items.find((i) => i.size === r.size);
-    return s + (matching?.deposit ?? 0) * r.quantity;
+    // Credit from the canonical KEG_DEPOSITS table — the same basis checkout
+    // priced the order on, and the same basis the server recomputes on an
+    // edit. Matching to a line item would diverge from order.total whenever a
+    // returned size isn't among the items.
+    return s + (KEG_DEPOSITS[r.size] ?? 0) * r.quantity;
   }, 0);
   const totalKegsOut = order.items.reduce((s, i) => s + i.quantity, 0);
   const totalReturns = order.kegReturns.reduce((s, r) => s + r.quantity, 0);
   const allowed = NEXT_STATUSES[order.status] || [];
+  const canEditItems = order.status === 'pending' || order.status === 'confirmed';
+
+  // Live preview of the edited order's money, mirroring the server's math so
+  // Mike sees the new total before saving.
+  const draftSubtotal = draftItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const draftDeposits = draftItems.reduce((s, i) => s + i.deposit * i.quantity, 0);
+  const draftReturnsCredit = order.kegReturns.reduce((s, r) => {
+    // Same KEG_DEPOSITS basis the server uses, so the previewed "New total"
+    // matches exactly what gets saved.
+    return s + (KEG_DEPOSITS[r.size] ?? 0) * r.quantity;
+  }, 0);
+  const draftTotal = draftSubtotal + draftDeposits - draftReturnsCredit;
+  const addProduct = catalog.find((p) => p.id === addProductId);
 
   return (
     <div className="space-y-6">
@@ -298,7 +412,156 @@ export default function OrderDetailPage() {
 
       {/* Items + totals */}
       <section className="card">
-        <span className="section-label mb-3 block">Items</span>
+        <div className="flex items-center justify-between mb-3">
+          <span className="section-label">Items</span>
+          {canEditItems && !editing && (
+            <button onClick={startEdit} className="btn-secondary text-xs px-3 py-1.5">
+              Edit items
+            </button>
+          )}
+        </div>
+
+        {editing && (
+          <div className="space-y-4">
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>
+              Saving recalculates the invoice{order.status === 'confirmed' ? ', inventory and keg deposits' : ''}. The customer is <strong>not</strong> emailed — let them know yourself.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--divider)' }}>
+                    <th className="text-left text-xs uppercase tracking-wider font-semibold py-2" style={{ color: 'var(--muted)' }}>Product</th>
+                    <th className="text-left text-xs uppercase tracking-wider font-semibold py-2" style={{ color: 'var(--muted)' }}>Size</th>
+                    <th className="text-right text-xs uppercase tracking-wider font-semibold py-2" style={{ color: 'var(--muted)' }}>Qty</th>
+                    <th className="text-right text-xs uppercase tracking-wider font-semibold py-2" style={{ color: 'var(--muted)' }}>Unit</th>
+                    <th className="text-right text-xs uppercase tracking-wider font-semibold py-2" style={{ color: 'var(--muted)' }}>Line total</th>
+                    <th className="py-2" aria-label="Remove" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {draftItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-3 text-sm italic" style={{ color: 'var(--muted)' }}>
+                        No items yet — add one below.
+                      </td>
+                    </tr>
+                  ) : (
+                    draftItems.map((item, idx) => (
+                      <tr key={`${item.productId}-${item.size}-${idx}`} style={{ borderBottom: '1px dotted var(--divider)' }}>
+                        <td className="py-2 text-sm font-medium" style={{ color: 'var(--ink)' }}>{item.productName}</td>
+                        <td className="py-2 text-sm italic" style={{ color: 'var(--muted)' }}>{SIZE_LABELS[item.size] || item.size}</td>
+                        <td className="py-2 text-right">
+                          <div className="inline-flex items-center border border-divider" style={{ borderRadius: 3, overflow: 'hidden' }}>
+                            <button type="button" onClick={() => setDraftQty(idx, item.quantity - 1)} className="px-2 py-1" style={{ color: 'var(--muted)' }} aria-label="Decrease quantity">&minus;</button>
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) => setDraftQty(idx, parseInt(e.target.value, 10) || 1)}
+                              className="w-12 text-center font-variant-tabular bg-transparent"
+                              style={{ color: 'var(--ink)' }}
+                              aria-label={`Quantity for ${item.productName}`}
+                            />
+                            <button type="button" onClick={() => setDraftQty(idx, item.quantity + 1)} className="px-2 py-1" style={{ color: 'var(--muted)' }} aria-label="Increase quantity">+</button>
+                          </div>
+                        </td>
+                        <td className="py-2 text-sm text-right font-variant-tabular">{formatCurrency(item.unitPrice)}</td>
+                        <td className="py-2 text-sm text-right font-semibold font-variant-tabular">
+                          {formatCurrency((item.unitPrice + item.deposit) * item.quantity)}
+                        </td>
+                        <td className="py-2 text-right">
+                          <button type="button" onClick={() => removeDraftItem(idx)} className="text-sm" style={{ color: 'var(--ruby)' }}>
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Add a beer to the order */}
+            <div className="flex flex-wrap items-end gap-2 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+              <div>
+                <label className="section-label block mb-1">Add beer</label>
+                <select
+                  className="input text-sm"
+                  value={addProductId}
+                  onChange={(e) => { setAddProductId(e.target.value); setAddSize(''); }}
+                >
+                  <option value="">Select…</option>
+                  {catalog.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}{p.available === false ? ' (hidden)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="section-label block mb-1">Size</label>
+                <select
+                  className="input text-sm"
+                  value={addSize}
+                  onChange={(e) => setAddSize(e.target.value)}
+                  disabled={!addProductId}
+                >
+                  <option value="">Select…</option>
+                  {(addProduct?.sizes || []).map((s) => (
+                    <option key={s.size} value={s.size}>
+                      {(SIZE_LABELS[s.size] || s.size)} — {formatCurrency(s.price)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={addDraftItem}
+                disabled={!addProductId || !addSize}
+                className="btn-secondary text-sm px-3 py-2"
+                style={{ opacity: !addProductId || !addSize ? 0.4 : 1 }}
+              >
+                Add to order
+              </button>
+              {!catalogLoaded && <span className="text-xs italic" style={{ color: 'var(--muted)' }}>Loading catalog…</span>}
+            </div>
+
+            {/* Draft totals */}
+            <div className="ml-auto w-full sm:max-w-xs space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--muted)' }}>Items subtotal</span>
+                <span className="font-variant-tabular" style={{ color: 'var(--ink)' }}>{formatCurrency(draftSubtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--muted)' }}>Deposits out</span>
+                <span className="font-variant-tabular" style={{ color: 'var(--ink)' }}>{formatCurrency(draftDeposits)}</span>
+              </div>
+              {draftReturnsCredit > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--pine)' }}>Returns credit</span>
+                  <span className="font-variant-tabular" style={{ color: 'var(--pine)' }}>&minus;{formatCurrency(draftReturnsCredit)}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-divider">
+                <span style={{ color: 'var(--ink)', fontWeight: 600 }}>New total</span>
+                <span className="font-display font-variant-tabular" style={{ fontSize: '1.25rem', color: 'var(--brass)', fontVariationSettings: "'opsz' 24", fontWeight: 500 }}>
+                  {formatCurrency(draftTotal)}
+                </span>
+              </div>
+            </div>
+
+            {editError && <p className="text-sm" style={{ color: 'var(--ruby)' }}>{editError}</p>}
+
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={saveEdit} disabled={savingEdit} className="btn-primary">
+                {savingEdit ? 'Saving…' : 'Save changes'}
+              </button>
+              <button type="button" onClick={cancelEdit} disabled={savingEdit} className="btn-secondary">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!editing && (<>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -380,6 +643,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
         </div>
+        </>)}
       </section>
 
       {/* Invoice block (if any) */}

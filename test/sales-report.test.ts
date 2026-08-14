@@ -291,9 +291,10 @@ describe("salesReportToCsv", () => {
 
   it("emits a header, a data row and a total row", () => {
     const lines = salesReportToCsv(base).split("\n");
-    expect(lines[0]).toBe('"Beer Style","Package Type","Quantity Ordered","Revenue","Orders"');
-    expect(lines[1]).toBe('"German Pilsner","1/2bbl","2","360.00","1"');
-    expect(lines[2]).toBe('"TOTAL","","2","360.00","1"');
+    // 2 × 1/2bbl = 31.0 gallons = 1.00 barrel.
+    expect(lines[0]).toBe('"Beer Style","Package Type","Quantity Ordered","Gallons","Barrels","Revenue","Orders"');
+    expect(lines[1]).toBe('"German Pilsner","1/2bbl","2","31.0","1.00","360.00","1"');
+    expect(lines[2]).toBe('"TOTAL","","2","31.0","1.00","360.00","1"');
   });
 
   it("adds the customer column only when the report is grouped that way", () => {

@@ -95,6 +95,10 @@ export function buildCrmList(
       contactName: c.contactName,
       email: c.email,
       phone: c.phone,
+      streetAddress: c.streetAddress || '',
+      city: c.city || '',
+      state: c.state || '',
+      zip: c.zip || '',
       // A lead has no orders, so activity is the only signal there is. This is
       // exactly why logging earns its place on leads and not on customers.
       recentActivityAt: act?.at || null,
@@ -126,6 +130,10 @@ export function buildCrmList(
       contactName: c.contactName,
       email: c.email,
       phone: c.phone,
+      streetAddress: c.streetAddress || '',
+      city: c.city || '',
+      state: c.state || '',
+      zip: c.zip || '',
       recentActivityAt,
       recentActivitySource,
       nextFollowupDate: c.nextFollowupDate || null,

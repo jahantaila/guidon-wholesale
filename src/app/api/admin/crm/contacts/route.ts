@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
-import { getCrmContacts, createCrmContact, updateCrmContact } from '@/lib/data';
+import { getCrmContacts, createCrmContact, updateCrmContact, deleteCrmContact } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { CrmContact, CrmStatus } from '@/lib/types';
 
@@ -93,6 +93,23 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[crm/contacts PUT] failed:', err);
+    return NextResponse.json({ error: extractError(err) }, { status: 500 });
+  }
+}
+
+/** DELETE /api/admin/crm/contacts — hard-delete a lead/prospect + its log. */
+export async function DELETE(request: NextRequest) {
+  if (!(await isAdminRequest(request))) {
+    return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+  }
+  try {
+    const { id } = (await request.json()) || {};
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    const ok = await deleteCrmContact(id);
+    if (!ok) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[crm/contacts DELETE] failed:', err);
     return NextResponse.json({ error: extractError(err) }, { status: 500 });
   }
 }

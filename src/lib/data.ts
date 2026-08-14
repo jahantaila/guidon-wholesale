@@ -101,6 +101,7 @@ function rowToProduct(row: any): Product {
     awards: Array.isArray(row.awards) ? row.awards : [],
     newRelease: row.new_release ?? false,
     limitedRelease: row.limited_release ?? false,
+    sortOrder: row.sort_order ?? null,
     sizes: (row.product_sizes || [])
       .slice()
       .sort((a: { sort_order?: number | null }, b: { sort_order?: number | null }) => {
@@ -369,6 +370,24 @@ export async function deleteCustomer(id: string): Promise<boolean> {
 
 // ─── Products ──────────────────────────────────────────────────────────────────
 
+/**
+ * Product display order: explicit sort_order ascending, then name.
+ *
+ * Sorting happens in application code, NOT in the SQL query, on purpose. If we
+ * ordered by `sort_order` in the query and the column did not exist yet (a
+ * pre-migration instance), the whole catalog query would throw and both the
+ * admin table AND the customer order page would go blank. Reading the column as
+ * `null` and sorting here means a missing column simply falls back to name
+ * order — the same fail-soft posture `adjustProductInventory` takes on
+ * `inventory_count`. NULL sorts last so new products land at the bottom.
+ */
+export function byProductDisplayOrder(a: Product, b: Product): number {
+  const ao = a.sortOrder ?? Number.POSITIVE_INFINITY;
+  const bo = b.sortOrder ?? Number.POSITIVE_INFINITY;
+  if (ao !== bo) return ao - bo;
+  return a.name.localeCompare(b.name);
+}
+
 export async function getProducts(): Promise<Product[]> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
@@ -378,9 +397,9 @@ export async function getProducts(): Promise<Product[]> {
       .eq('available', true)
       .order('name');
     if (error) throw error;
-    return (data || []).map(rowToProduct);
+    return (data || []).map(rowToProduct).sort(byProductDisplayOrder);
   }
-  return readJSON<Product[]>('products.json');
+  return readJSON<Product[]>('products.json').sort(byProductDisplayOrder);
 }
 
 export async function getProduct(id: string): Promise<Product | undefined> {
@@ -405,9 +424,9 @@ export async function getAllProducts(): Promise<Product[]> {
       .select('*, product_sizes(*)')
       .order('name');
     if (error) throw error;
-    return (data || []).map(rowToProduct);
+    return (data || []).map(rowToProduct).sort(byProductDisplayOrder);
   }
-  return readJSON<Product[]>('products.json');
+  return readJSON<Product[]>('products.json').sort(byProductDisplayOrder);
 }
 
 export async function createProduct(product: Product): Promise<Product> {
@@ -467,6 +486,7 @@ export async function updateProduct(id: string, fields: Partial<Product>): Promi
     if (fields.awards !== undefined) updateFields.awards = fields.awards;
     if (fields.newRelease !== undefined) updateFields.new_release = fields.newRelease;
     if (fields.limitedRelease !== undefined) updateFields.limited_release = fields.limitedRelease;
+    if (fields.sortOrder !== undefined) updateFields.sort_order = fields.sortOrder;
     if (Object.keys(updateFields).length > 0) {
       const { error } = await sb.from('products').update(updateFields).eq('id', id);
       if (error) throw error;
@@ -582,6 +602,37 @@ export async function setProductInventory(
   return safeCount;
 }
 
+/**
+ * Persist a new product display order. `orderedIds` is the full list of product
+ * ids in the order the admin dragged them into; each product's sort_order is
+ * set to its index. Small catalog, so a per-row update loop is fine and avoids
+ * needing a bulk-upsert helper.
+ *
+ * If the sort_order column doesn't exist yet (pre-migration), the first update
+ * errors on it and we no-op rather than throw — the reorder simply doesn't
+ * stick until the migration runs, but nothing else breaks.
+ */
+export async function reorderProducts(orderedIds: string[]): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    for (let i = 0; i < orderedIds.length; i++) {
+      const { error } = await sb.from('products').update({ sort_order: i }).eq('id', orderedIds[i]);
+      if (error) {
+        if (/sort_order/.test(error.message)) return;
+        throw error;
+      }
+    }
+    return;
+  }
+  const products = readJSON<Product[]>('products.json');
+  const indexById = new Map(orderedIds.map((id, i) => [id, i] as const));
+  for (const p of products) {
+    const idx = indexById.get(p.id);
+    if (idx !== undefined) p.sortOrder = idx;
+  }
+  writeJSON('products.json', products);
+}
+
 export async function deleteProduct(id: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
@@ -677,14 +728,52 @@ export async function updateOrder(id: string, updates: Partial<Order>): Promise<
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.deliveryDate !== undefined) row.delivery_date = updates.deliveryDate;
     if (updates.notes !== undefined) row.notes = updates.notes;
-    const { data, error } = await sb
-      .from('orders')
-      .update(row)
-      .eq('id', id)
-      .select('*, order_items(*), keg_returns(*)')
-      .single();
-    if (error) return undefined;
-    return rowToOrder(data);
+    // Totals are recomputed by the caller (admin item edits) and written here.
+    if (updates.subtotal !== undefined) row.subtotal = updates.subtotal;
+    if (updates.totalDeposit !== undefined) row.total_deposit = updates.totalDeposit;
+    if (updates.total !== undefined) row.total = updates.total;
+
+    if (Object.keys(row).length > 0) {
+      const { error } = await sb.from('orders').update(row).eq('id', id);
+      if (error) return undefined;
+    }
+
+    // Replace line items when the caller supplies a new array. Full
+    // delete + reinsert mirrors updateProduct's handling of product_sizes:
+    // no diff to maintain, and an order's item count is tiny. Only runs when
+    // `items` is explicitly provided, so a plain status change never touches
+    // the line items.
+    if (updates.items !== undefined) {
+      const { error: delErr } = await sb.from('order_items').delete().eq('order_id', id);
+      if (delErr) return undefined;
+      if (updates.items.length > 0) {
+        const { error: insErr } = await sb.from('order_items').insert(
+          updates.items.map((i) => ({
+            order_id: id,
+            product_id: i.productId,
+            product_name: i.productName,
+            size: i.size,
+            quantity: i.quantity,
+            unit_price: i.unitPrice,
+            deposit: i.deposit,
+          })),
+        );
+        if (insErr) return undefined;
+      }
+    }
+
+    if (updates.kegReturns !== undefined) {
+      const { error: delErr } = await sb.from('keg_returns').delete().eq('order_id', id);
+      if (delErr) return undefined;
+      if (updates.kegReturns.length > 0) {
+        const { error: insErr } = await sb.from('keg_returns').insert(
+          updates.kegReturns.map((r) => ({ order_id: id, size: r.size, quantity: r.quantity })),
+        );
+        if (insErr) return undefined;
+      }
+    }
+
+    return getOrder(id);
   }
   const orders = readJSON<Order[]>('orders.json');
   const index = orders.findIndex(o => o.id === id);
@@ -692,6 +781,31 @@ export async function updateOrder(id: string, updates: Partial<Order>): Promise<
   orders[index] = { ...orders[index], ...updates };
   writeJSON('orders.json', orders);
   return orders[index];
+}
+
+/**
+ * Remove the auto-posted keg DEPOSIT rows for one order. Used when an admin
+ * edits a confirmed order's items — the deposits are then rebuilt from the new
+ * items so the customer's outstanding-keg balance stays exactly right.
+ *
+ * Scoped to `type = 'deposit'` AND this order id. Manual returns are recorded
+ * with orderId '' (see /api/keg-ledger), so they are never in range; neither
+ * are deposits belonging to any other order.
+ */
+export async function deleteOrderKegDeposits(orderId: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb
+      .from('keg_ledger')
+      .delete()
+      .eq('order_id', orderId)
+      .eq('type', 'deposit');
+    if (error) throw error;
+    return;
+  }
+  const ledger = readJSON<KegLedgerEntry[]>('keg-ledger.json');
+  const next = ledger.filter((e) => !(e.orderId === orderId && e.type === 'deposit'));
+  writeJSON('keg-ledger.json', next);
 }
 
 // ─── Invoices ──────────────────────────────────────────────────────────────────
@@ -751,6 +865,12 @@ export async function updateInvoice(id: string, updates: Partial<Invoice>): Prom
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.paidAt !== undefined) row.paid_at = updates.paidAt;
     if (updates.sentAt !== undefined) row.sent_at = updates.sentAt;
+    // Line items + money columns, so an admin order edit can keep the linked
+    // invoice in sync. items is a jsonb snapshot on the invoice row.
+    if (updates.items !== undefined) row.items = updates.items;
+    if (updates.subtotal !== undefined) row.subtotal = updates.subtotal;
+    if (updates.totalDeposit !== undefined) row.total_deposit = updates.totalDeposit;
+    if (updates.total !== undefined) row.total = updates.total;
     const { data, error } = await sb
       .from('invoices')
       .update(row)
@@ -1447,6 +1567,38 @@ export async function updateCrmContact(
   all[i] = { ...all[i], ...updates };
   writeJSON('crm-contacts.json', all);
   return all[i];
+}
+
+/**
+ * Hard-delete a lead/prospect. Its logged activities are removed FIRST.
+ *
+ * The crm_activities.contact_id FK is ON DELETE SET NULL, but the row also has
+ * a check constraint requiring exactly one of (customer_id, contact_id) to be
+ * non-null. A plain contact delete would try to null contact_id on its
+ * activities and trip that check, failing the delete. Clearing the activities
+ * up front avoids it — and is the right behavior anyway: discarding a lead
+ * discards its touch history. (Converted leads have already had their history
+ * re-parented onto the customer, so this never touches a customer's log.)
+ */
+export async function deleteCrmContact(id: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error: actErr } = await sb.from('crm_activities').delete().eq('contact_id', id);
+    if (actErr) throw actErr;
+    const { error } = await sb.from('crm_contacts').delete().eq('id', id);
+    if (error) {
+      console.error('[deleteCrmContact] supabase error:', error.message, error.details);
+      return false;
+    }
+    return true;
+  }
+  const contacts = readJSON<CrmContact[]>('crm-contacts.json');
+  const filtered = contacts.filter((c) => c.id !== id);
+  if (filtered.length === contacts.length) return false;
+  writeJSON('crm-contacts.json', filtered);
+  const activities = readJSON<CrmActivity[]>('crm-activities.json');
+  writeJSON('crm-activities.json', activities.filter((a) => a.contactId !== id));
+  return true;
 }
 
 export async function getCrmActivities(subjectId?: string): Promise<CrmActivity[]> {

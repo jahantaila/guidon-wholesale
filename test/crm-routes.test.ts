@@ -33,6 +33,7 @@ const h = vi.hoisted(() => {
       return c;
     }),
     createCrmContactSpy: vi.fn(async (c: Record<string, unknown>) => { contacts.push(c); return c; }),
+    deleteCrmContactSpy: vi.fn(async (id: string) => contacts.some((c) => c.id === id)),
   };
 });
 
@@ -42,6 +43,7 @@ vi.mock("@/lib/data", () => ({
   getCrmContact: vi.fn(async (id: string) => h.contacts.find((c) => c.id === id)),
   createCrmContact: h.createCrmContactSpy,
   updateCrmContact: h.updateCrmContactSpy,
+  deleteCrmContact: h.deleteCrmContactSpy,
   getCrmActivities: vi.fn(async (subjectId?: string) =>
     subjectId ? h.activities.filter((a) => a.customerId === subjectId || a.contactId === subjectId) : h.activities),
   createCrmActivity: h.createCrmActivitySpy,
@@ -52,7 +54,7 @@ vi.mock("@/lib/data", () => ({
   getOrders: vi.fn(async () => []),
 }));
 
-import { POST as contactsPOST, PUT as contactsPUT, GET as contactsGET } from "@/app/api/admin/crm/contacts/route";
+import { POST as contactsPOST, PUT as contactsPUT, GET as contactsGET, DELETE as contactsDELETE } from "@/app/api/admin/crm/contacts/route";
 import { POST as convertPOST } from "@/app/api/admin/crm/contacts/convert/route";
 import { POST as activityPOST, GET as activityGET } from "@/app/api/admin/crm/activities/route";
 import { GET as summaryGET } from "@/app/api/admin/crm/summary/route";
@@ -127,6 +129,27 @@ describe("PUT /crm/contacts", () => {
 
   it("404s an unknown contact", async () => {
     expect((await contactsPUT(req({ id: "nope" }, "PUT"))).status).toBe(404);
+  });
+});
+
+describe("DELETE /crm/contacts", () => {
+  it("rejects a non-admin", async () => {
+    h.isAdminRequestSpy.mockResolvedValue(false);
+    expect((await contactsDELETE(req({ id: "lead-1" }, "DELETE"))).status).toBe(403);
+  });
+
+  it("requires an id", async () => {
+    expect((await contactsDELETE(req({}, "DELETE"))).status).toBe(400);
+  });
+
+  it("deletes an existing lead", async () => {
+    const res = await contactsDELETE(req({ id: "lead-1" }, "DELETE"));
+    expect(res.status).toBe(200);
+    expect(h.deleteCrmContactSpy).toHaveBeenCalledWith("lead-1");
+  });
+
+  it("404s an unknown contact", async () => {
+    expect((await contactsDELETE(req({ id: "ghost" }, "DELETE"))).status).toBe(404);
   });
 });
 

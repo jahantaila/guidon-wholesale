@@ -48,6 +48,12 @@ export default function KegTrackerPage() {
   const [adjustError, setAdjustError] = useState('');
   const [toast, setToast] = useState('');
 
+  // Search + filters over the balances table.
+  const [search, setSearch] = useState('');
+  const [sizeFilter, setSizeFilter] = useState<'all' | '1/2bbl' | '1/4bbl' | '1/6bbl'>('all');
+  const [outstandingOnly, setOutstandingOnly] = useState(false);
+  const [ageFilter, setAgeFilter] = useState<'all' | '30' | '60' | '90'>('all');
+
   useEffect(() => {
     async function load() {
       try {
@@ -127,6 +133,25 @@ export default function KegTrackerPage() {
   }, [allLedger]);
 
   const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+  // Apply search + filters. Small table (one row per customer with ledger
+  // history), so a plain filter each render is fine — no memo needed.
+  const filtered = balances.filter((entry) => {
+    const cust = customerMap.get(entry.customerId);
+    const name = (cust?.businessName || entry.customerId).toLowerCase();
+    if (search.trim() && !name.includes(search.trim().toLowerCase())) return false;
+    const total =
+      (entry.balance['1/2bbl'] || 0) + (entry.balance['1/4bbl'] || 0) + (entry.balance['1/6bbl'] || 0);
+    if (outstandingOnly && total <= 0) return false;
+    if (sizeFilter !== 'all' && (entry.balance[sizeFilter] || 0) <= 0) return false;
+    if (ageFilter !== 'all') {
+      const age = oldestAgeByCustomer.get(entry.customerId);
+      if (age === undefined || age < Number(ageFilter)) return false;
+    }
+    return true;
+  });
+  const filtersActive =
+    search.trim() !== '' || sizeFilter !== 'all' || outstandingOnly || ageFilter !== 'all';
 
   const handleExpand = async (customerId: string) => {
     if (expandedId === customerId) { setExpandedId(null); return; }
@@ -252,11 +277,68 @@ export default function KegTrackerPage() {
         ))}
       </div>
 
+      {/* Search + filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search customer..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input max-w-[220px] text-sm"
+        />
+        <select
+          value={sizeFilter}
+          onChange={(e) => setSizeFilter(e.target.value as typeof sizeFilter)}
+          className="input text-sm"
+          style={{ maxWidth: 150 }}
+          aria-label="Filter by keg size"
+        >
+          <option value="all">All sizes</option>
+          <option value="1/2bbl">Has 1/2 bbl</option>
+          <option value="1/4bbl">Has 1/4 bbl</option>
+          <option value="1/6bbl">Has 1/6 bbl</option>
+        </select>
+        <select
+          value={ageFilter}
+          onChange={(e) => setAgeFilter(e.target.value as typeof ageFilter)}
+          className="input text-sm"
+          style={{ maxWidth: 170 }}
+          aria-label="Filter by oldest outstanding keg age"
+        >
+          <option value="all">Any age</option>
+          <option value="30">Oldest 30+ days</option>
+          <option value="60">Oldest 60+ days</option>
+          <option value="90">Oldest 90+ days</option>
+        </select>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-cream/50">
+          <input
+            type="checkbox"
+            checked={outstandingOnly}
+            onChange={(e) => setOutstandingOnly(e.target.checked)}
+            className="accent-gold cursor-pointer"
+          />
+          Outstanding only
+        </label>
+        {filtersActive && (
+          <button
+            onClick={() => { setSearch(''); setSizeFilter('all'); setAgeFilter('all'); setOutstandingOnly(false); }}
+            className="text-xs italic hover:underline text-cream/40"
+          >
+            Clear
+          </button>
+        )}
+        <span className="text-xs text-cream/30 ml-auto font-variant-tabular">
+          {filtered.length} of {balances.length}
+        </span>
+      </div>
+
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="p-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12 w-full" />)}</div>
-        ) : balances.length === 0 ? (
-          <p className="p-6 text-cream/30 text-sm">No keg balances recorded.</p>
+        ) : filtered.length === 0 ? (
+          <p className="p-6 text-cream/30 text-sm">
+            {balances.length === 0 ? 'No keg balances recorded.' : 'No customers match your search or filters.'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -272,7 +354,7 @@ export default function KegTrackerPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
-                {balances.map((entry) => {
+                {filtered.map((entry) => {
                   const total = (entry.balance['1/2bbl'] || 0) + (entry.balance['1/4bbl'] || 0) + (entry.balance['1/6bbl'] || 0);
                   const isExpanded = expandedId === entry.customerId;
                   return (

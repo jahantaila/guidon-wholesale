@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
 import { isAdminRequest } from '@/lib/auth-check';
-import { getProducts, getAllProducts, createProduct, updateProduct, deleteProduct } from '@/lib/data';
+import { getProducts, getAllProducts, createProduct, updateProduct, deleteProduct, reorderProducts } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Product } from '@/lib/types';
 
@@ -81,6 +81,33 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[api/products PUT] failed:', err);
+    const message = extractError(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/products  — reorder the whole catalog.
+ * Body: { order: string[] }  (product ids in the desired display order)
+ *
+ * Separate from PUT (which edits one product) because a drag-and-drop reorder
+ * writes many rows at once and carries no other field changes.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const admin = await isAdminRequest(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Admin session required' }, { status: 403 });
+    }
+    const body = await request.json();
+    const order = body?.order;
+    if (!Array.isArray(order) || order.some((id) => typeof id !== 'string')) {
+      return NextResponse.json({ error: 'order must be an array of product ids.' }, { status: 400 });
+    }
+    await reorderProducts(order);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[api/products PATCH] failed:', err);
     const message = extractError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }

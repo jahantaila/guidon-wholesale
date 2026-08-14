@@ -2,20 +2,48 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
+import { useParams, useRouter } from 'next/navigation';
+import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder, CrmActivity, CrmActivityType } from '@/lib/types';
+import { CRM_ACTIVITY_LABELS, CRM_ACTIVITY_TYPES } from '@/lib/types';
+import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone, US_STATES } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+
+const TODAY = () => new Date().toISOString().slice(0, 10);
 
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const router = useRouter();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [ledger, setLedger] = useState<KegLedgerEntry[]>([]);
   const [recurring, setRecurring] = useState<RecurringOrder[]>([]);
+
+  // CRM activity — the SAME crm_activities the CRM page reads, so a call or
+  // visit logged here shows up as the account's "last touch" over there, and
+  // vice-versa. This is the notes/last-visit "sync" Mike asked for.
+  const [activities, setActivities] = useState<CrmActivity[]>([]);
+  const [logForm, setLogForm] = useState<{ type: CrmActivityType; date: string; note: string }>({
+    type: 'spoke_phone',
+    date: TODAY(),
+    note: '',
+  });
+  const [logging, setLogging] = useState(false);
+
+  // Edit + delete the customer from this page (no round-trip to the list).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    businessName: '', contactName: '', email: '', phone: '',
+    streetAddress: '', city: '', state: '', zip: '',
+    abcPermitNumber: '', customerIdentification: '',
+    preferredPaymentMethod: 'no_preference' as 'check' | 'fintech' | 'no_preference',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'deposit' | 'return'>('all');
   const [ledgerSizeFilter, setLedgerSizeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -34,16 +62,19 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [customersRes, ordersRes, invoicesRes, ledgerRes, recurringRes] = await Promise.all([
+        const [customersRes, ordersRes, invoicesRes, ledgerRes, recurringRes, activitiesRes] = await Promise.all([
           adminFetch('/api/customers'),
           adminFetch(`/api/orders?customerId=${id}`),
           adminFetch(`/api/invoices?customerId=${id}`),
           adminFetch(`/api/keg-ledger?customerId=${id}`),
           adminFetch(`/api/recurring-orders?customerId=${id}`),
+          adminFetch(`/api/admin/crm/activities?subjectId=${id}`),
         ]);
         const customers: Customer[] = await customersRes.json();
         const c = customers.find((x) => x.id === id) || null;
         setCustomer(c);
+        const actData = await activitiesRes.json().catch(() => []);
+        setActivities(Array.isArray(actData) ? actData : []);
         if (c) {
           setNotesDraft(c.notes || '');
           setTagsDraft((c.tags || []).join(', '));
@@ -186,6 +217,117 @@ export default function CustomerDetailPage() {
     } finally {
       setSavingNotes(false);
       window.setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  const refreshActivities = async () => {
+    try {
+      const res = await adminFetch(`/api/admin/crm/activities?subjectId=${id}`);
+      const data = await res.json().catch(() => []);
+      setActivities(Array.isArray(data) ? data : []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const submitLog = async () => {
+    if (!customer) return;
+    // Anchor the day at local noon so it doesn't slip in UTC.
+    const occurredAt = new Date(`${logForm.date}T12:00:00`).toISOString();
+    setLogging(true);
+    try {
+      const res = await adminFetch('/api/admin/crm/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectId: customer.id, type: logForm.type, occurredAt, notes: logForm.note.trim() }),
+      });
+      if (res.ok) {
+        setLogForm({ type: 'spoke_phone', date: TODAY(), note: '' });
+        setToast(`${CRM_ACTIVITY_LABELS[logForm.type]} logged.`);
+        await refreshActivities();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast(data?.error || 'Could not log that.');
+      }
+    } catch {
+      setToast('Could not log that.');
+    } finally {
+      setLogging(false);
+      window.setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  const openEdit = () => {
+    if (!customer) return;
+    setEditForm({
+      businessName: customer.businessName,
+      contactName: customer.contactName,
+      email: customer.email,
+      phone: customer.phone,
+      streetAddress: customer.streetAddress,
+      city: customer.city,
+      state: customer.state,
+      zip: customer.zip,
+      abcPermitNumber: customer.abcPermitNumber || '',
+      customerIdentification: customer.customerIdentification || '',
+      preferredPaymentMethod: customer.preferredPaymentMethod || 'no_preference',
+    });
+    setEditError('');
+    setEditOpen(true);
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customer) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await adminFetch('/api/customers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id, ...editForm }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCustomer(updated);
+        setEditOpen(false);
+        setToast('Customer updated.');
+        window.setTimeout(() => setToast(''), 3000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setEditError(data?.error || 'Save failed.');
+      }
+    } catch {
+      setEditError('Save failed. Please retry.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteCustomer = async () => {
+    if (!customer) return;
+    setDeleting(true);
+    try {
+      const res = await adminFetch('/api/customers', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: customer.id }),
+      });
+      if (res.ok) {
+        // Archived (had history) or hard-deleted — either way, back to the list.
+        router.push('/admin/customers');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast(data?.error || 'Delete failed.');
+        window.setTimeout(() => setToast(''), 5000);
+        setDeleteConfirm(false);
+      }
+    } catch {
+      setToast('Delete failed.');
+      window.setTimeout(() => setToast(''), 5000);
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -340,6 +482,9 @@ export default function CustomerDetailPage() {
           >
             Place order &rarr;
           </Link>
+          <button onClick={openEdit} className="btn-secondary text-sm">
+            Edit details
+          </button>
           {totalKegsOut > 0 && (
             <button
               onClick={remindAboutKegs}
@@ -347,6 +492,25 @@ export default function CustomerDetailPage() {
               className="btn-secondary text-sm"
             >
               {sendingReminder ? 'Sending…' : 'Remind about kegs'}
+            </button>
+          )}
+          {deleteConfirm ? (
+            <div className="flex flex-col gap-1 items-stretch">
+              <button
+                onClick={deleteCustomer}
+                disabled={deleting}
+                className="btn-secondary text-sm"
+                style={{ color: 'var(--ruby)', borderColor: 'var(--ruby)' }}
+              >
+                {deleting ? 'Deleting…' : 'Confirm delete'}
+              </button>
+              <button onClick={() => setDeleteConfirm(false)} className="text-xs" style={{ color: 'var(--muted)' }}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setDeleteConfirm(true)} className="text-xs mt-1" style={{ color: 'var(--ruby)' }}>
+              Delete customer
             </button>
           )}
         </div>
@@ -469,6 +633,76 @@ export default function CustomerDetailPage() {
               <span key={t} className="badge-sm" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>{t}</span>
             ))}
           </div>
+        )}
+      </section>
+
+      {/* CRM activity — the SAME crm_activities the CRM page reads. A call,
+          visit or sample-drop logged here becomes this account's "last touch"
+          in the CRM, and anything logged from the CRM shows up here. That is
+          the notes / last-visit sync between Customers and CRM. */}
+      <section className="card p-5">
+        <div className="flex items-baseline justify-between mb-3">
+          <span className="section-label">Activity</span>
+          <span className="text-xs italic" style={{ color: 'var(--muted)' }}>Shared with the CRM</span>
+        </div>
+        <div className="flex flex-wrap items-end gap-2 mb-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>Activity</label>
+            <select
+              className="input text-sm"
+              value={logForm.type}
+              onChange={(e) => setLogForm((f) => ({ ...f, type: e.target.value as CrmActivityType }))}
+            >
+              {CRM_ACTIVITY_TYPES.map((t) => <option key={t} value={t}>{CRM_ACTIVITY_LABELS[t]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>Date</label>
+            <input
+              type="date"
+              className="input text-sm font-variant-tabular"
+              value={logForm.date}
+              max={TODAY()}
+              onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))}
+            />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>Note (optional)</label>
+            <input
+              type="text"
+              className="input text-sm w-full"
+              placeholder="e.g. Dropped samples of the fall seasonal; owner liked it"
+              value={logForm.note}
+              onChange={(e) => setLogForm((f) => ({ ...f, note: e.target.value }))}
+            />
+          </div>
+          <button onClick={submitLog} disabled={logging} className="btn-primary text-sm">
+            {logging ? 'Saving…' : 'Log'}
+          </button>
+        </div>
+        {activities.length === 0 ? (
+          <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
+            No calls, visits or emails logged yet. Orders count as touches automatically.
+          </p>
+        ) : (
+          <ul className="border-t border-divider">
+            {activities.map((a) => (
+              <li key={a.id} className="py-2 border-b border-divider flex items-baseline gap-3 flex-wrap">
+                <span className="font-variant-tabular text-xs shrink-0" style={{ color: 'var(--muted)', minWidth: 92 }}>
+                  {formatDate(a.occurredAt)}
+                </span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                  {CRM_ACTIVITY_LABELS[a.type] || a.type}
+                </span>
+                {a.notes && (
+                  <span className="text-sm italic" style={{ color: 'var(--muted)' }}>— {a.notes}</span>
+                )}
+                {a.source === 'system' && (
+                  <span className="text-[10px] ml-auto" style={{ color: 'var(--faint)' }}>auto-logged</span>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -765,6 +999,87 @@ export default function CustomerDetailPage() {
           </>
         )}
       </section>
+
+      {/* Edit customer — same fields as the list-page modal, so Mike can fix
+          details without leaving the account. */}
+      {editOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => !savingEdit && setEditOpen(false)}
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={saveEdit}
+            className="bg-charcoal-100 border border-white/[0.08] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+          >
+            <h3 className="font-heading text-xl font-bold mb-5" style={{ color: 'var(--ink)' }}>Edit Customer</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Business Name</label>
+                <input className="input" value={editForm.businessName} onChange={(e) => setEditForm((f) => ({ ...f, businessName: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Contact Name</label>
+                <input className="input" value={editForm.contactName} onChange={(e) => setEditForm((f) => ({ ...f, contactName: e.target.value }))} required autoComplete="name" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Email</label>
+                <input type="email" className="input" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} required autoComplete="email" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Phone</label>
+                <input type="tel" className="input" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} autoComplete="tel" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Street Address</label>
+                <input className="input" value={editForm.streetAddress} onChange={(e) => setEditForm((f) => ({ ...f, streetAddress: e.target.value }))} autoComplete="street-address" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.5fr_1fr] gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>City</label>
+                  <input className="input" value={editForm.city} onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))} autoComplete="address-level2" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>State</label>
+                  <select className="input" value={editForm.state} onChange={(e) => setEditForm((f) => ({ ...f, state: e.target.value }))} autoComplete="address-level1">
+                    <option value="">Select...</option>
+                    {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Zip</label>
+                  <input className="input" value={editForm.zip} onChange={(e) => setEditForm((f) => ({ ...f, zip: e.target.value }))} autoComplete="postal-code" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>ABC Permit Number</label>
+                  <input className="input font-mono" value={editForm.abcPermitNumber} onChange={(e) => setEditForm((f) => ({ ...f, abcPermitNumber: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>Payment Method</label>
+                  <select className="input" value={editForm.preferredPaymentMethod} onChange={(e) => setEditForm((f) => ({ ...f, preferredPaymentMethod: e.target.value as 'check' | 'fintech' | 'no_preference' }))}>
+                    <option value="no_preference">No preference</option>
+                    <option value="check">Check</option>
+                    <option value="fintech">Fintech</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: 'var(--muted)' }}>
+                  Customer Identification <span className="font-normal text-xs">(admin-only)</span>
+                </label>
+                <input className="input font-mono" value={editForm.customerIdentification} onChange={(e) => setEditForm((f) => ({ ...f, customerIdentification: e.target.value }))} />
+              </div>
+              {editError && <p className="text-sm" style={{ color: 'var(--ruby)' }}>{editError}</p>}
+            </div>
+            <div className="flex justify-end gap-3 pt-5">
+              <button type="button" onClick={() => setEditOpen(false)} className="btn-secondary px-4 py-2">Cancel</button>
+              <button type="submit" disabled={savingEdit} className="btn-primary">{savingEdit ? 'Saving...' : 'Save'}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
