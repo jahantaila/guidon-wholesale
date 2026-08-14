@@ -2,7 +2,7 @@
   {
     "id": "ord-001",
     "customerId": "cust-001",
-    "status": "delivered",
+    "status": "completed",
     "items": [
       { "productId": "prod-001", "productName": "Guidon Gold", "size": "1/2bbl", "quantity": 2, "unitPrice": 200, "deposit": 50 },
       { "productId": "prod-004", "productName": "Barracks IPA", "size": "1/4bbl", "quantity": 1, "unitPrice": 140, "deposit": 40 }
