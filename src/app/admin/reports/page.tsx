@@ -17,6 +17,7 @@ interface ReportRow {
   packageType: string;
   customer?: string;
   quantity: number;
+  gallons: number;
   revenue: number;
   orderCount: number;
 }
@@ -24,6 +25,7 @@ interface ReportRow {
 interface Report {
   rows: ReportRow[];
   totalQuantity: number;
+  totalGallons: number;
   totalRevenue: number;
   orderCount: number;
   from: string | null;
@@ -31,6 +33,9 @@ interface Report {
   includeCustomer: boolean;
   includeCancelled: boolean;
 }
+
+/** US beer barrel = 31 US gallons. Barrels shown = gallons / 31. */
+const GALLONS_PER_BARREL = 31;
 
 /** Local calendar date (not UTC) so "today" matches the brewery's day. */
 function localDate(d: Date): string {
@@ -188,7 +193,15 @@ export default function ReportsPage() {
             {report!.includeCustomer ? 'style/package/customer' : 'style/package'}{' '}
             combination{report!.rows.length === 1 ? '' : 's'}, from{' '}
             <span className="ledger-num">{report!.orderCount}</span> order
-            {report!.orderCount === 1 ? '' : 's'}. Beer revenue{' '}
+            {report!.orderCount === 1 ? '' : 's'}.
+            {report!.totalGallons > 0 && (
+              <>
+                {' '}
+                <span className="ledger-num">{report!.totalGallons.toFixed(0)}</span> gallons (
+                <span className="ledger-num">{(report!.totalGallons / GALLONS_PER_BARREL).toFixed(1)}</span> bbl).
+              </>
+            )}{' '}
+            Beer revenue{' '}
             <span className="ledger-num">{formatCurrency(report!.totalRevenue)}</span>.
             {report!.includeCancelled && ' Cancelled orders included.'}
           </>
@@ -302,6 +315,8 @@ export default function ReportsPage() {
                     <th className="overline text-left py-2">Customer</th>
                   )}
                   <th className="overline text-right py-2">Qty</th>
+                  <th className="overline text-right py-2">Gallons</th>
+                  <th className="overline text-right py-2">Barrels</th>
                   <th className="overline text-right py-2">Revenue</th>
                   <th className="overline text-right py-2">Orders</th>
                 </tr>
@@ -318,6 +333,8 @@ export default function ReportsPage() {
                       <td className="table-cell py-2">{row.customer}</td>
                     )}
                     <td className="table-cell py-2 text-right font-semibold">{row.quantity}</td>
+                    <td className="table-cell py-2 text-right font-variant-tabular">{row.gallons.toFixed(1)}</td>
+                    <td className="table-cell py-2 text-right font-variant-tabular">{(row.gallons / GALLONS_PER_BARREL).toFixed(2)}</td>
                     <td className="table-cell py-2 text-right">{formatCurrency(row.revenue)}</td>
                     <td className="table-cell py-2 text-right" style={{ color: 'var(--muted)' }}>
                       {row.orderCount}
@@ -330,6 +347,12 @@ export default function ReportsPage() {
                   {report!.includeCustomer && <td className="table-cell py-2" />}
                   <td className="table-cell py-2 text-right font-semibold">
                     {report!.totalQuantity}
+                  </td>
+                  <td className="table-cell py-2 text-right font-semibold font-variant-tabular">
+                    {report!.totalGallons.toFixed(1)}
+                  </td>
+                  <td className="table-cell py-2 text-right font-semibold font-variant-tabular">
+                    {(report!.totalGallons / GALLONS_PER_BARREL).toFixed(2)}
                   </td>
                   <td className="table-cell py-2 text-right font-semibold">
                     {formatCurrency(report!.totalRevenue)}

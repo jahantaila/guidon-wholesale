@@ -51,6 +51,8 @@ export default function ProductsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   // Drag state for size-row reorder (native HTML5 DnD; no external lib).
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Drag state for whole-product row reorder (controls customer-facing order).
+  const [rowDragIndex, setRowDragIndex] = useState<number | null>(null);
 
   const reorderSize = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0) return;
@@ -208,6 +210,34 @@ export default function ProductsPage() {
     } catch (err) { console.error('Failed to delete product', err); }
   };
 
+  // Persist a new product display order (drag-and-drop). Optimistic: update the
+  // list where Mike is looking, then save the id order to the server. This
+  // order drives BOTH this admin table and the customer-facing catalog.
+  const persistProductOrder = useCallback(async (ordered: Product[]) => {
+    setProducts(ordered);
+    try {
+      await adminFetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: ordered.map((p) => p.id) }),
+      });
+    } catch (err) {
+      console.error('Failed to save product order', err);
+    }
+  }, []);
+
+  // Move a product row from one position to another. Indices are into the full
+  // `products` array; row dragging is only enabled when the search box is empty
+  // (see the table), so the rendered order matches `products` 1:1 and the
+  // indices are valid.
+  const moveProductRow = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    const next = [...products];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    persistProductOrder(next);
+  };
+
   const updateSize = <K extends keyof ProductForm['sizes'][number]>(
     sizeKey: KegSize,
     field: K,
@@ -315,6 +345,13 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {!loading && products.length > 0 && (
+        <p className="text-xs -mt-2" style={{ color: 'var(--muted)' }}>
+          Drag the <span aria-hidden="true">⠿</span> handle to set the order beers appear in — this list and the customer catalog stay in sync.
+          {search && ' Clear the search to reorder.'}
+        </p>
+      )}
+
       <div className="card p-0 overflow-hidden">
         {loading ? (
           <div className="p-6 space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-14 w-full rounded-lg" />)}</div>
@@ -325,6 +362,7 @@ export default function ProductsPage() {
             <table className="w-full">
               <thead className="bg-charcoal-200">
                 <tr>
+                  <th className="table-header w-7" aria-label="Reorder" />
                   <th className="table-header">Name</th>
                   <th className="table-header">Style</th>
                   <th className="table-header">ABV</th>
@@ -335,12 +373,44 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {products.filter(p => {
-                  if (!search) return true;
-                  const q = search.toLowerCase();
-                  return p.name.toLowerCase().includes(q) || p.style.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
-                }).map(product => (
-                  <tr key={product.id} className={cn('transition-colors', product.available ? 'hover:bg-white/[0.02]' : 'opacity-50')}>
+                {(search
+                  ? products.filter((p) => {
+                      const q = search.toLowerCase();
+                      return p.name.toLowerCase().includes(q) || p.style.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+                    })
+                  : products
+                ).map((product, idx) => (
+                  <tr
+                    key={product.id}
+                    onDragOver={search ? undefined : (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                    onDrop={search ? undefined : (e) => {
+                      e.preventDefault();
+                      const from = Number(e.dataTransfer.getData('text/plain'));
+                      if (!Number.isNaN(from)) moveProductRow(from, idx);
+                      setRowDragIndex(null);
+                    }}
+                    className={cn('transition-colors', product.available ? 'hover:bg-white/[0.02]' : 'opacity-50', rowDragIndex === idx && 'opacity-40')}
+                  >
+                    <td className="table-cell align-middle" style={{ width: 28 }}>
+                      {search ? (
+                        <span className="text-cream/10" title="Clear the search box to drag-reorder">⋮⋮</span>
+                      ) : (
+                        <div
+                          draggable
+                          onDragStart={(e) => { setRowDragIndex(idx); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); }}
+                          onDragEnd={() => setRowDragIndex(null)}
+                          className="cursor-move text-cream/25 hover:text-gold transition-colors flex items-center justify-center"
+                          title="Drag to reorder how this beer appears — here and in the customer catalog"
+                          aria-label={`Drag ${product.name} to reorder`}
+                        >
+                          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true">
+                            <circle cx="3" cy="3" r="1.3" /><circle cx="9" cy="3" r="1.3" />
+                            <circle cx="3" cy="8" r="1.3" /><circle cx="9" cy="8" r="1.3" />
+                            <circle cx="3" cy="13" r="1.3" /><circle cx="9" cy="13" r="1.3" />
+                          </svg>
+                        </div>
+                      )}
+                    </td>
                     <td className="table-cell font-heading font-bold text-cream">{product.name}</td>
                     <td className="table-cell text-cream/50">{product.style}</td>
                     <td className="table-cell text-cream/50">{product.abv}%</td>

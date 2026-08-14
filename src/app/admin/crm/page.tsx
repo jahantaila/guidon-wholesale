@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Link from 'next/link';
 import { adminFetch } from '@/lib/admin-fetch';
-import { formatPhone } from '@/lib/utils';
+import { formatPhone, formatDate, US_STATES } from '@/lib/utils';
 import { CRM_ACTIVITY_LABELS, CRM_ACTIVITY_TYPES } from '@/lib/types';
-import type { CrmListRow, CrmActivityType, CrmListStatus } from '@/lib/types';
+import type { CrmListRow, CrmActivityType, CrmListStatus, CrmStatus } from '@/lib/types';
 
 /**
  * CRM: leads, prospects and customers in one list.
@@ -72,6 +72,32 @@ export default function CrmPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState('');
 
+  // Per-row log form: activity type + date (defaults today) + optional note.
+  // Replaces the old one-click log so Mike can back-date a call he forgot to
+  // record and add a note in the same step.
+  const [logForm, setLogForm] = useState<{ type: CrmActivityType; date: string; note: string }>({
+    type: 'spoke_phone',
+    date: new Date().toISOString().slice(0, 10),
+    note: '',
+  });
+
+  // Convert-to-customer modal (replaces the old window.prompt, which could be
+  // blocked in embedded contexts and swallowed errors).
+  const [convertFor, setConvertFor] = useState<CrmListRow | null>(null);
+  const [convertEmail, setConvertEmail] = useState('');
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState('');
+
+  // Edit-contact modal (leads + prospects) + inline delete confirm.
+  const [editFor, setEditFor] = useState<CrmListRow | null>(null);
+  const [contactForm, setContactForm] = useState({
+    businessName: '', contactName: '', email: '', phone: '',
+    streetAddress: '', city: '', state: '', zip: '',
+    status: 'lead' as CrmStatus, notes: '',
+  });
+  const [savingContact, setSavingContact] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const [addOpen, setAddOpen] = useState(false);
   const [newLead, setNewLead] = useState({ businessName: '', contactName: '', phone: '', email: '' });
 
@@ -132,19 +158,28 @@ export default function CrmPage() {
     load();
   }, [load]);
 
-  /** One click = one logged touch. Optimistic, so the row updates where Mike
-   *  is already looking instead of behind a toast. */
-  async function logActivity(row: CrmListRow, type: CrmActivityType) {
+  /** Open the log form for a row, resetting to a today-dated entry. */
+  function openLog(rowId: string) {
+    setLogForm({ type: 'spoke_phone', date: new Date().toISOString().slice(0, 10), note: '' });
+    setLogOpenFor(rowId);
+  }
+
+  /** Log a touch: activity type + date (defaults today, but back-datable) +
+   *  optional note. Optimistic so the row updates where Mike is already
+   *  looking, then reloads so derived fields (last touch) settle. */
+  async function submitLog(row: CrmListRow) {
+    const { type, date, note } = logForm;
+    // Anchor the chosen day at local noon so it doesn't slip a day in UTC.
+    const occurredAt = new Date(`${date}T12:00:00`).toISOString();
     setBusy(row.id);
     setLogOpenFor(null);
-    const now = new Date().toISOString();
     setData((prev) =>
       prev
         ? {
             ...prev,
             rows: prev.rows.map((r) =>
               r.id === row.id
-                ? { ...r, recentActivityAt: now, recentActivitySource: CRM_ACTIVITY_LABELS[type] }
+                ? { ...r, recentActivityAt: occurredAt, recentActivitySource: CRM_ACTIVITY_LABELS[type] }
                 : r,
             ),
           }
@@ -154,7 +189,7 @@ export default function CrmPage() {
       const res = await adminFetch('/api/admin/crm/activities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subjectId: row.id, type }),
+        body: JSON.stringify({ subjectId: row.id, type, occurredAt, notes: note.trim() }),
       });
       if (!res.ok) {
         setError('Could not log that. Refresh and try again.');
@@ -162,6 +197,7 @@ export default function CrmPage() {
       } else {
         setFlash(`${CRM_ACTIVITY_LABELS[type]} logged for ${row.businessName}.`);
         setTimeout(() => setFlash(''), 3000);
+        await load();
       }
     } catch {
       await load();
@@ -196,39 +232,141 @@ export default function CrmPage() {
   async function promote(row: CrmListRow) {
     if (row.status === 'lead') {
       setBusy(row.id);
-      await adminFetch('/api/admin/crm/contacts', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: row.id, status: 'prospect' }),
-      });
-      await load();
-      setBusy(null);
+      try {
+        const res = await adminFetch('/api/admin/crm/contacts', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: row.id, status: 'prospect' }),
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(() => null);
+          setError(b?.error || 'Could not promote that lead to prospect.');
+        }
+        await load();
+      } finally {
+        setBusy(null);
+      }
       return;
     }
-    // prospect -> customer is a one-way door: it creates a real account and
-    // moves the history. Confirm, and say what actually happens.
-    const email = window.prompt(
-      `Convert ${row.businessName} to a customer?\n\n` +
-        `This creates a customer account and moves their logged history across.\n` +
-        `It does NOT give them a portal login — that is still a separate step.\n\n` +
-        `Email for the account:`,
-      row.email || '',
-    );
-    if (email === null) return;
-    setBusy(row.id);
+    // prospect -> customer is a one-way door: it creates a real account, sets
+    // up a portal login and emails the welcome. Collect the email in a proper
+    // modal (window.prompt could be blocked in the embedded admin and hid
+    // server errors).
+    setConvertFor(row);
+    setConvertEmail(row.email || '');
+    setConvertError('');
+  }
+
+  /** Runs the prospect -> customer conversion. The server creates the
+   *  customer, provisions a portal login (temp password), moves the logged
+   *  history and emails the welcome. */
+  async function doConvert() {
+    // Re-entry guard: the modal's Enter handler and the button can both fire,
+    // and a double-submit races two conversions of the same prospect.
+    if (!convertFor || converting) return;
+    const email = convertEmail.trim();
+    if (!email) {
+      setConvertError('An email address is required to create the account.');
+      return;
+    }
+    setConverting(true);
+    setConvertError('');
     try {
       const res = await adminFetch('/api/admin/crm/contacts/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: row.id, email }),
+        body: JSON.stringify({ id: convertFor.id, email }),
       });
       const b = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(b?.error || 'Could not convert that lead.');
-      } else {
-        setFlash(`${row.businessName} is now a customer.`);
-        setTimeout(() => setFlash(''), 4000);
+        setConvertError(b?.error || 'Could not convert that prospect.');
+        return;
       }
+      const emailed = b?.welcomeEmailed;
+      setFlash(
+        `${convertFor.businessName} is now a customer` +
+          (emailed ? ' — welcome email sent with their login.' : '.'),
+      );
+      setTimeout(() => setFlash(''), 5000);
+      setConvertFor(null);
+      setConvertEmail('');
+      await load();
+    } catch {
+      setConvertError('Could not convert that prospect.');
+    } finally {
+      setConverting(false);
+    }
+  }
+
+  /** Open the edit modal for a lead/prospect, prefilling from the row and
+   *  fetching its notes (not carried on the list row). */
+  async function openEditContact(row: CrmListRow) {
+    setContactForm({
+      businessName: row.businessName,
+      contactName: row.contactName,
+      email: row.email,
+      phone: row.phone,
+      streetAddress: row.streetAddress,
+      city: row.city,
+      state: row.state,
+      zip: row.zip,
+      status: (row.status === 'prospect' ? 'prospect' : 'lead'),
+      notes: '',
+    });
+    setEditFor(row);
+    try {
+      const res = await adminFetch('/api/admin/crm/contacts');
+      const all = await res.json();
+      const full = Array.isArray(all) ? all.find((c) => c.id === row.id) : null;
+      if (full) setContactForm((f) => ({ ...f, notes: full.notes || '', status: full.status || f.status }));
+    } catch {
+      /* notes prefill is best-effort */
+    }
+  }
+
+  async function saveContact(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editFor) return;
+    setSavingContact(true);
+    try {
+      const res = await adminFetch('/api/admin/crm/contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editFor.id, ...contactForm }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => null);
+        setError(b?.error || 'Could not save that contact.');
+        return;
+      }
+      setFlash(`Saved ${contactForm.businessName || 'contact'}.`);
+      setTimeout(() => setFlash(''), 3000);
+      setEditFor(null);
+      await load();
+    } finally {
+      setSavingContact(false);
+    }
+  }
+
+  /** Delete a lead/prospect (and its logged touches). Hard delete — the
+   *  server clears the activity history first so the DB's one-subject check
+   *  can't reject the delete. */
+  async function deleteContact(row: CrmListRow) {
+    setBusy(row.id);
+    try {
+      const res = await adminFetch('/api/admin/crm/contacts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.id }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => null);
+        setError(b?.error || 'Could not delete that contact.');
+      } else {
+        setFlash(`Deleted ${row.businessName}.`);
+        setTimeout(() => setFlash(''), 3000);
+      }
+      setDeleteConfirmId(null);
       await load();
     } finally {
       setBusy(null);
@@ -245,7 +383,11 @@ export default function CrmPage() {
         r.businessName.toLowerCase().includes(q) ||
         r.contactName.toLowerCase().includes(q) ||
         r.phone.includes(q) ||
-        r.email.toLowerCase().includes(q)
+        r.email.toLowerCase().includes(q) ||
+        r.streetAddress.toLowerCase().includes(q) ||
+        r.city.toLowerCase().includes(q) ||
+        r.state.toLowerCase().includes(q) ||
+        r.zip.toLowerCase().includes(q)
       );
     });
   }, [data, filter, search]);
@@ -430,7 +572,7 @@ export default function CrmPage() {
         <input
           className="input ml-auto"
           style={{ maxWidth: 260 }}
-          placeholder="Search name, phone, email"
+          placeholder="Search name, phone, email, city, zip"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -471,6 +613,7 @@ export default function CrmPage() {
                   <th className="overline text-left py-2">Contact</th>
                   <th className="overline text-left py-2">Status</th>
                   <th className="overline text-left py-2">Last touch</th>
+                  <th className="overline text-left py-2">Last ordered</th>
                   <th className="overline text-right py-2">Actions</th>
                 </tr>
               </thead>
@@ -480,7 +623,8 @@ export default function CrmPage() {
                   const cold = days !== null && days >= 45;
                   const due = row.nextFollowupDate && row.nextFollowupDate <= today;
                   return (
-                    <tr key={row.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+                    <Fragment key={row.id}>
+                    <tr style={{ borderBottom: logOpenFor === row.id ? 'none' : '1px solid var(--divider)' }}>
                       <td className="table-cell py-2">
                         {row.status === 'customer' ? (
                           <Link
@@ -511,76 +655,149 @@ export default function CrmPage() {
                         {STATUS_LABEL[row.status]}
                       </td>
                       <td className="table-cell py-2">
-                        <span
-                          title={row.recentActivityAt || 'no recorded contact'}
-                          style={{ color: cold || days === null ? 'var(--ember)' : 'var(--ink)' }}
-                        >
-                          {relative(row.recentActivityAt)}
-                        </span>
+                        {row.recentActivityAt ? (
+                          <span
+                            className="font-variant-tabular"
+                            title={relative(row.recentActivityAt)}
+                            style={{ color: cold ? 'var(--ember)' : 'var(--ink)' }}
+                          >
+                            {formatDate(row.recentActivityAt)}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--ember)' }}>never</span>
+                        )}
                         {row.recentActivitySource && (
                           <span className="text-xs ml-1" style={{ color: 'var(--muted)' }}>
                             · {row.recentActivitySource}
                           </span>
                         )}
                       </td>
+                      <td className="table-cell py-2 font-variant-tabular" style={{ color: row.lastOrderAt ? 'var(--ink)' : 'var(--faint)' }}>
+                        {row.lastOrderAt ? formatDate(row.lastOrderAt) : '—'}
+                      </td>
                       <td className="table-cell py-2 text-right whitespace-nowrap">
-                        {logOpenFor === row.id ? (
-                          <span className="flex flex-wrap gap-2 justify-end">
-                            {CRM_ACTIVITY_TYPES.map((t) => (
-                              <button
-                                key={t}
-                                onClick={() => logActivity(row, t)}
-                                className="text-xs underline"
-                                style={{ color: 'var(--brass)' }}
-                              >
-                                {CRM_ACTIVITY_LABELS[t]}
-                              </button>
-                            ))}
+                        <span className="flex flex-wrap gap-x-3 gap-y-1 justify-end items-center">
+                          <button
+                            onClick={() => (logOpenFor === row.id ? setLogOpenFor(null) : openLog(row.id))}
+                            disabled={busy === row.id}
+                            className="text-sm underline"
+                            style={{ color: 'var(--brass)' }}
+                          >
+                            {logOpenFor === row.id ? 'Close' : 'Log'}
+                          </button>
+                          {row.email && (
                             <button
-                              onClick={() => setLogOpenFor(null)}
-                              className="text-xs"
-                              style={{ color: 'var(--faint)' }}
-                            >
-                              cancel
-                            </button>
-                          </span>
-                        ) : (
-                          <span className="flex gap-3 justify-end">
-                            <button
-                              onClick={() => setLogOpenFor(row.id)}
-                              disabled={busy === row.id}
+                              onClick={() => {
+                                setEmailTo(row);
+                                setDraft({ subject: '', body: '' });
+                                setSendError('');
+                              }}
                               className="text-sm underline"
                               style={{ color: 'var(--brass)' }}
                             >
-                              Log
+                              Email
                             </button>
-                            {row.email && (
+                          )}
+                          {row.status !== 'customer' && (
+                            <button
+                              onClick={() => openEditContact(row)}
+                              className="text-sm underline"
+                              style={{ color: 'var(--muted)' }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {row.status !== 'customer' && (
+                            <button
+                              onClick={() => promote(row)}
+                              disabled={busy === row.id}
+                              className="text-sm underline"
+                              style={{ color: 'var(--olive)' }}
+                            >
+                              {row.status === 'lead' ? '→ Prospect' : 'Convert →'}
+                            </button>
+                          )}
+                          {row.status !== 'customer' &&
+                            (deleteConfirmId === row.id ? (
+                              <span className="inline-flex gap-2 items-center">
+                                <button
+                                  onClick={() => deleteContact(row)}
+                                  disabled={busy === row.id}
+                                  className="text-sm underline"
+                                  style={{ color: 'var(--ruby)' }}
+                                >
+                                  Confirm delete
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  className="text-sm"
+                                  style={{ color: 'var(--faint)' }}
+                                >
+                                  cancel
+                                </button>
+                              </span>
+                            ) : (
                               <button
-                                onClick={() => {
-                                  setEmailTo(row);
-                                  setDraft({ subject: '', body: '' });
-                                  setSendError('');
-                                }}
+                                onClick={() => setDeleteConfirmId(row.id)}
                                 className="text-sm underline"
-                                style={{ color: 'var(--brass)' }}
+                                style={{ color: 'var(--ruby)' }}
                               >
-                                Email
+                                Delete
                               </button>
-                            )}
-                            {row.status !== 'customer' && (
-                              <button
-                                onClick={() => promote(row)}
-                                disabled={busy === row.id}
-                                className="text-sm underline"
-                                style={{ color: 'var(--olive)' }}
-                              >
-                                {row.status === 'lead' ? '→ Prospect' : 'Convert →'}
-                              </button>
-                            )}
-                          </span>
-                        )}
+                            ))}
+                        </span>
                       </td>
                     </tr>
+                    {logOpenFor === row.id && (
+                      <tr style={{ borderBottom: '1px solid var(--divider)' }}>
+                        <td colSpan={6} className="pb-3">
+                          <div
+                            className="flex flex-wrap items-end gap-2 p-3"
+                            style={{ background: 'var(--surface)', border: '1px solid var(--divider)', borderRadius: 4 }}
+                          >
+                            <div>
+                              <label className="label block mb-1 text-xs">Activity</label>
+                              <select
+                                className="input"
+                                value={logForm.type}
+                                onChange={(e) => setLogForm((f) => ({ ...f, type: e.target.value as CrmActivityType }))}
+                              >
+                                {CRM_ACTIVITY_TYPES.map((t) => (
+                                  <option key={t} value={t}>{CRM_ACTIVITY_LABELS[t]}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="label block mb-1 text-xs">Date</label>
+                              <input
+                                type="date"
+                                className="input font-variant-tabular"
+                                value={logForm.date}
+                                max={today}
+                                onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-[200px]">
+                              <label className="label block mb-1 text-xs">Note (optional)</label>
+                              <input
+                                type="text"
+                                className="input w-full"
+                                placeholder="What happened? e.g. Owner wants a fall seasonal drop-off next week"
+                                value={logForm.note}
+                                onChange={(e) => setLogForm((f) => ({ ...f, note: e.target.value }))}
+                              />
+                            </div>
+                            <button className="btn-primary" onClick={() => submitLog(row)} disabled={busy === row.id}>
+                              {busy === row.id ? 'Saving…' : 'Save log'}
+                            </button>
+                            <button className="btn-secondary" onClick={() => setLogOpenFor(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -661,6 +878,134 @@ export default function CrmPage() {
                 onClick={() => setEmailTo(null)}
                 disabled={sending}
               >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Convert prospect → customer. Collects the email, then the server
+          creates the account, provisions a portal login and emails the
+          welcome. Replaces the old window.prompt. */}
+      {convertFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6"
+          style={{ background: 'rgba(42, 36, 22, 0.45)' }}
+          onClick={() => !converting && setConvertFor(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md mt-16 p-6"
+            style={{ background: 'var(--surface)', border: '1px solid var(--divider)', borderRadius: 4, boxShadow: 'var(--shadow-sm)' }}
+          >
+            <div className="overline mb-1" style={{ color: 'var(--brass)' }}>Convert to customer</div>
+            <h2 className="font-display text-2xl mb-1" style={{ color: 'var(--ink)' }}>{convertFor.businessName}</h2>
+            <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+              Creates a customer account, sets up a portal login (temporary password{' '}
+              <strong style={{ color: 'var(--ink)' }}>guidon</strong>, changed on first sign-in), moves this
+              prospect&rsquo;s logged history across, and emails them a welcome with their login. This
+              can&rsquo;t be undone.
+            </p>
+            <label className="label block mb-1">Account email</label>
+            <input
+              className="input w-full mb-1"
+              type="email"
+              autoFocus
+              value={convertEmail}
+              onChange={(e) => setConvertEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') doConvert(); }}
+              placeholder="owner@thebar.com"
+            />
+            <p className="text-xs mb-4" style={{ color: 'var(--faint)' }}>The welcome email is sent here.</p>
+            {convertError && <p className="text-sm mb-3" style={{ color: 'var(--ruby)' }}>{convertError}</p>}
+            <div className="flex items-center gap-3">
+              <button className="btn-primary" onClick={doConvert} disabled={converting || !convertEmail.trim()}>
+                {converting ? 'Converting…' : 'Convert + email login'}
+              </button>
+              <button className="btn-secondary" onClick={() => setConvertFor(null)} disabled={converting}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit a lead / prospect inline — no more round-trip to the Customers
+          page just to fix a phone number. */}
+      {editFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6"
+          style={{ background: 'rgba(42, 36, 22, 0.45)' }}
+          onClick={() => !savingContact && setEditFor(null)}
+        >
+          <form
+            onSubmit={saveContact}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg mt-12 p-6"
+            style={{ background: 'var(--surface)', border: '1px solid var(--divider)', borderRadius: 4, boxShadow: 'var(--shadow-sm)' }}
+          >
+            <div className="overline mb-1" style={{ color: 'var(--brass)' }}>
+              Edit {editFor.status === 'prospect' ? 'prospect' : 'lead'}
+            </div>
+            <h2 className="font-display text-2xl mb-4" style={{ color: 'var(--ink)' }}>
+              {contactForm.businessName || editFor.businessName}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="label block mb-1">Business name</label>
+                <input className="input w-full" value={contactForm.businessName} onChange={(e) => setContactForm((f) => ({ ...f, businessName: e.target.value }))} required />
+              </div>
+              <div>
+                <label className="label block mb-1">Contact</label>
+                <input className="input w-full" value={contactForm.contactName} onChange={(e) => setContactForm((f) => ({ ...f, contactName: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label block mb-1">Phone</label>
+                <input className="input w-full" value={contactForm.phone} onChange={(e) => setContactForm((f) => ({ ...f, phone: e.target.value }))} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1">Email</label>
+                <input className="input w-full" type="email" value={contactForm.email} onChange={(e) => setContactForm((f) => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1">Street address</label>
+                <input className="input w-full" value={contactForm.streetAddress} onChange={(e) => setContactForm((f) => ({ ...f, streetAddress: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label block mb-1">City</label>
+                <input className="input w-full" value={contactForm.city} onChange={(e) => setContactForm((f) => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label block mb-1">State</label>
+                  <select className="input w-full" value={contactForm.state} onChange={(e) => setContactForm((f) => ({ ...f, state: e.target.value }))}>
+                    <option value="">—</option>
+                    {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label block mb-1">Zip</label>
+                  <input className="input w-full" value={contactForm.zip} onChange={(e) => setContactForm((f) => ({ ...f, zip: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="label block mb-1">Stage</label>
+                <select className="input w-full" value={contactForm.status} onChange={(e) => setContactForm((f) => ({ ...f, status: e.target.value as CrmStatus }))}>
+                  <option value="lead">Lead</option>
+                  <option value="prospect">Prospect</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1">Notes</label>
+                <textarea className="input w-full" rows={3} value={contactForm.notes} onChange={(e) => setContactForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-4">
+              <button className="btn-primary" disabled={savingContact || !contactForm.businessName.trim()}>
+                {savingContact ? 'Saving…' : 'Save changes'}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => setEditFor(null)} disabled={savingContact}>
                 Cancel
               </button>
             </div>

@@ -624,7 +624,10 @@ function TableView({
       <tbody>
         {orders.map((order) => {
           const isExpanded = expandedId === order.id;
-          const action = STATUS_ACTION[order.status];
+          // Fall back for any legacy/unknown status (e.g. a pre-migration
+          // 'delivered' row) so one bad row can't crash the whole page on
+          // `action.next`.
+          const action = STATUS_ACTION[order.status] ?? STATUS_ACTION.completed;
           return (
             <Fragment key={order.id}>
               <tr
