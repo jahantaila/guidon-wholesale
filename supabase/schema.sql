@@ -107,6 +107,14 @@ alter table keg_returns drop constraint if exists keg_returns_size_check;
 -- back to the legacy insertion order.
 alter table product_sizes add column if not exists sort_order int;
 
+-- Product-level display order: admin drags whole product rows up/down in the
+-- admin catalog to control the order beers appear in — both in the admin table
+-- and on the customer-facing catalog. Rendered ascending; NULL sorts last so
+-- brand-new products land at the bottom until they're placed. Reads sort this
+-- in application code (not SQL) so a pre-migration instance without the column
+-- degrades to name order instead of failing the whole catalog query.
+alter table products add column if not exists sort_order int;
+
 alter table products enable row level security;
 drop policy if exists "Public read access" on products;
 create policy "Public read access" on products for select using (true);

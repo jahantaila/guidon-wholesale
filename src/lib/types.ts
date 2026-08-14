@@ -109,6 +109,10 @@ export interface Product {
   sizes: ProductSize[];
   category: string;
   available: boolean;
+  /** Admin-defined display order for the whole product. Lower renders first,
+   * on both the admin catalog and the customer-facing order page. null/undefined
+   * sorts last (new products land at the bottom until dragged into place). */
+  sortOrder?: number | null;
   /** Path under /public/images/products or external URL. Empty = use
    * typographic card treatment (no raster image). */
   imageUrl?: string;
@@ -371,6 +375,12 @@ export interface CrmListRow {
   contactName: string;
   email: string;
   phone: string;
+  /** Address, carried so the CRM search can match on city / street / zip and
+   *  so an inline edit has something to prefill. */
+  streetAddress: string;
+  city: string;
+  state: string;
+  zip: string;
   /** Latest of (last order placed, last logged activity). Null if neither. */
   recentActivityAt: string | null;
   /** What produced recentActivityAt, for the "23d ago · Cold call" label. */

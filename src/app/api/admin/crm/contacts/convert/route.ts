@@ -12,8 +12,18 @@ import {
 } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Customer } from '@/lib/types';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { syncSupabaseAuthPassword } from '@/lib/auth-provision';
+import { notifyApplicationDecision, portalUrl, isEmailConfigured } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Temp password issued when a prospect is converted to a customer, matching
+ * the application-approval flow. mustChangePassword forces a change on first
+ * login, so this value is one-use.
+ */
+const TEMP_PASSWORD = 'guidon';
 
 /**
  * POST /api/admin/crm/contacts/convert
@@ -34,8 +44,11 @@ export const dynamic = 'force-dynamic';
  * If it dies between 2 and 3, re-running finds the contact already claimed and
  * re-parents the remaining activities rather than erroring forever.
  *
- * Portal access is deliberately NOT provisioned here. Creating the account and
- * giving the bar a login are separate decisions, and the modal says so.
+ * Since 2026-08-14 conversion also (4) provisions a portal login (temp
+ * password, mustChangePassword) and (5) emails the customer a welcome — the
+ * same treatment as approving a wholesale application. Both are best-effort:
+ * the customer row already exists by then, so a mail or auth hiccup logs and
+ * continues rather than failing the conversion.
  */
 export async function POST(request: NextRequest) {
   if (!(await isAdminRequest(request))) {
@@ -110,10 +123,16 @@ export async function POST(request: NextRequest) {
       archivedAt: null,
       nextFollowupDate: contact.nextFollowupDate || null,
       nextFollowupNotes: contact.nextFollowupNotes,
-      mustChangePassword: false,
+      // Converting now provisions a portal login (see below), so flag the
+      // temp password for a forced change on first sign-in. `password` is only
+      // read by the file-based fallback auth; Supabase auth is set via
+      // syncSupabaseAuthPassword.
+      mustChangePassword: true,
+      password: TEMP_PASSWORD,
       createdAt: new Date().toISOString(),
     } as unknown as Customer;
 
+    let customerId = customer.id;
     try {
       await createCustomer(customer);
     } catch (err) {
@@ -122,6 +141,15 @@ export async function POST(request: NextRequest) {
         await updateCrmContact(id, { convertedAt: null });
         throw err;
       }
+      // Lost a race: a concurrent convert already inserted this email (the
+      // early dupe check passed for both). Adopt the EXISTING customer's id so
+      // we re-parent history and stamp convertedCustomerId onto a real row —
+      // not the local object whose insert just 409'd, which would 404 when
+      // Mike clicks through to "the customer".
+      const existingByEmail = (await getCustomers(true)).find(
+        (c) => c.email.toLowerCase() === email,
+      );
+      if (existingByEmail) customerId = existingByEmail.id;
     }
 
     // Step 3 — re-parent history. Without this, promoting an account erases
@@ -132,19 +160,55 @@ export async function POST(request: NextRequest) {
       await createCrmActivity({
         ...a,
         id: '',
-        customerId: customer.id,
+        customerId,
         contactId: null,
       });
       await deleteCrmActivity(a.id);
     }
 
     await updateCrmContact(id, {
-      convertedCustomerId: customer.id,
+      convertedCustomerId: customerId,
       convertedAt: claimedAt,
     });
 
+    // Step 4 — provision a portal login. Supabase-only (the file fallback has
+    // no auth users). Best-effort: the customer already exists, so a failure
+    // here just means Mike resets their password later.
+    if (isSupabaseConfigured()) {
+      try {
+        await syncSupabaseAuthPassword({
+          email,
+          password: TEMP_PASSWORD,
+          businessName: customer.businessName,
+          contactName: customer.contactName,
+        });
+      } catch (err) {
+        console.error('[crm/contacts/convert] login provisioning failed (non-fatal):', err);
+      }
+    }
+
+    // Step 5 — welcome email with the login. Reuses the application-approval
+    // template (same message: account is live, here's your temp password).
+    let welcomeEmailed = false;
+    try {
+      await notifyApplicationDecision({
+        applicationId: customer.id,
+        applicantEmail: email,
+        applicantName: customer.contactName,
+        businessName: customer.businessName,
+        decision: 'approved',
+        portalUrl: portalUrl(),
+        tempPassword: TEMP_PASSWORD,
+      });
+      // Report truthfully whether a real email could have gone out (send()
+      // returns ok even in the no-credentials stub mode).
+      welcomeEmailed = isEmailConfigured();
+    } catch (err) {
+      console.error('[crm/contacts/convert] welcome email failed (non-fatal):', err);
+    }
+
     return NextResponse.json(
-      { customerId: customer.id, movedActivities: history.length },
+      { customerId, movedActivities: history.length, welcomeEmailed },
       { status: 201 },
     );
   } catch (err) {
