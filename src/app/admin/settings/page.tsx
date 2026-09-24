@@ -10,12 +10,22 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Follow-up reminder emails. Off by default until Mike confirms who gets
+  // them; the recipients box takes a comma-separated list.
+  const [reminders, setReminders] = useState({ enabled: false, recipients: [] as string[] });
+  const [reminderDraft, setReminderDraft] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
 
   useEffect(() => {
     adminFetch('/api/admin/settings', { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
         setEmails(Array.isArray(data.notificationEmails) ? data.notificationEmails : []);
+        setVideoUrl(typeof data.onboardingVideoUrl === 'string' ? data.onboardingVideoUrl : '');
+        if (data.followupReminders) {
+          setReminders(data.followupReminders);
+          setReminderDraft((data.followupReminders.recipients || []).join(', '));
+        }
       })
       .catch(() => setError('Failed to load settings.'))
       .finally(() => setLoading(false));
@@ -60,6 +70,49 @@ export default function SettingsPage() {
     const next = [...emails, addr];
     await saveEmails(next);
     setNewEmail('');
+  };
+
+  const saveReminders = async (enabled: boolean) => {
+    setSaving(true);
+    setError(''); setSuccess('');
+    try {
+      const recipients = reminderDraft.split(',').map((e) => e.trim()).filter(Boolean);
+      const res = await adminFetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ followupReminders: { enabled, recipients } }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed.');
+      setReminders(data.followupReminders);
+      setReminderDraft((data.followupReminders.recipients || []).join(', '));
+      flash('success', 'Saved.');
+    } catch (err) {
+      flash('error', err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveVideoUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(''); setSuccess('');
+    try {
+      const res = await adminFetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboardingVideoUrl: videoUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed.');
+      setVideoUrl(data.onboardingVideoUrl || '');
+      flash('success', 'Saved.');
+    } catch (err) {
+      flash('error', err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const removeEmail = async (addr: string) => {
@@ -140,6 +193,63 @@ export default function SettingsPage() {
               />
               <button type="submit" className="btn-primary" disabled={saving || !newEmail.trim()}>
                 Add Recipient
+              </button>
+            </form>
+          </section>
+
+          {/* Follow-up reminders */}
+          <section className="card p-5">
+            <div className="mb-3">
+              <span className="section-label">Follow-up Reminders</span>
+              <p className="text-sm mt-1 italic" style={{ color: 'var(--muted)' }}>
+                An email the day before and the morning of each follow-up scheduled in the CRM,
+                sent around 8am Eastern. Goes only to the addresses below, never to customers.
+              </p>
+            </div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }} htmlFor="reminder-recipients">
+              Send to (comma-separated)
+            </label>
+            <input
+              id="reminder-recipients"
+              className="input w-full mb-3"
+              value={reminderDraft}
+              onChange={(e) => setReminderDraft(e.target.value)}
+              placeholder="mike@guidonbrewing.com"
+              disabled={saving}
+            />
+            <div className="flex items-center gap-3">
+              <button className="btn-primary" disabled={saving} onClick={() => saveReminders(reminders.enabled)}>
+                Save recipients
+              </button>
+              <button className="btn-secondary" disabled={saving} onClick={() => saveReminders(!reminders.enabled)}>
+                {reminders.enabled ? 'Turn off' : 'Turn on'}
+              </button>
+              <span className="text-sm" style={{ color: reminders.enabled ? 'var(--pine)' : 'var(--muted)' }}>
+                {reminders.enabled ? 'On' : 'Off'}
+              </span>
+            </div>
+          </section>
+
+          {/* Setup walkthrough link in the welcome email */}
+          <section className="card p-5">
+            <div className="mb-3">
+              <span className="section-label">New Account Walkthrough</span>
+              <p className="text-sm mt-1 italic" style={{ color: 'var(--muted)' }}>
+                A link to the account-setup video, added to the &ldquo;account approved&rdquo; email every
+                new customer gets. Leave blank to leave it out.
+              </p>
+            </div>
+            <form onSubmit={saveVideoUrl} className="flex items-stretch gap-2">
+              <input
+                type="url"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://…"
+                className="input flex-1"
+                disabled={saving}
+              />
+              <button type="submit" className="btn-primary" disabled={saving}>
+                Save link
               </button>
             </form>
           </section>

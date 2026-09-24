@@ -192,6 +192,23 @@ describe("POST /crm/activities", () => {
     expect(back.occurredAt).toBe("2026-07-04T12:00:00.000Z");
   });
 
+  it("logs a 'Sent text' (Mike, Sept 2026) and it shows on that account's timeline", async () => {
+    const res = await activityPOST(req({ subjectId: "cust-1", type: "sent_text", notes: "Need any beer?" }));
+    expect(res.status).toBe(201);
+    const timeline = await (await activityGET(req(undefined, "GET", "https://x.test/api/admin/crm/activities?subjectId=cust-1"))).json();
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]).toMatchObject({ type: "sent_text", customerId: "cust-1", notes: "Need any beer?" });
+  });
+
+  it("explains a not-yet-migrated activity type instead of a raw DB error", async () => {
+    h.createCrmActivitySpy.mockRejectedValueOnce({
+      message: 'new row for relation "crm_activities" violates check constraint "crm_activities_type_check"',
+    });
+    const res = await activityPOST(req({ subjectId: "cust-1", type: "sent_text" }));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toMatch(/migration 003/);
+  });
+
   it("falls back to now when occurredAt is unparseable", async () => {
     const a = await (await activityPOST(req({ subjectId: "lead-1", type: "cold_call", occurredAt: "last tuesday" }))).json();
     expect(Number.isNaN(Date.parse(a.occurredAt))).toBe(false);

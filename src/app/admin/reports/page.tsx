@@ -197,8 +197,8 @@ export default function ReportsPage() {
             {report!.totalGallons > 0 && (
               <>
                 {' '}
-                <span className="ledger-num">{report!.totalGallons.toFixed(0)}</span> gallons (
-                <span className="ledger-num">{(report!.totalGallons / GALLONS_PER_BARREL).toFixed(1)}</span> bbl).
+                <span className="ledger-num">{report!.totalGallons.toFixed(1)}</span> gallons (
+                <span className="ledger-num">{(report!.totalGallons / GALLONS_PER_BARREL).toFixed(2)}</span> bbl).
               </>
             )}{' '}
             Beer revenue{' '}
@@ -368,7 +368,10 @@ export default function ReportsPage() {
       </div>
 
       <p className="mt-4 text-xs" style={{ color: 'var(--faint)' }}>
-        Counted by the date the order was placed, in brewery local time. Revenue excludes
+        Counted by each order&rsquo;s reporting date, in brewery local time &mdash; the day it
+        was placed, unless you moved a late-entered order to an earlier month from its order
+        page. Case of cans = 3 gal, four-pack = 0.5 gal, 50 L keg = 13.2 gal, 1 bbl = 31 gal.
+        Revenue excludes
         keg deposits, which are refundable. Cancelled orders are excluded unless you tick
         the box above.
       </p>

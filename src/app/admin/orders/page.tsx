@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Link from 'next/link';
 import { Order, OrderStatus, Customer, Invoice } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDay, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 const STATUS_FLOW: OrderStatus[] = ['pending', 'confirmed', 'completed'];
@@ -457,6 +457,11 @@ function CardsView({
                 <p className="font-variant-tabular text-xs" style={{ color: 'var(--ink)' }}>
                   {formatDate(order.createdAt)}
                 </p>
+                {order.reportingDate && (
+                  <p className="text-xs" style={{ color: 'var(--ember)' }}>
+                    reports as {formatDay(order.reportingDate)}
+                  </p>
+                )}
               </div>
               <div>
                 <span className="section-label block mb-0.5" style={{ color: 'var(--muted)' }}>Invoice</span>
@@ -648,7 +653,14 @@ function TableView({
                 <td className="table-cell">
                   {customerMap.get(order.customerId)?.businessName || order.customerId}
                 </td>
-                <td className="table-cell font-variant-tabular">{formatDate(order.createdAt)}</td>
+                <td className="table-cell font-variant-tabular">
+                  {formatDate(order.createdAt)}
+                  {order.reportingDate && (
+                    <span className="block text-xs" style={{ color: 'var(--ember)' }}>
+                      reports as {formatDay(order.reportingDate)}
+                    </span>
+                  )}
+                </td>
                 <td className="table-cell text-right font-variant-tabular">{order.items.length}</td>
                 <td className="table-cell">
                   <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>

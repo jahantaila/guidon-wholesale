@@ -264,3 +264,19 @@ describe("relativeDay / daysAgo", () => {
     expect(daysAgo("2026-09-01T00:00:00Z", NOW)).toBe(0);
   });
 });
+
+describe("Sent text activity", () => {
+  it("is a loggable type labelled the way Mike asked", async () => {
+    const { CRM_ACTIVITY_TYPES, CRM_ACTIVITY_LABELS } = await import("@/lib/types");
+    expect(CRM_ACTIVITY_TYPES).toContain("sent_text");
+    expect(CRM_ACTIVITY_LABELS.sent_text).toBe("Sent text");
+  });
+
+  it("names the last touch in the CRM list", async () => {
+    const { lastActivityBySubject } = await import("@/lib/crm");
+    const m = lastActivityBySubject([
+      { id: "a", customerId: "c1", contactId: null, type: "sent_text", occurredAt: "2026-09-22T16:00:00Z", notes: "", source: "admin", createdAt: "" },
+    ]);
+    expect(m.get("c1")?.label).toBe("Sent text");
+  });
+});

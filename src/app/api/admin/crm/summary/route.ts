@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         lead: rows.filter((r) => r.status === 'lead').length,
         prospect: rows.filter((r) => r.status === 'prospect').length,
         customer: rows.filter((r) => r.status === 'customer').length,
+        followups: rows.filter((r) => !!r.nextFollowupDate).length,
       },
       // Surfaced so the UI can explain an empty page rather than looking
       // broken when the migration has not been run yet.

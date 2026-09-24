@@ -8,7 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { Customer, Product, Order, OrderItem, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule, CrmContact, CrmActivity } from './types';
+import type { Customer, Product, Order, OrderItem, OrderReportingDateChange, Invoice, KegLedgerEntry, KegLedgerStatus, OrderTemplate, RecurringOrder, WholesaleApplication, KegSize, BrewSchedule, CrmContact, CrmActivity } from './types';
 import { isSupabaseConfigured, createAdminClient } from './supabase';
 import { formatAddress } from './utils';
 
@@ -145,6 +145,8 @@ function rowToOrder(row: any): Order {
     deliveryDate: row.delivery_date,
     notes: row.notes,
     createdAt: row.created_at,
+    // Undefined before migration 003 adds the column; null = placed date.
+    reportingDate: row.reporting_date ?? null,
   };
 }
 
@@ -781,6 +783,85 @@ export async function updateOrder(id: string, updates: Partial<Order>): Promise<
   orders[index] = { ...orders[index], ...updates };
   writeJSON('orders.json', orders);
   return orders[index];
+}
+
+// ─── Order reporting date ─────────────────────────────────────────────────────
+
+/**
+ * Change the day an order counts toward in reports. created_at is never
+ * touched. The audit row is written FIRST: a reporting date that changed
+ * without a record of the change is exactly the "falsified date" this design
+ * exists to avoid, so if the audit insert fails nothing changes. If the order
+ * update then fails, the audit row is removed again (best effort).
+ *
+ * Returns undefined if the order does not exist. A no-op (same date) writes
+ * nothing and returns the order unchanged.
+ */
+export async function setOrderReportingDate(
+  orderId: string,
+  reportingDate: string | null,
+): Promise<Order | undefined> {
+  const existing = await getOrder(orderId);
+  if (!existing) return undefined;
+  const previous = existing.reportingDate ?? null;
+  if (previous === reportingDate) return existing;
+
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data: audit, error: auditErr } = await sb
+      .from('order_reporting_date_changes')
+      .insert({ order_id: orderId, previous_date: previous, new_date: reportingDate })
+      .select('id')
+      .single();
+    if (auditErr) throw auditErr;
+    const { error } = await sb.from('orders').update({ reporting_date: reportingDate }).eq('id', orderId);
+    if (error) {
+      await sb.from('order_reporting_date_changes').delete().eq('id', audit.id);
+      throw error;
+    }
+    return getOrder(orderId);
+  }
+
+  const changes = readJSON<OrderReportingDateChange[]>('order-reporting-date-changes.json');
+  changes.push({
+    id: `rdc-${Date.now()}-${changes.length}`,
+    orderId,
+    previousDate: previous,
+    newDate: reportingDate,
+    changedAt: new Date().toISOString(),
+  });
+  writeJSON('order-reporting-date-changes.json', changes);
+  const orders = readJSON<Order[]>('orders.json');
+  const i = orders.findIndex((o) => o.id === orderId);
+  orders[i] = { ...orders[i], reportingDate };
+  writeJSON('orders.json', orders);
+  return orders[i];
+}
+
+/** Reporting-date history for one order, newest first. */
+export async function getOrderReportingDateChanges(orderId: string): Promise<OrderReportingDateChange[]> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from('order_reporting_date_changes')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('changed_at', { ascending: false });
+    if (error) {
+      if (isMissingTableError(error)) return [];
+      throw error;
+    }
+    return (data || []).map((r) => ({
+      id: r.id,
+      orderId: r.order_id,
+      previousDate: r.previous_date ?? null,
+      newDate: r.new_date ?? null,
+      changedAt: r.changed_at,
+    }));
+  }
+  return readJSON<OrderReportingDateChange[]>('order-reporting-date-changes.json')
+    .filter((c) => c.orderId === orderId)
+    .sort((a, b) => b.changedAt.localeCompare(a.changedAt));
 }
 
 /**
@@ -1664,4 +1745,60 @@ export async function deleteCrmActivity(id: string): Promise<boolean> {
   if (next.length === all.length) return false;
   writeJSON('crm-activities.json', next);
   return true;
+}
+
+// ─── CRM follow-up reminders ──────────────────────────────────────────────────
+
+/**
+ * Claim the right to send one reminder. Returns true only for the caller that
+ * actually inserted the row; the (subject, date, kind) primary key makes a
+ * retry or an overlapping cron run get false, so each reminder goes out once.
+ * Claim BEFORE sending; release if the send fails so tomorrow's retry (or a
+ * re-run) can try again.
+ */
+export async function claimFollowupReminder(
+  subjectId: string,
+  followupDate: string,
+  kind: 'day_before' | 'day_of',
+): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    const { error } = await sb
+      .from('crm_followup_reminders')
+      .insert({ subject_id: subjectId, followup_date: followupDate, kind });
+    if (!error) return true;
+    if ((error as { code?: string }).code === '23505') return false; // already sent
+    throw error;
+  }
+  const all = readJSON<{ subjectId: string; followupDate: string; kind: string; sentAt: string }[]>(
+    'crm-followup-reminders.json',
+  );
+  if (all.some((r) => r.subjectId === subjectId && r.followupDate === followupDate && r.kind === kind)) {
+    return false;
+  }
+  all.push({ subjectId, followupDate, kind, sentAt: new Date().toISOString() });
+  writeJSON('crm-followup-reminders.json', all);
+  return true;
+}
+
+export async function releaseFollowupReminder(
+  subjectId: string,
+  followupDate: string,
+  kind: 'day_before' | 'day_of',
+): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const sb = createAdminClient();
+    await sb
+      .from('crm_followup_reminders')
+      .delete()
+      .eq('subject_id', subjectId)
+      .eq('followup_date', followupDate)
+      .eq('kind', kind);
+    return;
+  }
+  const all = readJSON<{ subjectId: string; followupDate: string; kind: string }[]>('crm-followup-reminders.json');
+  writeJSON(
+    'crm-followup-reminders.json',
+    all.filter((r) => !(r.subjectId === subjectId && r.followupDate === followupDate && r.kind === kind)),
+  );
 }

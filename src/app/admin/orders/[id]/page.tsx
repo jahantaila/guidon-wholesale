@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { Order, OrderItem, OrderStatus, Customer, Invoice, Product } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDay, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import ReportingDateControl from '@/components/ReportingDateControl';
 
 const SIZE_LABELS: Record<string, string> = {
   '1/2bbl': '1/2 Barrel',
@@ -298,6 +299,11 @@ export default function OrderDetailPage() {
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm" style={{ color: 'var(--muted)' }}>
             <span className={cn('badge-sm', getStatusColor(order.status))}>{order.status}</span>
             <span>Placed <strong style={{ color: 'var(--ink)' }}>{formatDate(order.createdAt)}</strong></span>
+            {order.reportingDate && (
+              <a href="#reporting-date" style={{ color: 'var(--ember)' }}>
+                reports as {formatDay(order.reportingDate)}
+              </a>
+            )}
             <span>·</span>
             <span>{totalKegsOut} keg{totalKegsOut === 1 ? '' : 's'} out</span>
             {totalReturns > 0 && (
@@ -365,6 +371,13 @@ export default function OrderDetailPage() {
           )}
         </div>
       </header>
+
+      {/* Late-entered orders: file them under the month they belong to
+          without touching the real placed date. */}
+      <ReportingDateControl
+        orderId={order.id}
+        onChange={(reportingDate) => setOrder((o) => (o ? { ...o, reportingDate } : o))}
+      />
 
       {/* Customer block */}
       <section className="card">

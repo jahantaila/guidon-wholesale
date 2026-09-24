@@ -104,6 +104,7 @@ export function buildCrmList(
       recentActivityAt: act?.at || null,
       recentActivitySource: act?.label || null,
       nextFollowupDate: c.nextFollowupDate || null,
+      nextFollowupNotes: c.nextFollowupNotes || '',
       orderCount: 0,
       lastOrderAt: null,
     });
@@ -137,6 +138,7 @@ export function buildCrmList(
       recentActivityAt,
       recentActivitySource,
       nextFollowupDate: c.nextFollowupDate || null,
+      nextFollowupNotes: c.nextFollowupNotes || '',
       orderCount: orderCounts.get(c.id) || 0,
       lastOrderAt: orderAt,
     });
@@ -217,4 +219,32 @@ export function relativeDay(iso: string | null, now: Date = new Date()): string 
   if (d === 0) return 'today';
   if (d === 1) return 'yesterday';
   return `${d}d ago`;
+}
+
+export type FollowupState = 'overdue' | 'today' | 'upcoming';
+
+/** Where a scheduled follow-up sits relative to `today` (YYYY-MM-DD,
+ *  brewery-local). null when none is scheduled. */
+export function followupState(date: string | null | undefined, today: string): FollowupState | null {
+  if (!date) return null;
+  if (date < today) return 'overdue';
+  if (date === today) return 'today';
+  return 'upcoming';
+}
+
+/**
+ * Every row with a follow-up scheduled, soonest first. Overdue ones are NOT
+ * dropped: they sort to the top, because a missed follow-up is the one that
+ * most needs doing. Ties break by name so the order is stable.
+ */
+export function scheduledFollowups<T extends { nextFollowupDate?: string | null; businessName: string }>(
+  rows: T[],
+): T[] {
+  return rows
+    .filter((r) => !!r.nextFollowupDate)
+    .sort(
+      (a, b) =>
+        (a.nextFollowupDate as string).localeCompare(b.nextFollowupDate as string) ||
+        a.businessName.localeCompare(b.businessName),
+    );
 }
