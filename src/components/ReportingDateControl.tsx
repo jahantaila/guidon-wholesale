@@ -5,9 +5,9 @@ import { adminFetch } from '@/lib/admin-fetch';
 import { formatDate, formatDay as day } from '@/lib/utils';
 import type { OrderReportingDateChange } from '@/lib/types';
 
-/** One place for the copy, pending Mike's pick between "Reporting date" and
- *  "Order date". */
-export const REPORTING_DATE_LABEL = 'Reporting date';
+/** One place for the copy. Mike chose "Order date" (Sept 2026); it sits
+ *  next to the fixed "Placed" date. */
+export const REPORTING_DATE_LABEL = 'Order date';
 
 interface State {
   placedDate: string;
@@ -39,13 +39,13 @@ export default function ReportingDateControl({
       const res = await adminFetch(`/api/admin/orders/reporting-date?orderId=${encodeURIComponent(orderId)}`);
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(body?.error || 'Could not load the reporting date.');
+        setError(body?.error || 'Could not load the order date.');
         return;
       }
       setState(body);
       setDraft(body.reportingDate || body.placedDate);
     } catch {
-      setError('Could not load the reporting date.');
+      setError('Could not load the order date.');
     }
   }, [orderId]);
 
@@ -65,7 +65,7 @@ export default function ReportingDateControl({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(body?.error || 'Could not save the reporting date.');
+        setError(body?.error || 'Could not save the order date.');
         return;
       }
       setState(body);
@@ -77,7 +77,7 @@ export default function ReportingDateControl({
       );
       onChange?.(body.reportingDate);
     } catch {
-      setError('Could not save the reporting date.');
+      setError('Could not save the order date.');
     } finally {
       setSaving(false);
     }

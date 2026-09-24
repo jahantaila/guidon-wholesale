@@ -368,7 +368,7 @@ export default function ReportsPage() {
       </div>
 
       <p className="mt-4 text-xs" style={{ color: 'var(--faint)' }}>
-        Counted by each order&rsquo;s reporting date, in brewery local time &mdash; the day it
+        Counted by each order&rsquo;s &ldquo;Order date&rdquo;, in brewery local time &mdash; the day it
         was placed, unless you moved a late-entered order to an earlier month from its order
         page. Case of cans = 3 gal, four-pack = 0.5 gal, 50 L keg = 13.2 gal, 1 bbl = 31 gal.
         Revenue excludes

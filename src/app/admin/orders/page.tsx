@@ -459,7 +459,7 @@ function CardsView({
                 </p>
                 {order.reportingDate && (
                   <p className="text-xs" style={{ color: 'var(--ember)' }}>
-                    reports as {formatDay(order.reportingDate)}
+                    order date {formatDay(order.reportingDate)}
                   </p>
                 )}
               </div>
@@ -657,7 +657,7 @@ function TableView({
                   {formatDate(order.createdAt)}
                   {order.reportingDate && (
                     <span className="block text-xs" style={{ color: 'var(--ember)' }}>
-                      reports as {formatDay(order.reportingDate)}
+                      order date {formatDay(order.reportingDate)}
                     </span>
                   )}
                 </td>

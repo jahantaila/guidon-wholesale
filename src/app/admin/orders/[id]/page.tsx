@@ -301,7 +301,7 @@ export default function OrderDetailPage() {
             <span>Placed <strong style={{ color: 'var(--ink)' }}>{formatDate(order.createdAt)}</strong></span>
             {order.reportingDate && (
               <a href="#reporting-date" style={{ color: 'var(--ember)' }}>
-                reports as {formatDay(order.reportingDate)}
+                order date {formatDay(order.reportingDate)}
               </a>
             )}
             <span>·</span>

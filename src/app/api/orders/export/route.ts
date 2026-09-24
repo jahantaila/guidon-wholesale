@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     'Date Placed',
     // The day the order counts toward in reports. Same as Date Placed unless
     // the admin filed a late-entered order under an earlier month.
-    'Reporting Date',
+    'Order Date (for reports)',
     'Status',
     'Customer',
     'Customer Email',

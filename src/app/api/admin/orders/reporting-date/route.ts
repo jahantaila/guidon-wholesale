@@ -63,7 +63,7 @@ export async function PUT(request: NextRequest) {
     const raw = body?.reportingDate;
     if (raw !== null && raw !== '' && (typeof raw !== 'string' || !isCalendarDate(raw))) {
       return NextResponse.json(
-        { error: 'Reporting date must be a date in YYYY-MM-DD format.' },
+        { error: 'Order date must be a date in YYYY-MM-DD format.' },
         { status: 400 },
       );
     }
@@ -76,7 +76,7 @@ export async function PUT(request: NextRequest) {
     let reportingDate: string | null = raw || null;
     if (reportingDate && reportingDate > today) {
       return NextResponse.json(
-        { error: 'The reporting date cannot be in the future.' },
+        { error: 'The order date cannot be in the future.' },
         { status: 400 },
       );
     }
@@ -91,7 +91,7 @@ export async function PUT(request: NextRequest) {
     // rather than letting the UI claim a save that did not happen.
     if ((updated.reportingDate ?? null) !== reportingDate) {
       return NextResponse.json(
-        { error: 'The reporting date did not save. The database may need migration 003.' },
+        { error: 'The order date did not save. The database may need migration 003.' },
         { status: 500 },
       );
     }
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: needsMigration
-          ? 'Reporting dates are not set up in the database yet (migration 003).'
+          ? 'Order dates are not set up in the database yet (migration 003).'
           : message,
       },
       { status: needsMigration ? 503 : 500 },
