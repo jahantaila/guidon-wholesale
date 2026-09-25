@@ -169,7 +169,24 @@ export interface Order {
    * column kept in the DB for legacy data, but new orders write `null`. */
   deliveryDate?: string | null;
   notes: string;
+  /** When the order was actually entered. Immutable — never back-dated. */
   createdAt: string;
+  /** Brewery-local calendar date (YYYY-MM-DD) the order counts toward in
+   * reports. Set by the admin when an order is entered after month-end but
+   * belongs to the previous month. null/undefined = the day it was placed.
+   * Every change is recorded in order_reporting_date_changes. */
+  reportingDate?: string | null;
+}
+
+/** Audit row: one change to an order's reporting date. */
+export interface OrderReportingDateChange {
+  id: string;
+  orderId: string;
+  /** null = it was following the placed date. */
+  previousDate: string | null;
+  /** null = reset to the placed date. */
+  newDate: string | null;
+  changedAt: string;
 }
 
 export interface OrderTemplate {
@@ -314,6 +331,7 @@ export type CrmListStatus = CrmStatus | 'customer';
 
 export type CrmActivityType =
   | 'sent_email'
+  | 'sent_text'
   | 'spoke_phone'
   | 'left_voicemail'
   | 'cold_call'
@@ -322,6 +340,7 @@ export type CrmActivityType =
 /** Mike's own words, in his own order. Used for the one-click log buttons. */
 export const CRM_ACTIVITY_LABELS: Record<CrmActivityType, string> = {
   sent_email: 'Sent email',
+  sent_text: 'Sent text',
   spoke_phone: 'Spoke on phone',
   left_voicemail: 'Left voice mail',
   cold_call: 'Cold call',
@@ -386,6 +405,7 @@ export interface CrmListRow {
   /** What produced recentActivityAt, for the "23d ago · Cold call" label. */
   recentActivitySource: string | null;
   nextFollowupDate?: string | null;
+  nextFollowupNotes: string;
   /** Customers only. Lets the list surface who has gone quiet. */
   orderCount: number;
   lastOrderAt: string | null;

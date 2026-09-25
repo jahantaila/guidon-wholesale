@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import Link from 'next/link';
 import { adminFetch } from '@/lib/admin-fetch';
-import { formatPhone, formatDate, US_STATES } from '@/lib/utils';
+import { formatPhone, formatDate, formatDay, US_STATES } from '@/lib/utils';
+import { breweryLocalDate } from '@/lib/sales-report';
+import { followupState, scheduledFollowups } from '@/lib/crm';
 import { CRM_ACTIVITY_LABELS, CRM_ACTIVITY_TYPES } from '@/lib/types';
 import type { CrmListRow, CrmActivityType, CrmListStatus, CrmStatus } from '@/lib/types';
 
@@ -38,10 +40,10 @@ interface Summary {
   rows: CrmListRow[];
   quiet: QuietAccount[];
   quietDays: number;
-  counts: { total: number; lead: number; prospect: number; customer: number };
+  counts: { total: number; lead: number; prospect: number; customer: number; followups?: number };
 }
 
-type Filter = 'all' | 'lead' | 'prospect' | 'customer';
+type Filter = 'all' | 'lead' | 'prospect' | 'customer' | 'followups';
 
 function daysAgo(iso: string | null): number | null {
   if (!iso) return null;
@@ -97,6 +99,12 @@ export default function CrmPage() {
   });
   const [savingContact, setSavingContact] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Per-row follow-up form. Writes the same next-follow-up fields as the
+  // customer page, so Mike can schedule one without leaving the CRM.
+  const [followupOpenFor, setFollowupOpenFor] = useState<string | null>(null);
+  const [followupForm, setFollowupForm] = useState({ date: '', notes: '' });
+  const [followupError, setFollowupError] = useState('');
 
   const [addOpen, setAddOpen] = useState(false);
   const [newLead, setNewLead] = useState({ businessName: '', contactName: '', phone: '', email: '' });
@@ -158,10 +166,56 @@ export default function CrmPage() {
     load();
   }, [load]);
 
+  // Deep link from the follow-up reminder email: /admin/crm?filter=followups
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('filter') === 'followups') setFilter('followups');
+  }, []);
+
   /** Open the log form for a row, resetting to a today-dated entry. */
   function openLog(rowId: string) {
     setLogForm({ type: 'spoke_phone', date: new Date().toISOString().slice(0, 10), note: '' });
+    setFollowupOpenFor(null);
     setLogOpenFor(rowId);
+  }
+
+  /** Open the follow-up form for a row, prefilled with what is scheduled. */
+  function openFollowup(row: CrmListRow) {
+    setFollowupForm({ date: row.nextFollowupDate || '', notes: row.nextFollowupNotes || '' });
+    setFollowupError('');
+    setLogOpenFor(null);
+    setFollowupOpenFor(row.id);
+  }
+
+  /** Schedule (date) or clear (null) a row's follow-up. The server reads the
+   *  value back and errors if it did not stick; the list is then reloaded so
+   *  what Mike sees is what is stored. */
+  async function saveFollowup(row: CrmListRow, date: string | null) {
+    setBusy(row.id);
+    setFollowupError('');
+    try {
+      const res = await adminFetch('/api/admin/crm/followup', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectId: row.id, date, notes: followupForm.notes }),
+      });
+      const b = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFollowupError(b?.error || 'The follow-up did not save. Please try again.');
+        return;
+      }
+      setFollowupOpenFor(null);
+      setFlash(
+        b.nextFollowupDate
+          ? `Follow-up saved: ${row.businessName} on ${formatDay(b.nextFollowupDate)}.`
+          : `Follow-up cleared for ${row.businessName}.`,
+      );
+      setTimeout(() => setFlash(''), 4000);
+      await load();
+    } catch {
+      setFollowupError('The follow-up did not save. Please try again.');
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** Log a touch: activity type + date (defaults today, but back-datable) +
@@ -376,8 +430,10 @@ export default function CrmPage() {
   const rows = useMemo(() => {
     if (!data) return [];
     const q = search.trim().toLowerCase();
-    return data.rows.filter((r) => {
-      if (filter !== 'all' && r.status !== filter) return false;
+    const matched = data.rows.filter((r) => {
+      if (filter === 'followups') {
+        if (!r.nextFollowupDate) return false;
+      } else if (filter !== 'all' && r.status !== filter) return false;
       if (!q) return true;
       return (
         r.businessName.toLowerCase().includes(q) ||
@@ -387,13 +443,19 @@ export default function CrmPage() {
         r.streetAddress.toLowerCase().includes(q) ||
         r.city.toLowerCase().includes(q) ||
         r.state.toLowerCase().includes(q) ||
-        r.zip.toLowerCase().includes(q)
+        r.zip.toLowerCase().includes(q) ||
+        (r.nextFollowupNotes || '').toLowerCase().includes(q)
       );
     });
+    // The follow-up view reads as an agenda: soonest (and overdue) first.
+    return filter === 'followups' ? scheduledFollowups(matched) : matched;
   }, [data, filter, search]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const dueFollowups = data?.rows.filter((r) => r.nextFollowupDate && r.nextFollowupDate <= today) ?? [];
+  // Brewery-local, not UTC: after 8pm Eastern the UTC date is already
+  // tomorrow, which would mark tomorrow's follow-ups as due tonight.
+  const today = breweryLocalDate(new Date().toISOString());
+  const scheduled = data?.rows.filter((r) => r.nextFollowupDate) ?? [];
+  const dueFollowups = scheduled.filter((r) => (r.nextFollowupDate as string) <= today);
   const neverTouched = data?.rows.filter((r) => !r.recentActivityAt).length ?? 0;
 
   const FILTERS: { key: Filter; label: string; count: number }[] = data
@@ -402,6 +464,7 @@ export default function CrmPage() {
         { key: 'lead', label: 'Leads', count: data.counts.lead },
         { key: 'prospect', label: 'Prospects', count: data.counts.prospect },
         { key: 'customer', label: 'Customers', count: data.counts.customer },
+        { key: 'followups', label: 'Follow-ups', count: scheduled.length },
       ]
     : [];
 
@@ -429,12 +492,21 @@ export default function CrmPage() {
           <span style={{ color: 'var(--ruby)' }}>{error}</span>
         ) : data ? (
           <>
-            {dueFollowups.length > 0 && (
+            {scheduled.length > 0 && (
               <>
-                <span className="ledger-num" style={{ color: 'var(--ember)' }}>
-                  {dueFollowups.length}
-                </span>{' '}
-                follow-up{dueFollowups.length === 1 ? '' : 's'} due.{' '}
+                <button
+                  onClick={() => setFilter('followups')}
+                  className="underline"
+                  style={{ color: 'inherit' }}
+                  title="Show only accounts with a follow-up scheduled"
+                >
+                  <span className="ledger-num" style={{ color: dueFollowups.length > 0 ? 'var(--ember)' : undefined }}>
+                    {scheduled.length}
+                  </span>{' '}
+                  follow-up{scheduled.length === 1 ? '' : 's'} scheduled
+                  {dueFollowups.length > 0 && `, ${dueFollowups.length} due`}
+                </button>
+                .{' '}
               </>
             )}
             {data.quiet.length > 0 && (
@@ -600,7 +672,9 @@ export default function CrmPage() {
               </>
             ) : (
               <p className="text-sm italic" style={{ color: 'var(--muted)' }}>
-                Nothing matches. {filter !== 'all' && 'Try All, or clear the search.'}
+                {filter === 'followups' && !search.trim()
+                  ? 'No follow-ups scheduled. Use Follow-up on any row to schedule one.'
+                  : <>Nothing matches. {filter !== 'all' && 'Try All, or clear the search.'}</>}
               </p>
             )}
           </div>
@@ -614,6 +688,7 @@ export default function CrmPage() {
                   <th className="overline text-left py-2">Status</th>
                   <th className="overline text-left py-2">Last touch</th>
                   <th className="overline text-left py-2">Last ordered</th>
+                  <th className="overline text-left py-2">Next follow-up</th>
                   <th className="overline text-right py-2">Actions</th>
                 </tr>
               </thead>
@@ -621,10 +696,11 @@ export default function CrmPage() {
                 {rows.map((row) => {
                   const days = daysAgo(row.recentActivityAt);
                   const cold = days !== null && days >= 45;
-                  const due = row.nextFollowupDate && row.nextFollowupDate <= today;
+                  const fState = followupState(row.nextFollowupDate, today);
+                  const panelOpen = logOpenFor === row.id || followupOpenFor === row.id;
                   return (
                     <Fragment key={row.id}>
-                    <tr style={{ borderBottom: logOpenFor === row.id ? 'none' : '1px solid var(--divider)' }}>
+                    <tr style={{ borderBottom: panelOpen ? 'none' : '1px solid var(--divider)' }}>
                       <td className="table-cell py-2">
                         {row.status === 'customer' ? (
                           <Link
@@ -636,11 +712,6 @@ export default function CrmPage() {
                           </Link>
                         ) : (
                           row.businessName
-                        )}
-                        {due && (
-                          <span className="ml-2 text-xs" style={{ color: 'var(--ember)' }}>
-                            follow-up due
-                          </span>
                         )}
                       </td>
                       <td className="table-cell py-2">
@@ -675,6 +746,30 @@ export default function CrmPage() {
                       <td className="table-cell py-2 font-variant-tabular" style={{ color: row.lastOrderAt ? 'var(--ink)' : 'var(--faint)' }}>
                         {row.lastOrderAt ? formatDate(row.lastOrderAt) : '—'}
                       </td>
+                      <td className="table-cell py-2">
+                        {row.nextFollowupDate ? (
+                          <>
+                            <span
+                              className="font-variant-tabular"
+                              style={{ color: fState === 'upcoming' ? 'var(--ink)' : 'var(--ember)' }}
+                            >
+                              {formatDay(row.nextFollowupDate)}
+                            </span>
+                            {fState !== 'upcoming' && (
+                              <span className="text-xs ml-1" style={{ color: 'var(--ember)' }}>
+                                {fState === 'today' ? 'today' : 'overdue'}
+                              </span>
+                            )}
+                            {row.nextFollowupNotes && (
+                              <span className="block text-xs" style={{ color: 'var(--muted)' }}>
+                                {row.nextFollowupNotes}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--faint)' }}>—</span>
+                        )}
+                      </td>
                       <td className="table-cell py-2 text-right whitespace-nowrap">
                         <span className="flex flex-wrap gap-x-3 gap-y-1 justify-end items-center">
                           <button
@@ -684,6 +779,14 @@ export default function CrmPage() {
                             style={{ color: 'var(--brass)' }}
                           >
                             {logOpenFor === row.id ? 'Close' : 'Log'}
+                          </button>
+                          <button
+                            onClick={() => (followupOpenFor === row.id ? setFollowupOpenFor(null) : openFollowup(row))}
+                            disabled={busy === row.id}
+                            className="text-sm underline"
+                            style={{ color: 'var(--brass)' }}
+                          >
+                            {followupOpenFor === row.id ? 'Close' : 'Follow-up'}
                           </button>
                           {row.email && (
                             <button
@@ -750,7 +853,7 @@ export default function CrmPage() {
                     </tr>
                     {logOpenFor === row.id && (
                       <tr style={{ borderBottom: '1px solid var(--divider)' }}>
-                        <td colSpan={6} className="pb-3">
+                        <td colSpan={7} className="pb-3">
                           <div
                             className="flex flex-wrap items-end gap-2 p-3"
                             style={{ background: 'var(--surface)', border: '1px solid var(--divider)', borderRadius: 4 }}
@@ -794,6 +897,61 @@ export default function CrmPage() {
                               Cancel
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    )}
+                    {followupOpenFor === row.id && (
+                      <tr style={{ borderBottom: '1px solid var(--divider)' }}>
+                        <td colSpan={7} className="pb-3">
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (followupForm.date) saveFollowup(row, followupForm.date);
+                            }}
+                            className="flex flex-wrap items-end gap-2 p-3"
+                            style={{ background: 'var(--surface)', border: '1px solid var(--divider)', borderRadius: 4 }}
+                          >
+                            <div>
+                              <label className="label block mb-1 text-xs">Follow up on</label>
+                              <input
+                                type="date"
+                                required
+                                className="input font-variant-tabular"
+                                value={followupForm.date}
+                                onChange={(e) => setFollowupForm((f) => ({ ...f, date: e.target.value }))}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-[200px]">
+                              <label className="label block mb-1 text-xs">Note (optional)</label>
+                              <input
+                                type="text"
+                                className="input w-full"
+                                maxLength={2000}
+                                placeholder="e.g. Call and ask for Marshall"
+                                value={followupForm.notes}
+                                onChange={(e) => setFollowupForm((f) => ({ ...f, notes: e.target.value }))}
+                              />
+                            </div>
+                            <button className="btn-primary" disabled={busy === row.id || !followupForm.date}>
+                              {busy === row.id ? 'Saving…' : 'Save follow-up'}
+                            </button>
+                            {row.nextFollowupDate && (
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                disabled={busy === row.id}
+                                onClick={() => saveFollowup(row, null)}
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button type="button" className="btn-secondary" onClick={() => setFollowupOpenFor(null)}>
+                              Cancel
+                            </button>
+                            {followupError && (
+                              <p className="w-full text-sm" style={{ color: 'var(--ruby)' }}>{followupError}</p>
+                            )}
+                          </form>
                         </td>
                       </tr>
                     )}

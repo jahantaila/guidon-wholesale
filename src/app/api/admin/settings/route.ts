@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
 import { extractError } from '@/lib/extract-error';
 import { getNotificationEmails, getSetting, setSetting } from '@/lib/data';
+import {
+  parseReminderSettings,
+  FOLLOWUP_REMINDER_SETTINGS_KEY,
+  DEFAULT_FOLLOWUP_REMINDER_SETTINGS,
+} from '@/lib/followup-reminders';
+import { ONBOARDING_VIDEO_SETTING_KEY } from '@/lib/email';
 
 // Opt out of static prerendering. Without this, Next.js sees a GET handler
 // that reads no request data and marks the whole route static — Vercel then
@@ -22,15 +28,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [notificationEmails, deliveryDays, deliveryLeadDays] = await Promise.all([
+    const [notificationEmails, deliveryDays, deliveryLeadDays, followupReminders] = await Promise.all([
       getNotificationEmails(),
       getSetting<number[]>('delivery_days', [2, 4]), // Tue + Thu default
       getSetting<number>('delivery_lead_days', 2),
+      getSetting(FOLLOWUP_REMINDER_SETTINGS_KEY, DEFAULT_FOLLOWUP_REMINDER_SETTINGS),
     ]);
     return NextResponse.json({
       notificationEmails,
       deliveryDays,
       deliveryLeadDays,
+      followupReminders: parseReminderSettings(followupReminders),
+      onboardingVideoUrl: await getSetting<string>(ONBOARDING_VIDEO_SETTING_KEY, ''),
     });
   } catch (err) {
     console.error('[api/admin/settings GET] failed:', err);
@@ -91,13 +100,48 @@ export async function PUT(request: NextRequest) {
     await setSetting('delivery_lead_days', lead);
   }
 
+  // Follow-up reminder emails: on/off + who gets them. Turning them on with
+  // nobody to send to is rejected rather than silently doing nothing.
+  if (body?.followupReminders !== undefined) {
+    const raw = body.followupReminders;
+    const listed = Array.isArray(raw?.recipients) ? raw.recipients : [];
+    const bad = listed.find((e: unknown) => typeof e !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()));
+    if (bad !== undefined) {
+      return NextResponse.json({ error: `Not a valid email: ${String(bad)}` }, { status: 400 });
+    }
+    const next = parseReminderSettings(raw);
+    if (next.enabled && next.recipients.length === 0) {
+      return NextResponse.json(
+        { error: 'Add at least one recipient before turning follow-up reminders on.' },
+        { status: 400 },
+      );
+    }
+    await setSetting(FOLLOWUP_REMINDER_SETTINGS_KEY, next);
+  }
+
+  // Setup-walkthrough link for the "account approved" email. '' removes it.
+  if (typeof body?.onboardingVideoUrl === 'string') {
+    const url = body.onboardingVideoUrl.trim();
+    if (url && !/^https:\/\/\S+$/i.test(url)) {
+      return NextResponse.json({ error: 'The walkthrough link must start with https://' }, { status: 400 });
+    }
+    await setSetting(ONBOARDING_VIDEO_SETTING_KEY, url);
+  }
+
   // Return the fresh settings.
-  const [notificationEmails, deliveryDays, deliveryLeadDays] = await Promise.all([
+  const [notificationEmails, deliveryDays, deliveryLeadDays, followupReminders] = await Promise.all([
     getNotificationEmails(),
     getSetting<number[]>('delivery_days', [2, 4]),
     getSetting<number>('delivery_lead_days', 2),
+    getSetting(FOLLOWUP_REMINDER_SETTINGS_KEY, DEFAULT_FOLLOWUP_REMINDER_SETTINGS),
   ]);
-  return NextResponse.json({ notificationEmails, deliveryDays, deliveryLeadDays });
+  return NextResponse.json({
+    notificationEmails,
+    deliveryDays,
+    deliveryLeadDays,
+    followupReminders: parseReminderSettings(followupReminders),
+    onboardingVideoUrl: await getSetting<string>(ONBOARDING_VIDEO_SETTING_KEY, ''),
+  });
   } catch (err) {
     console.error('[api/admin/settings PUT] failed:', err);
     const message = extractError(err);

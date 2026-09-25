@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Order, Customer, WholesaleApplication, Invoice, Product } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { orderReportDay, breweryLocalDate } from '@/lib/sales-report';
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -160,10 +161,12 @@ export default function AdminDashboard() {
   // client-side means numbers always match what the orders page shows.
   const pendingOrders = orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length;
   const pendingApplications = applications.filter((a) => !a.status || a.status === 'pending').length;
-  // Revenue this month: confirmed + completed orders placed in the current calendar month.
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  // Revenue this month: confirmed + completed orders that count toward the
+  // current calendar month — by reporting date, so a late-entered order filed
+  // under last month is not counted in this month too.
+  const monthStartDay = breweryLocalDate(new Date().toISOString()).slice(0, 8) + '01';
   const totalRevenue = orders
-    .filter((o) => (o.status === 'confirmed' || o.status === 'completed') && new Date(o.createdAt) >= monthStart)
+    .filter((o) => (o.status === 'confirmed' || o.status === 'completed') && orderReportDay(o) >= monthStartDay)
     .reduce((s, o) => s + o.total, 0);
   const totalCustomers = customers.filter((c) => !c.archivedAt).length;
 

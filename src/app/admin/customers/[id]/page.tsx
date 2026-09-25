@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { Customer, Order, Invoice, KegLedgerEntry, KegBalance, RecurringOrder, CrmActivity, CrmActivityType } from '@/lib/types';
 import { CRM_ACTIVITY_LABELS, CRM_ACTIVITY_TYPES } from '@/lib/types';
-import { formatCurrency, formatDate, getStatusColor, cn, formatAddress, formatPhone, US_STATES } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDay, getStatusColor, cn, formatAddress, formatPhone, US_STATES } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
@@ -55,6 +55,7 @@ export default function CustomerDetailPage() {
   const [followupDateDraft, setFollowupDateDraft] = useState('');
   const [followupNotesDraft, setFollowupNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [savingFollowup, setSavingFollowup] = useState(false);
   const [recurringName, setRecurringName] = useState('');
   const [recurringInterval, setRecurringInterval] = useState<number>(7);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
@@ -200,8 +201,6 @@ export default function CustomerDetailPage() {
           notes: notesDraft,
           tags,
           autoSendInvoices: autoSendDraft,
-          nextFollowupDate: followupDateDraft || null,
-          nextFollowupNotes: followupNotesDraft,
         }),
       });
       if (res.ok) {
@@ -217,6 +216,54 @@ export default function CustomerDetailPage() {
     } finally {
       setSavingNotes(false);
       window.setTimeout(() => setToast(''), 3000);
+    }
+  };
+
+  // Follow-up saves on its own button, next to its own fields. It used to ride
+  // along with the notes Save button ABOVE it, so a date typed here and never
+  // followed by a scroll back up was silently lost.
+  const followupDirty =
+    !!customer &&
+    (followupDateDraft !== (customer.nextFollowupDate || '') ||
+      followupNotesDraft !== (customer.nextFollowupNotes || ''));
+
+  useEffect(() => {
+    if (!followupDirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [followupDirty]);
+
+  const saveFollowup = async (clear = false) => {
+    if (!customer) return;
+    setSavingFollowup(true);
+    try {
+      const res = await adminFetch('/api/admin/crm/followup', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subjectId: customer.id,
+          date: clear ? null : followupDateDraft || null,
+          notes: followupNotesDraft,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setCustomer({ ...customer, nextFollowupDate: data.nextFollowupDate, nextFollowupNotes: data.nextFollowupNotes });
+        setFollowupDateDraft(data.nextFollowupDate || '');
+        setFollowupNotesDraft(data.nextFollowupNotes || '');
+        setToast(data.nextFollowupDate ? `Follow-up saved for ${formatDay(data.nextFollowupDate)}.` : 'Follow-up cleared.');
+      } else {
+        setToast(data?.error || 'The follow-up did not save.');
+      }
+    } catch {
+      setToast('The follow-up did not save.');
+    } finally {
+      setSavingFollowup(false);
+      window.setTimeout(() => setToast(''), 4000);
     }
   };
 
@@ -453,7 +500,7 @@ export default function CustomerDetailPage() {
             {customer.nextFollowupDate && (
               <span style={{ color: followupDue ? 'var(--ember)' : 'var(--muted)' }}>
                 <span style={{ color: 'var(--faint)' }}>Next follow-up:</span>{' '}
-                <span className="font-semibold">{formatDate(customer.nextFollowupDate)}</span>
+                <span className="font-semibold">{formatDay(customer.nextFollowupDate)}</span>
                 {followupDue && ' (due)'}
               </span>
             )}
@@ -585,9 +632,9 @@ export default function CustomerDetailPage() {
             {savingNotes ? 'Saving...' : 'Save'}
           </button>
         </div>
-        {/* CRM: next scheduled visit / follow-up + comments. Saved together
-            with notes + tags on the Save button above. */}
-        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-3 mt-4 pt-4 border-t border-divider">
+        {/* CRM: next scheduled visit / follow-up + comments. Its own Save —
+            the same record the CRM list edits. */}
+        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-3 mt-4 pt-4 border-t border-divider items-end">
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>
               Next visit / follow-up
@@ -611,6 +658,25 @@ export default function CustomerDetailPage() {
               className="input w-full text-sm"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => saveFollowup()}
+              disabled={savingFollowup || !followupDirty || !followupDateDraft}
+              className="btn-primary text-sm"
+            >
+              {savingFollowup ? 'Saving…' : 'Save follow-up'}
+            </button>
+            {customer.nextFollowupDate && (
+              <button onClick={() => saveFollowup(true)} disabled={savingFollowup} className="btn-secondary text-sm">
+                Clear
+              </button>
+            )}
+          </div>
+          {followupDirty && !savingFollowup && (
+            <p className="text-xs sm:col-span-3" style={{ color: 'var(--ember)' }}>
+              Follow-up not saved yet.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-4 pt-4 border-t border-divider">
           <input

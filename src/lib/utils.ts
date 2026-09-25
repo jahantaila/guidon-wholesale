@@ -13,6 +13,16 @@ export function formatDate(dateString: string): string {
   });
 }
 
+/**
+ * A calendar day stored as YYYY-MM-DD (follow-up dates, reporting dates).
+ * formatDate would parse it as UTC midnight and show the PREVIOUS day
+ * anywhere west of Greenwich — a follow-up set for Sep 29 read "Sep 28".
+ * Anchoring at local noon keeps the day the user picked.
+ */
+export function formatDay(ymd: string): string {
+  return formatDate(`${ymd}T12:00:00`);
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }

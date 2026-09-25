@@ -82,7 +82,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await createCrmActivity(activity), { status: 201 });
   } catch (err) {
     console.error('[crm/activities POST] failed:', err);
-    return NextResponse.json({ error: extractError(err) }, { status: 500 });
+    const message = extractError(err);
+    // A new activity type ships in code before the database constraint is
+    // widened. Say that, rather than surfacing a raw check-violation.
+    if (/crm_activities_type_check/.test(message)) {
+      return NextResponse.json(
+        { error: 'That activity type is not enabled in the database yet (migration 003).' },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

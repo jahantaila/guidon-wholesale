@@ -219,6 +219,15 @@ function ConfirmationContent() {
           )}
         </div>
 
+        {adminMode && orderId && (
+          <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+            Entering last month&rsquo;s order late?{' '}
+            <Link href={`/admin/orders/${orderId}#reporting-date`} className="underline" style={{ color: 'var(--brass)' }}>
+              Set its order date
+            </Link>{' '}
+            so it lands in that month&rsquo;s report.
+          </p>
+        )}
         {adminMode ? (
           <div className="flex flex-col sm:flex-row gap-3">
             <Link

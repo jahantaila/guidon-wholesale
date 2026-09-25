@@ -172,3 +172,12 @@ describe("US_STATES constant", () => {
     }
   });
 });
+
+import { formatDay } from "@/lib/utils";
+
+describe("formatDay", () => {
+  it("keeps the picked calendar day (no UTC slip to the day before)", () => {
+    expect(formatDay("2026-09-29")).toMatch(/Sep 29, 2026/);
+    expect(formatDay("2026-08-01")).toMatch(/Aug 1, 2026/);
+  });
+});

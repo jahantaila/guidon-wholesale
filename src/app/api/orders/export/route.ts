@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAdminRequest } from '@/lib/auth-check';
 import { getOrders, getCustomers } from '@/lib/data';
+import { orderReportDay } from '@/lib/sales-report';
 
 /**
  * GET /api/orders/export
@@ -18,6 +19,9 @@ export async function GET(request: NextRequest) {
   const headers = [
     'Order ID',
     'Date Placed',
+    // The day the order counts toward in reports. Same as Date Placed unless
+    // the admin filed a late-entered order under an earlier month.
+    'Order Date (for reports)',
     'Status',
     'Customer',
     'Customer Email',
@@ -40,6 +44,7 @@ export async function GET(request: NextRequest) {
       rows.push([
         o.id,
         new Date(o.createdAt).toLocaleDateString(),
+        orderReportDay(o),
         o.status,
         cust?.businessName || o.customerId,
         cust?.email || '',

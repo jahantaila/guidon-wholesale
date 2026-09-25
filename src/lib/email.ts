@@ -18,7 +18,7 @@
  */
 
 import { Resend } from 'resend';
-import { getNotificationEmails } from './data';
+import { getNotificationEmails, getSetting } from './data';
 
 type SendArgs = {
   to: string | string[];
@@ -564,6 +564,25 @@ export async function notifyRecurringHeadsUp(args: {
   });
 }
 
+export const ONBOARDING_VIDEO_SETTING_KEY = 'onboarding_video_url';
+
+/**
+ * Link to the account-setup walkthrough video, if one has been set in
+ * Settings (or ONBOARDING_VIDEO_URL). https only; anything else is ignored
+ * so a typo can't put a broken or unsafe link in front of a new customer.
+ * A settings read failure must never block the welcome email itself.
+ */
+export async function onboardingVideoUrl(): Promise<string | null> {
+  let url = '';
+  try {
+    url = (await getSetting<string>(ONBOARDING_VIDEO_SETTING_KEY, '')) || '';
+  } catch {
+    url = '';
+  }
+  url = (url || cleanEnvString(process.env.ONBOARDING_VIDEO_URL) || '').trim();
+  return /^https:\/\/\S+$/i.test(url) ? url : null;
+}
+
 /**
  * Application decision. Called when an admin approves or rejects an
  * application. Includes portal login info on approval.
@@ -578,6 +597,7 @@ export async function notifyApplicationDecision(args: {
   tempPassword?: string;
 }): Promise<void> {
   if (args.decision === 'approved') {
+    const videoUrl = await onboardingVideoUrl();
     await send({
       to: args.applicantEmail,
       subject: `Guidon Brewing Co. — ${args.businessName} is approved`,
@@ -597,6 +617,12 @@ export async function notifyApplicationDecision(args: {
               ? `<p style="margin:12px 0;font-size:13px;">Your temporary password: <code style="background:#EEE5CE;padding:2px 6px;">${escapeHtml(args.tempPassword)}</code> &mdash; change it on first login.</p>`
               : ''
           }
+          ${
+            videoUrl
+              ? `<p style="margin:16px 0 0;">New to the portal? <a href="${escapeHtml(videoUrl)}" style="color:#9E7A3B;font-weight:600;">Watch the short setup walkthrough &rarr;</a></p>
+                 <p style="margin:4px 0 0;font-size:13px;color:#6B5F48;">Signing in, setting your password, and placing your first order.</p>`
+              : ''
+          }
         `,
       }),
     });
@@ -614,4 +640,44 @@ export async function notifyApplicationDecision(args: {
       }),
     });
   }
+}
+
+/** Admin base URL for links in brewery-internal emails. */
+export function adminBaseUrl(): string {
+  return (cleanEnvString(process.env.NEXT_PUBLIC_APP_URL) || 'https://guidon-wholesale.vercel.app').replace(/\/$/, '');
+}
+
+/**
+ * Follow-up reminder to the brewery (never to a customer). One per follow-up
+ * per kind: the day before and the day of.
+ */
+export async function notifyFollowupReminder(args: {
+  to: string[];
+  businessName: string;
+  followupDate: string;
+  notes: string;
+  kind: 'day_before' | 'day_of';
+  path: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const when = new Date(`${args.followupDate}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'short', day: 'numeric',
+  });
+  const lead = args.kind === 'day_of' ? 'Today' : 'Tomorrow';
+  const link = `${adminBaseUrl()}${args.path}`;
+  return send({
+    to: args.to,
+    subject: `${lead}: follow up with ${args.businessName}`,
+    html: emailShell({
+      title: `${lead}: follow up with ${escapeHtml(args.businessName)}`,
+      preheader: args.notes || `Follow-up scheduled for ${when}.`,
+      body: `
+        <p style="margin:12px 0;">Scheduled follow-up with <strong>${escapeHtml(args.businessName)}</strong> on <strong style="color:#9E7A3B;">${escapeHtml(when)}</strong>.</p>
+        ${args.notes ? `<p style="margin:12px 0;font-style:italic;">&ldquo;${escapeHtml(args.notes)}&rdquo;</p>` : ''}
+        <p style="margin:16px 0;">
+          <a href="${link}" style="display:inline-block;background:#9E7A3B;color:#F5EFDF;padding:10px 18px;text-decoration:none;font-weight:600;">Open follow-up &rarr;</a>
+        </p>
+        <p style="margin:20px 0 0;font-size:13px;color:#6B5F48;">Log the call or move the date from the CRM once it&rsquo;s done.</p>
+      `,
+    }),
+  });
 }
