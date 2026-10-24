@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Invoice, InvoiceStatus, Customer, Order } from '@/lib/types';
 import { formatCurrency, formatDate, getStatusColor, cn, formatAddress } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
+import { invoiceBreakdown } from '@/lib/order-math';
 
 type FilterStatus = InvoiceStatus | 'all';
 type ViewMode = 'table' | 'cards';
@@ -163,6 +164,7 @@ export default function InvoicesPage() {
     // request 2026-04-29.
     const sourceOrder = orders.find((o) => o.id === inv.orderId);
     const kegReturns = sourceOrder?.kegReturns || [];
+    const money = invoiceBreakdown(inv);
     const paymentLabel: Record<string, string> = {
       check: 'Check',
       fintech: 'Fintech',
@@ -309,7 +311,7 @@ export default function InvoicesPage() {
                 </tbody>
               </table>
               <p className="text-[11px] italic text-amber-700 mt-2">
-                Deposit credits apply to your account once the brewery confirms the empties on receipt.
+                Deposit credit for these empties is applied to this invoice (see Keg Returns Credit below).
               </p>
             </div>
           )}
@@ -322,8 +324,14 @@ export default function InvoicesPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Keg Deposits</span>
-                <span className="text-gray-800">{formatCurrency(inv.totalDeposit)}</span>
+                <span className="text-gray-800">{formatCurrency(money.depositsCharged)}</span>
               </div>
+              {money.returnsCredit > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-emerald-700">Keg Returns Credit</span>
+                  <span className="text-emerald-700">&minus;{formatCurrency(money.returnsCredit)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-black text-xl border-t-2 border-gray-900 pt-3 mt-3">
                 <span className="text-gray-900">Total</span>
                 <span className="text-gray-900">{formatCurrency(inv.total)}</span>

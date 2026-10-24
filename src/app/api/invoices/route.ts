@@ -4,6 +4,7 @@ import { isAdminRequest, authContext } from '@/lib/auth-check';
 import { getInvoices, createInvoice, updateInvoice, getCustomers, getOrder } from '@/lib/data';
 import { send, formatCurrencyForEmail } from '@/lib/email';
 import { generateId } from '@/lib/utils';
+import { invoiceBreakdown } from '@/lib/order-math';
 import type { Invoice } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
@@ -147,6 +148,7 @@ async function fireInvoiceEmail(invoice: Invoice) {
   const [customers, order] = await Promise.all([getCustomers(), getOrder(invoice.orderId)]);
   const customer = customers.find((c) => c.id === invoice.customerId);
   if (!customer) return;
+  const money = invoiceBreakdown(invoice);
   const rows = invoice.items.map((i) => `
     <tr>
       <td style="padding:4px 8px;border-bottom:1px solid #EEE5CE;">${escapeHtml(i.productName)}</td>
@@ -174,7 +176,8 @@ async function fireInvoiceEmail(invoice: Invoice) {
     </table>
     <div style="font-size:14px;color:#6B5F48;">
       Subtotal: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(invoice.subtotal)}</span><br/>
-      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(invoice.totalDeposit)}</span><br/>
+      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(money.depositsCharged)}</span><br/>
+      ${money.returnsCredit > 0 ? `Keg returns credit: <span style="color:#2F5436;font-family:monospace;">&minus;${formatCurrencyForEmail(money.returnsCredit)}</span><br/>` : ''}
       <strong style="color:#2A2416;">Total due: <span style="font-family:monospace;color:#9E7A3B;">${formatCurrencyForEmail(invoice.total)}</span></strong>
     </div>
   </td></tr>

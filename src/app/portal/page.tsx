@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Customer, Order, OrderItem, Invoice, KegLedgerEntry, KegSize, KegBalance, Product, ProductSize, CartItem, KegReturn, RecurringOrder } from '@/lib/types';
 import { KEG_DEPOSITS } from '@/lib/types';
+import { invoiceBreakdown } from '@/lib/order-math';
 import { formatCurrency, formatDate, cn, getStatusColor, US_STATES, formatAddress } from '@/lib/utils';
 import { useBodyScrollLock } from '@/lib/use-body-scroll-lock';
 import { portalFetch, setPortalToken } from '@/lib/portal-fetch';
@@ -1908,14 +1909,17 @@ function InvoicesTab({ invoices, orders, loading, customer }: { invoices: Invoic
                 </tbody>
               </table>
               <p className="text-[11px] italic text-amber-700 mt-2">
-                Deposit credits apply to your account once the brewery confirms the empties on receipt.
+                Deposit credit for these empties is applied to this invoice (see Keg Returns Credit below).
               </p>
             </div>
           )}
           <div className="flex justify-end">
             <div className="w-72 space-y-2">
               <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span>{formatCurrency(printing.subtotal)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-gray-500">Keg Deposits</span><span>{formatCurrency(printing.totalDeposit)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-gray-500">Keg Deposits</span><span>{formatCurrency(invoiceBreakdown(printing).depositsCharged)}</span></div>
+              {invoiceBreakdown(printing).returnsCredit > 0 && (
+                <div className="flex justify-between text-sm"><span className="text-emerald-700">Keg Returns Credit</span><span className="text-emerald-700">&minus;{formatCurrency(invoiceBreakdown(printing).returnsCredit)}</span></div>
+              )}
               <div className="flex justify-between font-black text-xl border-t-2 border-gray-900 pt-2 mt-2"><span>Total</span><span>{formatCurrency(printing.total)}</span></div>
             </div>
           </div>

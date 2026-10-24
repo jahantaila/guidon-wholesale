@@ -4,7 +4,7 @@ import { extractError } from '@/lib/extract-error';
 import { getProducts, getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, deleteOrderKegDeposits, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, OrderItem, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
-import { KEG_DEPOSITS } from '@/lib/types';
+import { computeOrderTotals, invoiceBreakdown } from '@/lib/order-math';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -177,15 +177,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Money is recomputed server-side from the items + declared returns — the
+  // client's totals are ignored. A stale or buggy checkout once saved orders
+  // whose total didn't include the keg-returns credit, and the invoice
+  // inherited the wrong price.
+  const kegReturns = sanitizeKegReturns(body.kegReturns);
+  const money = computeOrderTotals(body.items as OrderItem[], kegReturns);
   const order: Order = {
     id: generateId('ord'),
     customerId,
     status: 'pending',
     items: body.items,
-    kegReturns: body.kegReturns || [],
-    subtotal: typeof body.subtotal === 'number' ? body.subtotal : 0,
-    totalDeposit: typeof body.totalDeposit === 'number' ? body.totalDeposit : 0,
-    total: typeof body.total === 'number' ? body.total : 0,
+    kegReturns,
+    subtotal: money.subtotal,
+    totalDeposit: money.totalDeposit,
+    total: money.total,
     // Per-order delivery dates were removed in 2026-04-29; brewery delivers
     // Thursdays + Fridays and admin schedules from the queue.
     deliveryDate: null,
@@ -269,6 +275,45 @@ export async function PUT(request: NextRequest) {
   // non-paid invoice. No customer email is sent (product decision
   // 2026-08-14: Mike already spoke to them). This branch returns on its own;
   // an edit never also transitions status in the same request.
+  // ── Admin keg-returns edit ───────────────────────────────────────────
+  // A payload carrying `kegReturns` but no `items` records the empties Mike
+  // ACTUALLY picked up, which often differs from what the customer declared
+  // at checkout. Only the price changes: the order total and any non-paid
+  // invoice get the new returns credit. Inventory and the keg ledger don't
+  // move (ledger returns are still recorded in the Keg Tracker). Allowed on
+  // completed orders too, since the count is usually settled at delivery.
+  if (Array.isArray(updates.kegReturns) && !Array.isArray(updates.items)) {
+    if (existingOrder.status === 'cancelled') {
+      return NextResponse.json(
+        { error: 'This order is cancelled and can no longer be edited.' },
+        { status: 409 },
+      );
+    }
+    const kegReturns = sanitizeKegReturns(updates.kegReturns);
+    const { subtotal, totalDeposit, total } = computeOrderTotals(existingOrder.items, kegReturns);
+    const updatedOrder = await updateOrder(id, { kegReturns, subtotal, totalDeposit, total });
+    if (!updatedOrder) {
+      return NextResponse.json(
+        { error: 'Could not save the keg returns. Reload the order and try again.' },
+        { status: 500 },
+      );
+    }
+    // Same rule as the item edit: a paid invoice is never rewritten.
+    let invoiceSynced = true;
+    let paidInvoiceUntouched = false;
+    try {
+      const allInvoices = await getInvoices();
+      for (const inv of allInvoices.filter((i) => i.orderId === existingOrder.id)) {
+        if (inv.status === 'paid') { paidInvoiceUntouched = true; continue; }
+        await updateInvoice(inv.id, { subtotal, totalDeposit, total });
+      }
+    } catch (err) {
+      invoiceSynced = false;
+      console.error('[order returns edit] invoice sync failed (non-fatal):', err);
+    }
+    return NextResponse.json({ ...updatedOrder, invoiceSynced, paidInvoiceUntouched });
+  }
+
   if (Array.isArray(updates.items)) {
     if (existingOrder.status === 'completed' || existingOrder.status === 'cancelled') {
       return NextResponse.json(
@@ -314,24 +359,11 @@ export async function PUT(request: NextRequest) {
     // Keg returns: replace them if the payload supplies an array, otherwise
     // keep what's already on the order.
     const kegReturns = Array.isArray(updates.kegReturns)
-      ? (updates.kegReturns as { size: string; quantity: number }[])
-          .filter((r) => r && typeof r.size === 'string' && Number(r.quantity) > 0)
-          .map((r) => ({ size: String(r.size), quantity: Math.floor(Number(r.quantity)) }))
+      ? sanitizeKegReturns(updates.kegReturns)
       : existingOrder.kegReturns;
 
     // Money is recomputed server-side — never trust client totals.
-    const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-    const depositsOut = items.reduce((s, i) => s + i.deposit * i.quantity, 0);
-    const returnsCredit = kegReturns.reduce((s, r) => {
-      // Credit from the canonical KEG_DEPOSITS table — exactly how checkout
-      // (order/page.tsx) priced the order. Returns are empties from any past
-      // order, NOT necessarily this cart, so matching to a current line item
-      // would silently change the credit (and overbill) when the returned size
-      // isn't among the edited items.
-      return s + (KEG_DEPOSITS[r.size] ?? 0) * r.quantity;
-    }, 0);
-    const totalDeposit = depositsOut - returnsCredit;
-    const total = subtotal + totalDeposit;
+    const { subtotal, totalDeposit, total } = computeOrderTotals(items, kegReturns);
 
     // Inventory + keg ledger only move for a CONFIRMED order: a pending order
     // hasn't reserved stock or posted deposits yet (both happen on confirm),
@@ -589,6 +621,7 @@ export async function PUT(request: NextRequest) {
 
 /** Build + send the invoice HTML email. Mirrors /api/invoices fireInvoiceEmail. */
 async function fireInvoiceEmail(invoice: Invoice, customer: Customer) {
+  const money = invoiceBreakdown(invoice);
   const rows = invoice.items.map((i) => `
     <tr>
       <td style="padding:4px 8px;border-bottom:1px solid #EEE5CE;">${escapeHtml(i.productName)}</td>
@@ -616,7 +649,8 @@ async function fireInvoiceEmail(invoice: Invoice, customer: Customer) {
     </table>
     <div style="font-size:14px;color:#6B5F48;">
       Subtotal: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(invoice.subtotal)}</span><br/>
-      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(invoice.totalDeposit)}</span><br/>
+      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(money.depositsCharged)}</span><br/>
+      ${money.returnsCredit > 0 ? `Keg returns credit: <span style="color:#2F5436;font-family:monospace;">&minus;${formatCurrencyForEmail(money.returnsCredit)}</span><br/>` : ''}
       <strong style="color:#2A2416;">Total due: <span style="font-family:monospace;color:#9E7A3B;">${formatCurrencyForEmail(invoice.total)}</span></strong>
     </div>
   </td></tr>
@@ -633,4 +667,18 @@ async function fireInvoiceEmail(invoice: Invoice, customer: Customer) {
 
 function escapeHtml(s: string): string {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+}
+
+/** Drop malformed / zero rows and merge duplicate sizes so a return row can't
+ * be double-counted. */
+function sanitizeKegReturns(raw: unknown): { size: string; quantity: number }[] {
+  if (!Array.isArray(raw)) return [];
+  const bySize = new Map<string, number>();
+  for (const r of raw as { size?: unknown; quantity?: unknown }[]) {
+    if (!r || typeof r.size !== 'string' || !r.size.trim()) continue;
+    const qty = Math.floor(Number(r.quantity));
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    bySize.set(r.size, (bySize.get(r.size) || 0) + qty);
+  }
+  return Array.from(bySize, ([size, quantity]) => ({ size, quantity }));
 }
