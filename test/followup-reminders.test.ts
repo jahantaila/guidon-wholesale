@@ -82,11 +82,21 @@ vi.mock("@/lib/data", () => ({
   }),
 }));
 vi.mock("@/lib/email", () => ({ notifyFollowupReminder: h.send }));
+// Real caller detection; the once-per-12h guard is covered in cron-auth.test.
+vi.mock("@/lib/cron-auth", async (orig) => ({
+  ...(await orig<typeof import("@/lib/cron-auth")>()),
+  claimCronRun: vi.fn(async () => true),
+}));
 vi.mock("@/lib/sales-report", () => ({ breweryLocalDate: () => h.today }));
 
 import { GET } from "@/app/api/cron/followup-reminders/route";
 
-function cron(query = "", headers: Record<string, string> = { "x-vercel-cron": "1" }) {
+// What Vercel's scheduler actually sends (no CRON_SECRET configured).
+const SCHEDULER = { "user-agent": "vercel-cron/1.0", "x-vercel-cron-schedule": "0 12 * * *" };
+const SECRET = { authorization: "Bearer test-cron-secret" };
+process.env.CRON_SECRET = "test-cron-secret";
+
+function cron(query = "", headers: Record<string, string> = SCHEDULER) {
   return GET(new Request(`https://x.test/api/cron/followup-reminders${query}`, { headers }) as never);
 }
 
@@ -105,8 +115,22 @@ beforeEach(() => {
 });
 
 describe("GET /api/cron/followup-reminders", () => {
-  it("rejects unauthenticated calls", async () => {
+  it("rejects unauthenticated calls, including the old header Vercel never sent", async () => {
     expect((await cron("", {})).status).toBe(401);
+    expect((await cron("", { "x-vercel-cron": "1" })).status).toBe(401);
+    expect((await cron("", { authorization: "Bearer wrong" })).status).toBe(401);
+  });
+
+  it("accepts the real secret too", async () => {
+    expect((await cron("", SECRET)).status).toBe(200);
+  });
+
+  it("the scheduler (no secret) cannot use dryRun or testTo: it just does the normal run", async () => {
+    const body = await (await cron("?dryRun=1&testTo=attacker@evil.test&today=2026-09-29")).json();
+    expect(body.dryRun).toBeUndefined();
+    expect(body.test).toBeUndefined();
+    expect(body.today).toBe("2026-09-28");
+    expect(h.send.mock.calls.every((c) => (c[0].to as string[])[0] === "mike@guidon.test")).toBe(true);
   });
 
   it("sends the day-before reminder to the configured recipients only", async () => {
@@ -160,7 +184,7 @@ describe("GET /api/cron/followup-reminders", () => {
   });
 
   it("dryRun previews without sending or claiming", async () => {
-    const body = await (await cron("?dryRun=1&today=2026-09-29")).json();
+    const body = await (await cron("?dryRun=1&today=2026-09-29", SECRET)).json();
     expect(body.reminders.map((r: { kind: string }) => r.kind)).toEqual(["day_of"]);
     expect(h.send).not.toHaveBeenCalled();
     expect(h.claimed.size).toBe(0);
@@ -168,12 +192,12 @@ describe("GET /api/cron/followup-reminders", () => {
 
   it("testTo sends only to the internal test address, even when off, and records nothing", async () => {
     h.settings = { enabled: false, recipients: [] };
-    const body = await (await cron("?testTo=jahan@derbydigital.test")).json();
+    const body = await (await cron("?testTo=jahan@derbydigital.test", SECRET)).json();
     expect(body.test).toBe(true);
     expect(h.send).toHaveBeenCalledTimes(1);
     expect(h.send.mock.calls[0][0].to).toEqual(["jahan@derbydigital.test"]);
     expect(h.claimed.size).toBe(0);
-    expect((await cron("?testTo=not-an-email")).status).toBe(400);
+    expect((await cron("?testTo=not-an-email", SECRET)).status).toBe(400);
   });
 
   it("ignores a forced 'today' on the live path", async () => {
