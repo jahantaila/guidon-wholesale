@@ -1,6 +1,7 @@
 import { computeOrderTotals, noChargeItems } from '@/lib/order-math';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
+import { cronCaller, claimCronRun } from '@/lib/cron-auth';
 import {
   getDueRecurringOrders,
   getUpcomingRecurringOrders,
@@ -21,20 +22,11 @@ import type { Order, Invoice } from '@/lib/types';
  * next_run_at by intervalDays, draft invoice, notify. Admin reviews and
  * confirms like any other order.
  *
- * Auth: requires either the Vercel cron header (x-vercel-cron) or a
+ * Auth: see lib/cron-auth. Previously required an x-vercel-cron header or a
  * CRON_SECRET header match, so random callers can't spam-fire orders.
  */
 export const dynamic = 'force-dynamic';
 
-function authorized(request: NextRequest): boolean {
-  if (request.headers.get('x-vercel-cron')) return true;
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return false;
-  const provided = request.headers.get('authorization') || request.headers.get('x-cron-secret');
-  if (!provided) return false;
-  const token = provided.startsWith('Bearer ') ? provided.slice(7) : provided;
-  return token === expected;
-}
 
 async function runCron() {
   const [due, upcoming, customers] = await Promise.all([
@@ -144,10 +136,14 @@ async function runCron() {
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) {
+  const caller = cronCaller(request);
+  if (!caller) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
+    if (!(await claimCronRun('recurring-orders', caller, 12))) {
+      return NextResponse.json({ ok: true, skipped: 'already ran recently' });
+    }
     const result = await runCron();
     return NextResponse.json(result);
   } catch (err) {

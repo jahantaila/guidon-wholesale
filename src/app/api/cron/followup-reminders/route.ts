@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
+import { cronCaller, claimCronRun } from '@/lib/cron-auth';
 import {
   getCustomers,
   getCrmContacts,
@@ -30,32 +31,27 @@ import {
  * nothing twice. Moving a follow-up to a new date is a new key, so the new
  * date gets its own reminders.
  *
- * Query params (all require the cron secret):
+ * Query params (all require the cron secret; ignored for the scheduler):
  *   dryRun=1        list what would send; send and record nothing
  *   testTo=<email>  send today's reminders ONLY to that address, ignoring the
  *                   enabled flag and recording nothing — the internal test
  *                   path, so nothing reaches the real recipients
  *
- * Auth: Vercel cron header or CRON_SECRET bearer.
+ * Auth: see lib/cron-auth (Vercel scheduler, rate-limited; or CRON_SECRET).
  */
 export const dynamic = 'force-dynamic';
 
-function authorized(request: NextRequest): boolean {
-  if (request.headers.get('x-vercel-cron')) return true;
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return false;
-  const provided = request.headers.get('authorization') || request.headers.get('x-cron-secret');
-  if (!provided) return false;
-  const token = provided.startsWith('Bearer ') ? provided.slice(7) : provided;
-  return token === expected;
-}
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) {
+  const caller = cronCaller(request);
+  if (!caller) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const params = new URL(request.url).searchParams;
+    // Test / preview options need the real secret: a spoofed scheduler call
+    // must not be able to mail reminders to an arbitrary address or read
+    // customer names back.
+    const params = caller === 'secret' ? new URL(request.url).searchParams : new URLSearchParams();
     const dryRun = params.get('dryRun') === '1';
     const testTo = (params.get('testTo') || '').trim().toLowerCase();
     if (testTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testTo)) {
@@ -95,6 +91,10 @@ export async function GET(request: NextRequest) {
         results.push({ ...r, ok: res.ok, error: res.error });
       }
       return NextResponse.json({ ok: true, test: true, today, to: testTo, results });
+    }
+
+    if (!(await claimCronRun('followup-reminders', caller, 12))) {
+      return NextResponse.json({ ok: true, skipped: 'already ran recently', today });
     }
 
     if (!settings.enabled || settings.recipients.length === 0) {
