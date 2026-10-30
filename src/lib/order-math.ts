@@ -21,9 +21,25 @@ export interface OrderTotals {
   total: number;
 }
 
+/** No-charge account (the brewery's own taproom): every line is priced at $0,
+ * deposits included, so the order still records what beer went out (volume
+ * reports, inventory, kegs) without counting as revenue. */
+export function noChargeItems<T extends OrderItem>(items: T[]): T[] {
+  return items.map((i) => ({ ...i, unitPrice: 0, deposit: 0 }));
+}
+
 /** Single source of truth for an order's money. Checkout, the order POST, the
- * admin edit PUT and the invoice all agree because they all call this. */
-export function computeOrderTotals(items: OrderItem[], kegReturns: KegReturn[]): OrderTotals {
+ * admin edit PUT and the invoice all agree because they all call this.
+ * `noCharge` zeroes everything, keg-returns credit too: an internal account
+ * pays no deposit, so a credit would only push the invoice below $0. */
+export function computeOrderTotals(
+  items: OrderItem[],
+  kegReturns: KegReturn[],
+  opts: { noCharge?: boolean } = {},
+): OrderTotals {
+  if (opts.noCharge) {
+    return { subtotal: 0, depositsOut: 0, returnsCredit: 0, totalDeposit: 0, total: 0 };
+  }
   const subtotal = round2(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
   const depositsOut = round2(items.reduce((s, i) => s + i.deposit * i.quantity, 0));
   const returnsCredit = returnsCreditFor(kegReturns);

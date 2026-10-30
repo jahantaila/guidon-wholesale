@@ -39,6 +39,10 @@ export interface Customer {
   nextFollowupDate?: string | null;
   /** CRM: free-form comments for the scheduled follow-up. Admin-only. */
   nextFollowupNotes?: string;
+  /** No-charge account (e.g. the brewery's own taproom): orders are priced at
+   * $0 so invoices don't inflate revenue. Stored in the settings table under
+   * NO_CHARGE_SETTINGS_KEY, not a customers column, so it needs no migration. */
+  noCharge?: boolean;
   createdAt: string;
 }
 

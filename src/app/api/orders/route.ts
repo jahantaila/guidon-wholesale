@@ -4,7 +4,7 @@ import { extractError } from '@/lib/extract-error';
 import { getProducts, getOrders, createOrder, updateOrder, getOrder, createInvoice, getInvoices, updateInvoice, addKegLedgerEntry, deleteOrderKegDeposits, adjustProductInventory, getCustomers } from '@/lib/data';
 import { generateId } from '@/lib/utils';
 import type { Order, OrderItem, Invoice, KegLedgerEntry, Customer } from '@/lib/types';
-import { computeOrderTotals, invoiceBreakdown } from '@/lib/order-math';
+import { computeOrderTotals, invoiceBreakdown, noChargeItems } from '@/lib/order-math';
 import { notifyOrderPlaced, notifyOrderStatusChanged, notifyLowStock, send, formatCurrencyForEmail } from '@/lib/email';
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -181,13 +181,17 @@ export async function POST(request: NextRequest) {
   // client's totals are ignored. A stale or buggy checkout once saved orders
   // whose total didn't include the keg-returns credit, and the invoice
   // inherited the wrong price.
+  // A no-charge account (the brewery's own taproom) is priced at $0 whatever
+  // the catalog says, so its invoice never counts as revenue.
   const kegReturns = sanitizeKegReturns(body.kegReturns);
-  const money = computeOrderTotals(body.items as OrderItem[], kegReturns);
+  const noCharge = matchedCustomer.noCharge === true;
+  const orderItems = noCharge ? noChargeItems(body.items as OrderItem[]) : body.items;
+  const money = computeOrderTotals(orderItems, kegReturns, { noCharge });
   const order: Order = {
     id: generateId('ord'),
     customerId,
     status: 'pending',
-    items: body.items,
+    items: orderItems,
     kegReturns,
     subtotal: money.subtotal,
     totalDeposit: money.totalDeposit,
@@ -290,7 +294,8 @@ export async function PUT(request: NextRequest) {
       );
     }
     const kegReturns = sanitizeKegReturns(updates.kegReturns);
-    const { subtotal, totalDeposit, total } = computeOrderTotals(existingOrder.items, kegReturns);
+    const noCharge = await isNoChargeCustomer(existingOrder.customerId);
+    const { subtotal, totalDeposit, total } = computeOrderTotals(existingOrder.items, kegReturns, { noCharge });
     const updatedOrder = await updateOrder(id, { kegReturns, subtotal, totalDeposit, total });
     if (!updatedOrder) {
       return NextResponse.json(
@@ -344,7 +349,8 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const items: OrderItem[] = rawItems.map((raw) => {
+    const noCharge = await isNoChargeCustomer(existingOrder.customerId);
+    const editedItems: OrderItem[] = rawItems.map((raw) => {
       const it = raw as Record<string, unknown>;
       return {
         productId: String(it.productId),
@@ -355,6 +361,7 @@ export async function PUT(request: NextRequest) {
         deposit: typeof it.deposit === 'number' && Number.isFinite(it.deposit) ? it.deposit : 0,
       };
     });
+    const items = noCharge ? noChargeItems(editedItems) : editedItems;
 
     // Keg returns: replace them if the payload supplies an array, otherwise
     // keep what's already on the order.
@@ -363,7 +370,7 @@ export async function PUT(request: NextRequest) {
       : existingOrder.kegReturns;
 
     // Money is recomputed server-side — never trust client totals.
-    const { subtotal, totalDeposit, total } = computeOrderTotals(items, kegReturns);
+    const { subtotal, totalDeposit, total } = computeOrderTotals(items, kegReturns, { noCharge });
 
     // Inventory + keg ledger only move for a CONFIRMED order: a pending order
     // hasn't reserved stock or posted deposits yet (both happen on confirm),
@@ -681,4 +688,11 @@ function sanitizeKegReturns(raw: unknown): { size: string; quantity: number }[] 
     bySize.set(r.size, (bySize.get(r.size) || 0) + qty);
   }
   return Array.from(bySize, ([size, quantity]) => ({ size, quantity }));
+}
+
+/** Uses getCustomers (archived included) rather than getCustomer so an order
+ * for an archived account still resolves. */
+async function isNoChargeCustomer(customerId: string): Promise<boolean> {
+  const customers = await getCustomers(true);
+  return customers.find((c) => c.id === customerId)?.noCharge === true;
 }

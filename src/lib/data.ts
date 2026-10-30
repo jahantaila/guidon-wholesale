@@ -215,27 +215,55 @@ export function computeKegBalance(entries: Pick<KegLedgerEntry, 'type' | 'size' 
  * deleted; they stay in the DB so historical orders/invoices are intact,
  * but admin dropdowns and default listings exclude them.
  */
+// ─── No-charge accounts ─────────────────────────────────────────────────────
+// The brewery's own taproom orders beer through the portal so volumes are
+// tracked, but it doesn't pay for it; a priced invoice inflates the month's
+// revenue (Mike, 2026-10). The flag lives in the settings table rather than a
+// customers column so it ships without a database migration.
+
+export const NO_CHARGE_SETTINGS_KEY = 'no_charge_customers';
+
+export async function getNoChargeCustomerIds(): Promise<string[]> {
+  const ids = await getSetting<unknown>(NO_CHARGE_SETTINGS_KEY, []);
+  return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [];
+}
+
+export async function setCustomerNoCharge(id: string, noCharge: boolean): Promise<void> {
+  const current = await getNoChargeCustomerIds();
+  const next = noCharge
+    ? Array.from(new Set([...current, id]))
+    : current.filter((x) => x !== id);
+  if (next.length === current.length && next.every((x) => current.includes(x))) return;
+  await setSetting(NO_CHARGE_SETTINGS_KEY, next);
+}
+
+function withNoCharge(customers: Customer[], noChargeIds: string[]): Customer[] {
+  return customers.map((c) => ({ ...c, noCharge: noChargeIds.includes(c.id) }));
+}
+
 export async function getCustomers(includeArchived: boolean = false): Promise<Customer[]> {
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const query = sb.from('customers').select('*').order('created_at');
     if (!includeArchived) query.is('archived_at', null);
-    const { data, error } = await query;
+    const [{ data, error }, noChargeIds] = await Promise.all([query, getNoChargeCustomerIds()]);
     if (error) throw error;
-    return (data || []).map(rowToCustomer);
+    return withNoCharge((data || []).map(rowToCustomer), noChargeIds);
   }
-  const all = readJSON<Customer[]>('customers.json');
+  const all = withNoCharge(readJSON<Customer[]>('customers.json'), await getNoChargeCustomerIds());
   return includeArchived ? all : all.filter((c) => !c.archivedAt);
 }
 
 export async function getCustomer(id: string): Promise<Customer | undefined> {
+  const noChargeIds = await getNoChargeCustomerIds();
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const { data, error } = await sb.from('customers').select('*').eq('id', id).single();
     if (error) return undefined;
-    return rowToCustomer(data);
+    return withNoCharge([rowToCustomer(data)], noChargeIds)[0];
   }
-  return readJSON<Customer[]>('customers.json').find(c => c.id === id);
+  const found = readJSON<Customer[]>('customers.json').find(c => c.id === id);
+  return found ? withNoCharge([found], noChargeIds)[0] : undefined;
 }
 
 export async function createCustomer(customer: Customer): Promise<Customer> {
@@ -273,6 +301,13 @@ export async function createCustomer(customer: Customer): Promise<Customer> {
 }
 
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer | undefined> {
+  if (updates.noCharge !== undefined) {
+    if (!(await getCustomer(id))) return undefined;
+    await setCustomerNoCharge(id, updates.noCharge === true);
+    const { noCharge: _noCharge, ...rest } = updates; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const updated = await updateCustomer(id, rest);
+    return updated ? { ...updated, noCharge: updates.noCharge === true } : undefined;
+  }
   if (isSupabaseConfigured()) {
     const sb = createAdminClient();
     const row: Record<string, unknown> = {};
@@ -341,14 +376,120 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     }
     const { data, error } = await sb.from('customers').update(row).eq('id', id).select().single();
     if (error) return undefined;
-    return rowToCustomer(data);
+    return withNoCharge([rowToCustomer(data)], await getNoChargeCustomerIds())[0];
   }
   const customers = readJSON<Customer[]>('customers.json');
   const index = customers.findIndex(c => c.id === id);
   if (index === -1) return undefined;
   customers[index] = { ...customers[index], ...updates };
   writeJSON('customers.json', customers);
-  return customers[index];
+  return withNoCharge([customers[index]], await getNoChargeCustomerIds())[0];
+}
+
+// ─── Merge customers ─────────────────────────────────────────────────────────
+
+export interface CustomerMergeCounts {
+  orders: number;
+  invoices: number;
+  kegLedger: number;
+  orderTemplates: number;
+  recurringOrders: number;
+  crmActivities: number;
+  crmContacts: number;
+}
+
+/** Everything that points at a customer, with where it lives. */
+const CUSTOMER_LINKS: { key: keyof CustomerMergeCounts; table: string; column: string; file: string; field: string }[] = [
+  { key: 'orders', table: 'orders', column: 'customer_id', file: 'orders.json', field: 'customerId' },
+  { key: 'invoices', table: 'invoices', column: 'customer_id', file: 'invoices.json', field: 'customerId' },
+  { key: 'kegLedger', table: 'keg_ledger', column: 'customer_id', file: 'keg-ledger.json', field: 'customerId' },
+  { key: 'orderTemplates', table: 'order_templates', column: 'customer_id', file: 'order-templates.json', field: 'customerId' },
+  { key: 'recurringOrders', table: 'recurring_orders', column: 'customer_id', file: 'recurring-orders.json', field: 'customerId' },
+  { key: 'crmActivities', table: 'crm_activities', column: 'customer_id', file: 'crm-activities.json', field: 'customerId' },
+  { key: 'crmContacts', table: 'crm_contacts', column: 'converted_customer_id', file: 'crm-contacts.json', field: 'convertedCustomerId' },
+];
+
+/** How many records each link would move from `customerId`. */
+export async function countCustomerRecords(customerId: string): Promise<CustomerMergeCounts> {
+  const counts = { orders: 0, invoices: 0, kegLedger: 0, orderTemplates: 0, recurringOrders: 0, crmActivities: 0, crmContacts: 0 };
+  for (const link of CUSTOMER_LINKS) {
+    if (isSupabaseConfigured()) {
+      const sb = createAdminClient();
+      const { count, error } = await sb
+        .from(link.table)
+        .select('*', { count: 'exact', head: true })
+        .eq(link.column, customerId);
+      if (error && !isMissingTableError(error)) throw error;
+      counts[link.key] = count ?? 0;
+    } else {
+      counts[link.key] = readJSON<Record<string, unknown>[]>(link.file).filter((r) => r[link.field] === customerId).length;
+    }
+  }
+  return counts;
+}
+
+/**
+ * Folds the duplicate account `sourceId` into `targetId`: every order,
+ * invoice, keg-ledger row, template, recurring order and CRM record moves to
+ * the target, empty contact fields on the target are filled from the source,
+ * tags and notes are combined, and the source is archived (not deleted, so it
+ * can still be found under Archived). The target's business name, email and
+ * login are what stay.
+ *
+ * Not one transaction (PostgREST has none). Each step is an idempotent
+ * "move rows that still point at the source", so if a step fails, running
+ * the merge again finishes the job.
+ */
+export async function mergeCustomers(sourceId: string, targetId: string): Promise<CustomerMergeCounts> {
+  if (sourceId === targetId) throw new Error('Pick two different accounts to merge.');
+  const [source, target] = await Promise.all([getCustomer(sourceId), getCustomer(targetId)]);
+  if (!source) throw new Error('The account being merged away was not found.');
+  if (!target) throw new Error('The account to keep was not found.');
+  if (target.archivedAt) throw new Error('The account to keep is archived. Restore it first.');
+
+  const counts = await countCustomerRecords(sourceId);
+  for (const link of CUSTOMER_LINKS) {
+    if (isSupabaseConfigured()) {
+      const sb = createAdminClient();
+      const { error } = await sb.from(link.table).update({ [link.column]: targetId }).eq(link.column, sourceId);
+      if (error && !isMissingTableError(error)) throw error;
+    } else {
+      const rows = readJSON<Record<string, unknown>[]>(link.file);
+      if (rows.some((r) => r[link.field] === sourceId)) {
+        writeJSON(link.file, rows.map((r) => (r[link.field] === sourceId ? { ...r, [link.field]: targetId } : r)));
+      }
+    }
+  }
+
+  const fill = (keep: string | undefined, other: string | undefined) => (keep && keep.trim() ? keep : other || '');
+  const notes = [target.notes, source.notes && `Merged from ${source.businessName}: ${source.notes}`]
+    .filter((n) => n && n.trim())
+    .join('\n\n');
+  await updateCustomer(targetId, {
+    contactName: fill(target.contactName, source.contactName),
+    phone: fill(target.phone, source.phone),
+    abcPermitNumber: fill(target.abcPermitNumber, source.abcPermitNumber),
+    customerIdentification: fill(target.customerIdentification, source.customerIdentification),
+    ...(target.streetAddress || target.city ? {} : {
+      streetAddress: source.streetAddress, city: source.city, state: source.state, zip: source.zip,
+    }),
+    tags: Array.from(new Set([...(target.tags || []), ...(source.tags || [])])),
+    notes,
+    nextFollowupDate: target.nextFollowupDate || source.nextFollowupDate || null,
+    nextFollowupNotes: target.nextFollowupDate ? target.nextFollowupNotes : source.nextFollowupNotes,
+    ...(source.noCharge && !target.noCharge ? { noCharge: true } : {}),
+  });
+
+  await updateCustomer(sourceId, {
+    archivedAt: new Date().toISOString(),
+    nextFollowupDate: null,
+    nextFollowupNotes: '',
+    notes: [source.notes, `Merged into ${target.businessName} (${target.id}) on ${new Date().toISOString().slice(0, 10)}.`]
+      .filter((n) => n && n.trim())
+      .join('\n\n'),
+    ...(source.noCharge ? { noCharge: false } : {}),
+  });
+  return counts;
 }
 
 export async function deleteCustomer(id: string): Promise<boolean> {
