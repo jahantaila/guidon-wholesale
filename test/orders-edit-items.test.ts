@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Admin item-editing on a placed order (2026-08-14). A PUT carrying `items`
 // edits the order's contents and reconciles everything downstream:
@@ -17,7 +17,13 @@ const {
   adjustProductInventorySpy,
   getInvoicesSpy,
   updateInvoiceSpy,
+  createOrderSpy,
+  createInvoiceSpy,
+  getCustomersSpy,
 } = vi.hoisted(() => ({
+  getCustomersSpy: vi.fn(async (): Promise<Record<string, unknown>[]> => [{ id: "cust-1", email: "a@b.test", contactName: "A", businessName: "B" }]),
+  createOrderSpy: vi.fn(async (o: unknown) => o),
+  createInvoiceSpy: vi.fn(async (i: unknown) => i),
   getOrderSpy: vi.fn(),
   updateOrderSpy: vi.fn(async (id: string, updates: Record<string, unknown>) => ({ id, ...updates })),
   addKegLedgerEntrySpy: vi.fn(async (entry: unknown) => entry),
@@ -36,11 +42,11 @@ vi.mock("@/lib/data", () => ({
   getInvoices: getInvoicesSpy,
   updateInvoice: updateInvoiceSpy,
   getKegLedgerByCustomer: vi.fn(async () => []),
-  getCustomers: vi.fn(async () => []),
+  getCustomers: getCustomersSpy,
   getOrders: vi.fn(async () => []),
   getProducts: vi.fn(async () => []),
-  createOrder: vi.fn(async (o: unknown) => o),
-  createInvoice: vi.fn(async (i: unknown) => i),
+  createOrder: createOrderSpy,
+  createInvoice: createInvoiceSpy,
 }));
 vi.mock("@/lib/auth-check", () => ({
   isAdminRequest: () => true,
@@ -54,7 +60,7 @@ vi.mock("@/lib/email", () => ({
   formatCurrencyForEmail: (n: number) => `$${n}`,
 }));
 
-import { PUT } from "@/app/api/orders/route";
+import { PUT, POST } from "@/app/api/orders/route";
 
 function makeRequest(body: Record<string, unknown>): Request {
   return new Request("https://example.test/api/orders", {
@@ -202,5 +208,118 @@ describe("PUT /api/orders — keg deposit cleanup on cancel/revert", () => {
     getOrderSpy.mockResolvedValue({ ...baseOrder, status: "pending" });
     await PUT(makeRequest({ id: "ord-1", status: "cancelled" }) as never);
     expect(deleteOrderKegDepositsSpy).not.toHaveBeenCalled();
+  });
+});
+
+// Mike, 2026-10: "the actual keg returns for an order do not reflect in the
+// price on the invoice." Returns can now be corrected after delivery, and the
+// order POST no longer trusts client-sent totals.
+describe("PUT /api/orders — keg returns edit", () => {
+  it("recomputes the total with the new returns credit and syncs an unpaid invoice", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "confirmed" });
+    getInvoicesSpy.mockResolvedValue([{ id: "inv-1", orderId: "ord-1", status: "unpaid" }]);
+    const res = await PUT(makeRequest({ id: "ord-1", kegReturns: [{ size: "1/2bbl", quantity: 2 }] }) as never);
+    expect(res.status).toBe(200);
+    const updates = updateOrderSpy.mock.calls.at(-1)![1] as Record<string, unknown>;
+    // subtotal 200 + deposits 100 - credit 100 = 200
+    expect(updates).toMatchObject({ kegReturns: [{ size: "1/2bbl", quantity: 2 }], subtotal: 200, totalDeposit: 0, total: 200 });
+    expect(updateInvoiceSpy).toHaveBeenCalledWith("inv-1", { subtotal: 200, totalDeposit: 0, total: 200 });
+    // Price-only change: inventory and ledger untouched.
+    expect(adjustProductInventorySpy).not.toHaveBeenCalled();
+    expect(deleteOrderKegDepositsSpy).not.toHaveBeenCalled();
+  });
+
+  it("is allowed on a completed order", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "completed" });
+    const res = await PUT(makeRequest({ id: "ord-1", kegReturns: [{ size: "1/6bbl", quantity: 1 }] }) as never);
+    expect(res.status).toBe(200);
+  });
+
+  it("is rejected on a cancelled order", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "cancelled" });
+    const res = await PUT(makeRequest({ id: "ord-1", kegReturns: [] }) as never);
+    expect(res.status).toBe(409);
+  });
+
+  it("leaves a paid invoice alone and says so", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "completed" });
+    getInvoicesSpy.mockResolvedValue([{ id: "inv-1", orderId: "ord-1", status: "paid" }]);
+    const res = await PUT(makeRequest({ id: "ord-1", kegReturns: [{ size: "1/2bbl", quantity: 1 }] }) as never);
+    const body = await res.json();
+    expect(updateInvoiceSpy).not.toHaveBeenCalled();
+    expect(body.paidInvoiceUntouched).toBe(true);
+  });
+
+  it("merges duplicate sizes and drops zero / malformed rows", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "pending" });
+    await PUT(makeRequest({ id: "ord-1", kegReturns: [
+      { size: "1/6bbl", quantity: 1 }, { size: "1/6bbl", quantity: 2 }, { size: "1/2bbl", quantity: 0 }, { quantity: 4 },
+    ] }) as never);
+    const updates = updateOrderSpy.mock.calls.at(-1)![1] as Record<string, unknown>;
+    expect(updates.kegReturns).toEqual([{ size: "1/6bbl", quantity: 3 }]);
+  });
+
+  it("returns 500 when the returns write fails", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "pending" });
+    updateOrderSpy.mockResolvedValueOnce(undefined as never);
+    const res = await PUT(makeRequest({ id: "ord-1", kegReturns: [] }) as never);
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("POST /api/orders — totals are computed server-side", () => {
+  it("ignores client totals and applies the keg returns credit", async () => {
+    const req = new Request("https://example.test/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerId: "cust-1",
+        items: baseOrder.items,
+        kegReturns: [{ size: "1/2bbl", quantity: 1 }],
+        subtotal: 999, totalDeposit: 999, total: 999,
+      }),
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(201);
+    const order = createOrderSpy.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(order).toMatchObject({ subtotal: 200, totalDeposit: 50, total: 250 });
+    const inv = createInvoiceSpy.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(inv).toMatchObject({ subtotal: 200, totalDeposit: 50, total: 250 });
+  });
+});
+
+describe("no-charge account (brewery taproom) — always $0", () => {
+  const taproom = [{ id: "cust-1", email: "a@b.test", contactName: "A", businessName: "Guidon Brewing Co.", noCharge: true }];
+  beforeEach(() => getCustomersSpy.mockResolvedValue(taproom));
+  afterEach(() => getCustomersSpy.mockResolvedValue([{ id: "cust-1", email: "a@b.test", contactName: "A", businessName: "B" }]));
+
+  it("POST prices every line at $0 and the invoice is $0, even with keg returns", async () => {
+    const req = new Request("https://example.test/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: "cust-1", items: baseOrder.items, kegReturns: [{ size: "1/2bbl", quantity: 1 }] }),
+    });
+    expect((await POST(req as never)).status).toBe(201);
+    const order = createOrderSpy.mock.calls.at(-1)![0] as { items: { unitPrice: number; deposit: number; quantity: number }[] };
+    expect(order).toMatchObject({ subtotal: 0, totalDeposit: 0, total: 0 });
+    // Volume is kept: same quantity, zero money.
+    expect(order.items[0]).toMatchObject({ quantity: 2, unitPrice: 0, deposit: 0 });
+    expect(createInvoiceSpy.mock.calls.at(-1)![0]).toMatchObject({ subtotal: 0, totalDeposit: 0, total: 0 });
+  });
+
+  it("PUT item edit stays at $0", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "pending" });
+    await PUT(makeRequest({ id: "ord-1", items: NEW_ITEMS }) as never);
+    const [, updates] = updateOrderSpy.mock.calls[0];
+    expect(updates).toMatchObject({ subtotal: 0, totalDeposit: 0, total: 0 });
+    expect((updates.items as { unitPrice: number }[])[0].unitPrice).toBe(0);
+  });
+
+  it("PUT keg returns edit never goes below $0", async () => {
+    getOrderSpy.mockResolvedValue({ ...baseOrder, status: "completed", subtotal: 0, totalDeposit: 0, total: 0 });
+    getInvoicesSpy.mockResolvedValue([{ id: "inv-1", orderId: "ord-1", status: "draft" }]);
+    await PUT(makeRequest({ id: "ord-1", kegReturns: [{ size: "1/2bbl", quantity: 3 }] }) as never);
+    expect(updateOrderSpy.mock.calls[0][1]).toMatchObject({ total: 0 });
+    expect(updateInvoiceSpy).toHaveBeenCalledWith("inv-1", { subtotal: 0, totalDeposit: 0, total: 0 });
   });
 });

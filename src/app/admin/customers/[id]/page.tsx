@@ -52,6 +52,13 @@ export default function CustomerDetailPage() {
   const [notesDraft, setNotesDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
   const [autoSendDraft, setAutoSendDraft] = useState(false);
+  const [noChargeDraft, setNoChargeDraft] = useState(false);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [mergePreview, setMergePreview] = useState<Record<string, number> | null>(null);
+  const [mergeError, setMergeError] = useState('');
+  const [merging, setMerging] = useState(false);
   const [followupDateDraft, setFollowupDateDraft] = useState('');
   const [followupNotesDraft, setFollowupNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
@@ -74,12 +81,14 @@ export default function CustomerDetailPage() {
         const customers: Customer[] = await customersRes.json();
         const c = customers.find((x) => x.id === id) || null;
         setCustomer(c);
+        setAllCustomers(Array.isArray(customers) ? customers : []);
         const actData = await activitiesRes.json().catch(() => []);
         setActivities(Array.isArray(actData) ? actData : []);
         if (c) {
           setNotesDraft(c.notes || '');
           setTagsDraft((c.tags || []).join(', '));
           setAutoSendDraft(c.autoSendInvoices === true);
+          setNoChargeDraft(c.noCharge === true);
           setFollowupDateDraft(c.nextFollowupDate || '');
           setFollowupNotesDraft(c.nextFollowupNotes || '');
         }
@@ -201,6 +210,7 @@ export default function CustomerDetailPage() {
           notes: notesDraft,
           tags,
           autoSendInvoices: autoSendDraft,
+          noCharge: noChargeDraft,
         }),
       });
       if (res.ok) {
@@ -378,6 +388,48 @@ export default function CustomerDetailPage() {
     }
   };
 
+  // Merge a duplicate account INTO this one. Preview first (what will move),
+  // then confirm. This account keeps its name, email and login; the
+  // duplicate is archived.
+  const pickMergeSource = async (sourceId: string) => {
+    setMergeSourceId(sourceId);
+    setMergePreview(null);
+    setMergeError('');
+    if (!sourceId) return;
+    try {
+      const res = await adminFetch(`/api/admin/customers/merge?sourceId=${encodeURIComponent(sourceId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setMergePreview(data.counts);
+      else setMergeError(data?.error || 'Could not load that account.');
+    } catch {
+      setMergeError('Could not load that account.');
+    }
+  };
+
+  const confirmMerge = async () => {
+    if (!customer || !mergeSourceId) return;
+    setMerging(true);
+    setMergeError('');
+    try {
+      const res = await adminFetch('/api/admin/customers/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: mergeSourceId, targetId: customer.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // Orders, invoices, kegs and CRM all changed — reload everything.
+        window.location.reload();
+      } else {
+        setMergeError(data?.error || 'Merge failed. Nothing was archived; you can retry.');
+      }
+    } catch {
+      setMergeError('Merge failed. Please retry; a partial merge finishes on retry.');
+    } finally {
+      setMerging(false);
+    }
+  };
+
   const remindAboutKegs = async () => {
     if (shippedOrders.length === 0) return;
     setSendingReminder(true);
@@ -487,6 +539,12 @@ export default function CustomerDetailPage() {
                 return labels[customer.preferredPaymentMethod || 'no_preference'];
               })()}
             </span>
+            {customer.noCharge && (
+              <span style={{ color: 'var(--olive)' }}>
+                <span style={{ color: 'var(--faint)' }}>No-charge account:</span>{' '}
+                <span className="font-semibold">invoices $0</span>
+              </span>
+            )}
             {customer.autoSendInvoices && (
               <span style={{ color: 'var(--pine)' }}>
                 <span style={{ color: 'var(--faint)' }}>Auto-send invoices:</span>{' '}
@@ -531,6 +589,12 @@ export default function CustomerDetailPage() {
           </Link>
           <button onClick={openEdit} className="btn-secondary text-sm">
             Edit details
+          </button>
+          <button
+            onClick={() => { setMergeOpen(true); setMergeSourceId(''); setMergePreview(null); setMergeError(''); }}
+            className="btn-secondary text-sm"
+          >
+            Merge a duplicate
           </button>
           {totalKegsOut > 0 && (
             <button
@@ -691,6 +755,22 @@ export default function CustomerDetailPage() {
           </label>
           <span className="text-xs italic flex-1" style={{ color: 'var(--muted)' }}>
             When on, this customer gets their invoice emailed the moment their order is confirmed. When off, admin reviews + clicks Send from the Invoices tab first.
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-4 pt-4 border-t border-divider">
+          <input
+            type="checkbox"
+            id="noCharge"
+            checked={noChargeDraft}
+            onChange={(e) => setNoChargeDraft(e.target.checked)}
+            className="w-4 h-4 accent-gold cursor-pointer"
+          />
+          <label htmlFor="noCharge" className="text-sm cursor-pointer select-none" style={{ color: 'var(--ink)' }}>
+            No-charge account ($0 invoices)
+          </label>
+          <span className="text-xs italic flex-1" style={{ color: 'var(--muted)' }}>
+            For the brewery&rsquo;s own taproom. Every new order is priced at $0, deposits included, so it
+            doesn&rsquo;t count as revenue. Beer volumes, inventory and kegs are still tracked. Click Save to apply.
           </span>
         </div>
         {customer.tags && customer.tags.length > 0 && (
@@ -1065,6 +1145,73 @@ export default function CustomerDetailPage() {
           </>
         )}
       </section>
+
+      {mergeOpen && (() => {
+        const others = allCustomers
+          .filter((c) => c.id !== customer.id && !c.archivedAt)
+          .sort((a, b) => a.businessName.localeCompare(b.businessName));
+        const source = others.find((c) => c.id === mergeSourceId);
+        const labels: Record<string, string> = {
+          orders: 'orders', invoices: 'invoices', kegLedger: 'keg records', orderTemplates: 'saved carts',
+          recurringOrders: 'recurring orders', crmActivities: 'CRM log entries', crmContacts: 'converted leads',
+        };
+        const moving = mergePreview
+          ? Object.entries(mergePreview).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${labels[k] || k}`)
+          : [];
+        return (
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => !merging && setMergeOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="card max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+              style={{ background: 'var(--paper)' }}
+            >
+              <span className="section-label">Merge accounts</span>
+              <h3 className="font-display mt-1 mb-3" style={{ fontSize: '1.5rem', color: 'var(--ink)', fontWeight: 500 }}>
+                Merge a duplicate into {customer.businessName}
+              </h3>
+              <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+                Everything on the duplicate moves here: orders, invoices, keg balance, saved carts, recurring
+                orders and CRM history. This account keeps its name, email and portal login. The duplicate is
+                archived (you can still find it under Archived).
+              </p>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--muted)' }}>Duplicate account</label>
+              <select
+                className="input w-full text-sm"
+                value={mergeSourceId}
+                onChange={(e) => pickMergeSource(e.target.value)}
+                disabled={merging}
+              >
+                <option value="">Choose the duplicate…</option>
+                {others.map((c) => (
+                  <option key={c.id} value={c.id}>{c.businessName} — {c.email}</option>
+                ))}
+              </select>
+              {source && mergePreview && (
+                <p className="text-sm mt-4" style={{ color: 'var(--ink)' }}>
+                  {moving.length > 0
+                    ? <>Moves {moving.join(', ')} from <strong>{source.businessName}</strong> to <strong>{customer.businessName}</strong>, then archives {source.businessName}.</>
+                    : <><strong>{source.businessName}</strong> has no orders or history. Merging just archives it.</>}
+                </p>
+              )}
+              {mergeError && <p className="text-sm mt-3" style={{ color: 'var(--ruby)' }}>{mergeError}</p>}
+              <div className="flex justify-end gap-3 mt-6">
+                <button type="button" onClick={() => setMergeOpen(false)} disabled={merging} className="btn-secondary px-4 py-2">Cancel</button>
+                <button
+                  type="button"
+                  onClick={confirmMerge}
+                  disabled={!source || !mergePreview || merging}
+                  className="btn-primary"
+                >
+                  {merging ? 'Merging…' : 'Merge accounts'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Edit customer — same fields as the list-page modal, so Mike can fix
           details without leaving the account. */}

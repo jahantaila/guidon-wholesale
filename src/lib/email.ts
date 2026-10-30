@@ -19,6 +19,7 @@
 
 import { Resend } from 'resend';
 import { getNotificationEmails, getSetting } from './data';
+import { invoiceBreakdown } from '@/lib/order-math';
 
 type SendArgs = {
   to: string | string[];
@@ -239,7 +240,7 @@ export function formatCurrencyForEmail(cents: number): string {
 
 // ─── High-level triggers ──────────────────────────────────────────────────────
 
-type OrderLine = { productName: string; size: string; quantity: number; unitPrice: number };
+type OrderLine = { productName: string; size: string; quantity: number; unitPrice: number; deposit?: number };
 
 /**
  * Order placed. Sends two emails:
@@ -257,6 +258,7 @@ export async function notifyOrderPlaced(args: {
   total: number;
   notes?: string;
 }): Promise<void> {
+  const money = invoiceBreakdown(args);
   const itemRows = args.items
     .map(
       (i) => `
@@ -283,7 +285,8 @@ export async function notifyOrderPlaced(args: {
     </table>
     <div style="margin-top:8px;font-size:14px;color:#6B5F48;">
       Subtotal: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(args.subtotal)}</span><br/>
-      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(args.totalDeposit)}</span><br/>
+      Keg deposits: <span style="color:#2A2416;font-family:monospace;">${formatCurrencyForEmail(money.depositsCharged)}</span><br/>
+      ${money.returnsCredit > 0 ? `Keg returns credit: <span style="color:#2F5436;font-family:monospace;">&minus;${formatCurrencyForEmail(money.returnsCredit)}</span><br/>` : ''}
       <strong style="color:#2A2416;">Total due on delivery: <span style="font-family:monospace;color:#9E7A3B;">${formatCurrencyForEmail(args.total)}</span></strong>
     </div>`;
 

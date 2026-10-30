@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import type { Order, OrderItem, OrderStatus, Customer, Invoice, Product } from '@/lib/types';
-import { KEG_DEPOSITS } from '@/lib/types';
+import { KEG_DEPOSITS, LEGACY_KEG_SIZES } from '@/lib/types';
+import { returnsCreditFor } from '@/lib/order-math';
 import { formatCurrency, formatDate, formatDay, getStatusColor, cn, formatAddress, formatPhone } from '@/lib/utils';
 import { adminFetch } from '@/lib/admin-fetch';
 import ReportingDateControl from '@/components/ReportingDateControl';
@@ -56,6 +57,14 @@ export default function OrderDetailPage() {
   const [editError, setEditError] = useState('');
   const [addProductId, setAddProductId] = useState('');
   const [addSize, setAddSize] = useState('');
+
+  // Keg-returns editing. The customer declares empties at checkout, but the
+  // count Mike actually picks up on delivery often differs. Saving updates
+  // the returns credit on the order total and any unpaid invoice.
+  const [editingReturns, setEditingReturns] = useState(false);
+  const [draftReturns, setDraftReturns] = useState<Record<string, number>>({});
+  const [savingReturns, setSavingReturns] = useState(false);
+  const [returnsMessage, setReturnsMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   // Fetch the order, its customer, and any linked invoice in parallel.
   // The orders/customers/invoices APIs all return arrays; we find by id.
@@ -222,6 +231,51 @@ export default function OrderDetailPage() {
       setEditError('Network error saving changes. Please retry.');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  // ── Keg-returns editing ───────────────────────────────────────────────
+  const startReturnsEdit = () => {
+    if (!order) return;
+    const d: Record<string, number> = {};
+    for (const size of LEGACY_KEG_SIZES) d[size] = 0;
+    for (const r of order.kegReturns) d[r.size] = (d[r.size] || 0) + r.quantity;
+    setDraftReturns(d);
+    setReturnsMessage(null);
+    setEditingReturns(true);
+  };
+
+  const saveReturns = async () => {
+    if (!order) return;
+    setSavingReturns(true);
+    setReturnsMessage(null);
+    try {
+      const kegReturns = Object.entries(draftReturns)
+        .filter(([, q]) => q > 0)
+        .map(([size, quantity]) => ({ size, quantity }));
+      const res = await adminFetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id, kegReturns }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setEditingReturns(false);
+        await load();
+        setReturnsMessage(
+          data?.paidInvoiceUntouched
+            ? { tone: 'error', text: 'Returns saved. The invoice is already marked paid, so it was not changed. Settle the difference with the customer directly.' }
+            : data?.invoiceSynced === false
+              ? { tone: 'error', text: 'Returns saved, but the invoice could not be updated. Reload and check the invoice total.' }
+              : { tone: 'ok', text: 'Returns saved. Order total and invoice updated.' },
+        );
+      } else {
+        setReturnsMessage({ tone: 'error', text: (data && typeof data.error === 'string' && data.error) || `Save failed (HTTP ${res.status}).` });
+      }
+    } catch {
+      setReturnsMessage({ tone: 'error', text: 'Network error saving returns. Please retry.' });
+    } finally {
+      setSavingReturns(false);
     }
   };
 
@@ -605,23 +659,70 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Keg returns block */}
-        {order.kegReturns.length > 0 && (
-          <div className="mt-4 rounded-xl px-4 py-3" style={{ background: 'color-mix(in srgb, var(--pine) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--pine) 30%, transparent)' }}>
-            <span className="section-label mb-1 block" style={{ color: 'var(--pine)' }}>Keg Returns</span>
+        <div className="mt-4 rounded-xl px-4 py-3" style={{ background: 'color-mix(in srgb, var(--pine) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--pine) 30%, transparent)' }}>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <span className="section-label block" style={{ color: 'var(--pine)' }}>Keg Returns</span>
+            {!editingReturns && order.status !== 'cancelled' && (
+              <button type="button" onClick={startReturnsEdit} className="text-xs underline" style={{ color: 'var(--brass)' }}>
+                {order.kegReturns.length > 0 ? 'Edit returns' : 'Record returns'}
+              </button>
+            )}
+          </div>
+
+          {editingReturns ? (
+            <div className="space-y-3">
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                Enter the empties you actually picked up. Each keg is credited at its deposit
+                ({LEGACY_KEG_SIZES.map((s) => `${SIZE_LABELS[s]} ${formatCurrency(KEG_DEPOSITS[s])}`).join(', ')}).
+              </p>
+              <div className="flex flex-wrap gap-4">
+                {Object.keys(draftReturns).map((size) => (
+                  <label key={size} className="text-sm flex items-center gap-2">
+                    <span className="italic" style={{ color: 'var(--muted)' }}>{SIZE_LABELS[size] || size}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={draftReturns[size]}
+                      onChange={(e) => setDraftReturns((d) => ({ ...d, [size]: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                      className="input w-16 text-center font-variant-tabular"
+                      aria-label={`${SIZE_LABELS[size] || size} returned`}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-sm" style={{ color: 'var(--pine)' }}>
+                Returns credit: &minus;{formatCurrency(returnsCreditFor(Object.entries(draftReturns).map(([size, quantity]) => ({ size, quantity }))))}
+              </p>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={saveReturns} disabled={savingReturns} className="btn-primary">
+                  {savingReturns ? 'Saving…' : 'Save returns'}
+                </button>
+                <button type="button" onClick={() => setEditingReturns(false)} disabled={savingReturns} className="btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : order.kegReturns.length > 0 ? (
             <ul className="text-sm">
               {order.kegReturns.map((r) => (
                 <li key={r.size} style={{ color: 'var(--pine)' }}>
                   <span className="font-semibold font-variant-tabular inline-block w-6">{r.quantity}</span>
                   <span className="italic" style={{ color: 'var(--muted)' }}>{SIZE_LABELS[r.size] || r.size}</span>
-                  <span className="ml-2" style={{ color: 'var(--muted)' }}>(deposit credit applied to net)</span>
+                  <span className="ml-2" style={{ color: 'var(--muted)' }}>(deposit credit applied to the total)</span>
                 </li>
               ))}
             </ul>
-            <p className="text-[10px] italic mt-1" style={{ color: 'var(--muted)' }}>
-              Returns become balance credits only after admin manually approves them in the Keg Tracker.
-            </p>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm italic" style={{ color: 'var(--muted)' }}>No empties recorded on this order.</p>
+          )}
+
+          {returnsMessage && (
+            <p className="text-xs mt-2" style={{ color: returnsMessage.tone === 'ok' ? 'var(--pine)' : 'var(--ruby)' }}>{returnsMessage.text}</p>
+          )}
+          <p className="text-[10px] italic mt-1" style={{ color: 'var(--muted)' }}>
+            This changes the price only. To lower the customer&rsquo;s outstanding-keg count, also record the return in the Keg Tracker.
+          </p>
+        </div>
 
         {/* Totals */}
         <div className="mt-4 pt-3 border-t border-divider grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">

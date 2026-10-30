@@ -1,3 +1,4 @@
+import { computeOrderTotals, noChargeItems } from '@/lib/order-math';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractError } from '@/lib/extract-error';
 import {
@@ -75,9 +76,9 @@ async function runCron() {
       }
 
       // Compute order totals from the template items (unit_price + deposit).
-      const subtotal = rec.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-      const totalDeposit = rec.items.reduce((s, i) => s + i.deposit * i.quantity, 0);
-      const total = subtotal + totalDeposit;
+      // A no-charge account (the brewery's taproom) is always $0.
+      const items = customer.noCharge ? noChargeItems(rec.items) : rec.items;
+      const { subtotal, totalDeposit, total } = computeOrderTotals(items, [], { noCharge: customer.noCharge === true });
 
       // Per-order delivery dates were removed in 2026-04-29. Brewery
       // delivers Thursdays + Fridays; admin schedules the recurring run
@@ -86,7 +87,7 @@ async function runCron() {
         id: generateId('ord'),
         customerId: rec.customerId,
         status: 'pending',
-        items: rec.items,
+        items,
         kegReturns: [],
         subtotal,
         totalDeposit,
