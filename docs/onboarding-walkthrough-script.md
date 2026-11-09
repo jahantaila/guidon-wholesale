@@ -1,5 +1,10 @@
 # New account walkthrough: video script
 
+> **Status (Nov 2026):** produced as an animated walkthrough, source in
+> `video/` (see `video/README.md` to re-capture screens and re-render).
+> Live as an unlisted YouTube video, https://youtu.be/vUCI2DYHyrk, and set in
+> Admin → Settings → New Account Walkthrough.
+
 A short (about 2 minute) screen recording for new wholesale customers. It gets
 linked from the "account approved" email (Settings → New Account Walkthrough).
 Every step follows the current portal as of Sept 2026. Re-record it if the

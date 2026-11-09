@@ -1,0 +1,489 @@
+{
+  "email": {
+    "file": "shots/email.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "cta": {
+        "x": 469,
+        "y": 392,
+        "w": 228,
+        "h": 43
+      },
+      "temppw": {
+        "x": 625,
+        "y": 447,
+        "w": 106,
+        "h": 19
+      }
+    }
+  },
+  "landing": {
+    "file": "shots/landing.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "signin": {
+        "x": 553,
+        "y": 511,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "signin-empty": {
+    "file": "shots/signin-empty.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "email": {
+        "x": 553,
+        "y": 462,
+        "w": 334,
+        "h": 45
+      },
+      "password": {
+        "x": 553,
+        "y": 549,
+        "w": 334,
+        "h": 45
+      },
+      "submit": {
+        "x": 553,
+        "y": 610,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "signin-email": {
+    "file": "shots/signin-email.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "email": {
+        "x": 553,
+        "y": 462,
+        "w": 334,
+        "h": 45
+      },
+      "password": {
+        "x": 553,
+        "y": 549,
+        "w": 334,
+        "h": 45
+      },
+      "submit": {
+        "x": 553,
+        "y": 610,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "signin-filled": {
+    "file": "shots/signin-filled.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "email": {
+        "x": 553,
+        "y": 462,
+        "w": 334,
+        "h": 45
+      },
+      "password": {
+        "x": 553,
+        "y": 549,
+        "w": 334,
+        "h": 45
+      },
+      "submit": {
+        "x": 553,
+        "y": 610,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "setpw-empty": {
+    "file": "shots/setpw-empty.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "newPw": {
+        "x": 553,
+        "y": 445,
+        "w": 334,
+        "h": 45
+      },
+      "confirmPw": {
+        "x": 553,
+        "y": 532,
+        "w": 334,
+        "h": 45
+      },
+      "submit": {
+        "x": 553,
+        "y": 593,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "setpw-filled": {
+    "file": "shots/setpw-filled.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "newPw": {
+        "x": 553,
+        "y": 445,
+        "w": 334,
+        "h": 45
+      },
+      "confirmPw": {
+        "x": 553,
+        "y": 532,
+        "w": 334,
+        "h": 45
+      },
+      "submit": {
+        "x": 553,
+        "y": 593,
+        "w": 334,
+        "h": 48
+      }
+    }
+  },
+  "overview": {
+    "file": "shots/overview.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "tabs": {
+        "x": 112,
+        "y": 94,
+        "w": 108,
+        "h": 50
+      },
+      "stats": {
+        "x": 137,
+        "y": 206,
+        "w": 112,
+        "h": 19
+      },
+      "kegs": {
+        "x": 112,
+        "y": 320,
+        "w": 1216,
+        "h": 19
+      },
+      "recent": {
+        "x": 112,
+        "y": 602,
+        "w": 124,
+        "h": 19
+      },
+      "browseTab": {
+        "x": 224,
+        "y": 94,
+        "w": 156,
+        "h": 50
+      }
+    }
+  },
+  "browse-0": {
+    "file": "shots/browse-0.png",
+    "width": 1440,
+    "height": 1759,
+    "boxes": {
+      "card": {
+        "x": 524,
+        "y": 839,
+        "w": 392,
+        "h": 426
+      },
+      "quarter": {
+        "x": 662,
+        "y": 1159,
+        "w": 116,
+        "h": 28
+      },
+      "plus": {
+        "x": 622,
+        "y": 1208,
+        "w": 36,
+        "h": 28
+      },
+      "add": {
+        "x": 667,
+        "y": 1200,
+        "w": 228,
+        "h": 44
+      }
+    }
+  },
+  "browse-1": {
+    "file": "shots/browse-1.png",
+    "width": 1440,
+    "height": 1759,
+    "boxes": {
+      "card": {
+        "x": 524,
+        "y": 839,
+        "w": 392,
+        "h": 426
+      },
+      "quarter": {
+        "x": 662,
+        "y": 1159,
+        "w": 116,
+        "h": 28
+      },
+      "plus": {
+        "x": 622,
+        "y": 1208,
+        "w": 36,
+        "h": 28
+      },
+      "add": {
+        "x": 667,
+        "y": 1200,
+        "w": 228,
+        "h": 44
+      }
+    }
+  },
+  "browse-2": {
+    "file": "shots/browse-2.png",
+    "width": 1440,
+    "height": 1759,
+    "boxes": {
+      "card": {
+        "x": 524,
+        "y": 839,
+        "w": 392,
+        "h": 426
+      },
+      "quarter": {
+        "x": 662,
+        "y": 1159,
+        "w": 116,
+        "h": 28
+      },
+      "plus": {
+        "x": 622,
+        "y": 1208,
+        "w": 36,
+        "h": 28
+      },
+      "add": {
+        "x": 667,
+        "y": 1200,
+        "w": 228,
+        "h": 44
+      },
+      "review": {
+        "x": 1086,
+        "y": 190,
+        "w": 242,
+        "h": 44
+      }
+    }
+  },
+  "checkout-0": {
+    "file": "shots/checkout-0.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "modal": {
+        "x": 489,
+        "y": 66,
+        "w": 462,
+        "h": 28
+      },
+      "delivery": {
+        "x": 701,
+        "y": 281,
+        "w": 164,
+        "h": 16
+      },
+      "returns": {
+        "x": 489,
+        "y": 368,
+        "w": 462,
+        "h": 19
+      },
+      "ackBox": {
+        "x": 489,
+        "y": 864,
+        "w": 16,
+        "h": 16
+      },
+      "place": {
+        "x": 726,
+        "y": 892,
+        "w": 225,
+        "h": 44
+      },
+      "returnInputs": [
+        {
+          "x": 871,
+          "y": 418,
+          "w": 80,
+          "h": 45
+        },
+        {
+          "x": 871,
+          "y": 471,
+          "w": 80,
+          "h": 45
+        },
+        {
+          "x": 871,
+          "y": 525,
+          "w": 80,
+          "h": 45
+        }
+      ]
+    },
+    "returnLabels": [
+      "Half Barrel empties to return",
+      "Quarter Barrel empties to return",
+      "Sixth Barrel empties to return"
+    ]
+  },
+  "checkout-1": {
+    "file": "shots/checkout-1.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "modal": {
+        "x": 489,
+        "y": 66,
+        "w": 462,
+        "h": 28
+      },
+      "delivery": {
+        "x": 701,
+        "y": 281,
+        "w": 164,
+        "h": 16
+      },
+      "returns": {
+        "x": 489,
+        "y": 368,
+        "w": 462,
+        "h": 19
+      },
+      "ackBox": {
+        "x": 489,
+        "y": 890,
+        "w": 16,
+        "h": 16
+      },
+      "place": {
+        "x": 726,
+        "y": 918,
+        "w": 225,
+        "h": 44
+      }
+    }
+  },
+  "checkout-2": {
+    "file": "shots/checkout-2.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "modal": {
+        "x": 489,
+        "y": -58,
+        "w": 462,
+        "h": 28
+      },
+      "delivery": {
+        "x": 701,
+        "y": 157,
+        "w": 164,
+        "h": 16
+      },
+      "returns": {
+        "x": 489,
+        "y": 244,
+        "w": 462,
+        "h": 19
+      },
+      "ackBox": {
+        "x": 489,
+        "y": 766,
+        "w": 16,
+        "h": 16
+      },
+      "place": {
+        "x": 726,
+        "y": 794,
+        "w": 225,
+        "h": 44
+      }
+    }
+  },
+  "orders": {
+    "file": "shots/orders.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "tab": {
+        "x": 383,
+        "y": 94,
+        "w": 141,
+        "h": 50
+      },
+      "newOrder": {
+        "x": 129,
+        "y": 399,
+        "w": 1182,
+        "h": 24
+      }
+    }
+  },
+  "invoices": {
+    "file": "shots/invoices.png",
+    "width": 1440,
+    "height": 900,
+    "boxes": {
+      "tab": {
+        "x": 529,
+        "y": 94,
+        "w": 100,
+        "h": 50
+      }
+    }
+  },
+  "account": {
+    "file": "shots/account.png",
+    "width": 1440,
+    "height": 1453,
+    "boxes": {
+      "tab": {
+        "x": 633,
+        "y": 94,
+        "w": 99,
+        "h": 50
+      }
+    }
+  },
+  "help": {
+    "file": "shots/help.png",
+    "width": 1440,
+    "height": 1443,
+    "boxes": {
+      "tab": {
+        "x": 736,
+        "y": 94,
+        "w": 75,
+        "h": 50
+      }
+    }
+  }
+}

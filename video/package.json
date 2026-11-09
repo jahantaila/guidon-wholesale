@@ -1,0 +1,24 @@
+{
+  "name": "guidon-onboarding-video",
+  "private": true,
+  "description": "Animated onboarding walkthrough for new Guidon wholesale customers (Remotion).",
+  "scripts": {
+    "capture": "node capture/capture.cjs",
+    "audio": "node scripts/gen-audio.cjs",
+    "studio": "remotion studio src/index.ts",
+    "render": "npm run audio && remotion render src/index.ts Onboarding out/guidon-onboarding.mp4 --codec h264 --crf 20",
+    "still": "remotion still src/index.ts Onboarding"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.542",
+    "@remotion/google-fonts": "4.0.542",
+    "@remotion/transitions": "4.0.542",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.542"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}
